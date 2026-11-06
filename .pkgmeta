@@ -1,0 +1,4 @@
+package-as: OLEDHUD
+ignore:
+  - README.md
+  - tests

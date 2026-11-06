@@ -1,0 +1,14 @@
+<Bindings>
+	<Binding name="OLEDHUD_TOGGLE" header="OLEDHUD" category="ADDONS">
+		OLEDHUD.Toggle()
+	</Binding>
+	<Binding name="OLEDHUD_PEEK" runOnUp="true" category="ADDONS">
+		OLEDHUD.Peek(keystate == "down")
+	</Binding>
+	<Binding name="OLEDHUD_SCREENSHOT" category="ADDONS">
+		OLEDHUD.CleanScreenshot()
+	</Binding>
+	<Binding name="OLEDHUD_ENABLE" category="ADDONS">
+		OLEDHUD.ToggleEnabled()
+	</Binding>
+</Bindings>
