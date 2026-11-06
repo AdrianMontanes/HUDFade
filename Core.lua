@@ -256,12 +256,16 @@ local function scanModels()
 	models, loners = ms, ls
 end
 
--- After that, a few hundred frames a tick in the background, and only while the HUD is fully up. (Walking through
--- every frame in the game at the start of each hide caused a visible hitch.)
+-- After that, a few hundred frames a tick in the background. (Walking through every frame in the game at the start
+-- of each hide caused a visible hitch.) Addons create some 3D portraits only when first needed (EllesmereUI's target
+-- portrait), so a target or focus change asks for a pass soon.
 local SCAN_BATCH, SCAN_EVERY = 300, 15
 local scan = {}
+local function scanSoon()
+	if lastScan > now() - SCAN_EVERY + 1 then lastScan = now() - SCAN_EVERY + 1 end
+end
 local function scanStep()
-	if not EnumerateFrames or state.target < 0.999 or state.current < 0.999 then return end
+	if not EnumerateFrames then return end
 	if not scan.next then
 		if now() - lastScan < SCAN_EVERY then return end
 		local ok, first = pcall(EnumerateFrames)
@@ -332,7 +336,8 @@ local function applyModels(a)
 				pcall(m.SetModelAlpha, m, base)
 				baseAlpha[m] = nil
 			end
-		elseif ask(m, "IsVisible") then
+		else
+			-- (hidden ones too: harmless, and a portrait that appears while hidden is already faded)
 			if baseAlpha[m] == nil then
 				local own = ask(m, "GetModelAlpha")
 				baseAlpha[m] = type(own) == "number" and own or 1
@@ -1063,6 +1068,7 @@ events:RegisterEvent("PLAYER_LOGOUT")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_TARGET_CHANGED")
+pcall(events.RegisterEvent, events, "PLAYER_FOCUS_CHANGED")
 events:RegisterEvent("PLAYER_STARTED_MOVING")
 events:RegisterEvent("PLAYER_STOPPED_MOVING")
 events:RegisterEvent("UPDATE_BINDINGS")
@@ -1130,7 +1136,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		end
 		update()
 		syncShift(true)
+	elseif event == "PLAYER_FOCUS_CHANGED" then
+		scanSoon()
 	elseif event == "PLAYER_TARGET_CHANGED" then
+		scanSoon()
 		state.suppressed.target = nil
 		if DB.showTarget and is(UnitExists, "target") then input() end
 		update()
