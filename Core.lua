@@ -649,6 +649,32 @@ local startedAt = 0
 -- facing is only watched once it has settled; and only a turn above about a third of a degree counts.
 local SETTLE, TURN = 0.4, 0.006
 
+-- That turn is also why the camera moved a little before the pointer came back. So while the pointer is hidden,
+-- mouse look speed is turned down to a tenth: the turn is too small to see but still enough to notice (an addon
+-- cannot read the mouse any other way while the pointer is hidden). The real speeds wait in the saved variables like
+-- the names above, so even a crash gets them back at the next login. Right-drags, flight paths and steering while
+-- flying keep the normal speed.
+local LOOK_CVARS = { "cameraYawMoveSpeed", "cameraPitchMoveSpeed" }
+local LOOK_SLOW, TURN_SLOW = 0.1, 0.0008
+local mouseSlowed = false
+
+local function slowMouse(on)
+	on = on and true or false
+	if on == mouseSlowed or not DB then return end
+	if on then
+		for _, name in ipairs(LOOK_CVARS) do
+			local ok, value = pcall(getCVar, name)
+			local n = ok and tonumber(readable(value))
+			if n and n > 0 and DB.restore[name] == nil and pcall(setCVar, name, tostring(n * LOOK_SLOW)) then
+				DB.restore[name] = value
+			end
+		end
+	else
+		cvarsBack(LOOK_CVARS)
+	end
+	mouseSlowed = on
+end
+
 local function getFacing()
 	if not GetPlayerFacing then return nil end
 	local ok, f = pcall(GetPlayerFacing)
@@ -677,6 +703,7 @@ end
 local function releasePointer(stop, moved)
 	if not ours then return end
 	ours = false
+	slowMouse(false)
 	if stop and MouselookStop then pcall(MouselookStop) end
 	syncLeftOverride()
 	if moved then state.lastMouseMove = now() end
@@ -694,6 +721,7 @@ local function hidePointer()
 	if pcall(MouselookStart) then
 		ours = true
 		syncLeftOverride()
+		slowMouse(not (state.onTaxi or state.steering))
 		facing = getFacing()
 		startedAt = now()
 		state.cameraFree = false -- (hiding turned your character to the camera)
@@ -746,7 +774,7 @@ watcher:SetScript("OnUpdate", function()
 	end
 	local d = math.abs(f - facing)
 	if d > math.pi then d = 2 * math.pi - d end -- (the facing wraps around at a full turn)
-	if d <= TURN then return end
+	if d <= (mouseSlowed and TURN_SLOW or TURN) then return end
 	if state.steering then
 		-- Flying, swimming or in a vehicle with "even when flying" on: the mouse steers you and the pointer stays
 		-- hidden. Steering counts like turning the camera with the right button, so only if you want it to.
@@ -844,6 +872,7 @@ local function pollMouse()
 		facing, startedAt = getFacing(), t
 	end
 	state.onTaxi, state.steering = taxi, steer
+	if ours then slowMouse(not (taxi or steer)) end
 	local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
 	local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
 	local anyButton = left or right

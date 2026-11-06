@@ -2,7 +2,7 @@
 -- Minimal WoW API mock to run HUD Fade's logic outside the game.
 local T = 0
 function GetTime() return T end
-local cvars = { UnitNameNPC="1", UnitNameOwn="0", nameplateShowEnemies="1", nameplateShowFriends="1", nameplateShowFriendlyPlayers="1" }
+local cvars = { cameraYawMoveSpeed="180", cameraPitchMoveSpeed="90", UnitNameNPC="1", UnitNameOwn="0", nameplateShowEnemies="1", nameplateShowFriends="1", nameplateShowFriendlyPlayers="1" }
 C_CVar = { GetCVar=function(n) return cvars[n] end, SetCVar=function(n,v) if lockdown and n:find("nameplate") then error("blocked") end cvars[n]=v end }
 lockdown=false
 function InCombatLockdown() return lockdown end
@@ -167,10 +167,12 @@ HUDFade.Peek(false)
 HUDFadeDB.hideCursor = true
 HUDFade.Hide(); step(4)
 check("pointer hidden when still", mouselook==true)
+check("mouse look slowed to a tenth while hidden", tonumber(cvars.cameraYawMoveSpeed)==18 and tonumber(cvars.cameraPitchMoveSpeed)==9 and HUDFadeDB.restore.cameraYawMoveSpeed=="180")
 step(1); check("idle timer not reset by our own mouselook", HUDFade.state.lastInput < GetTime() - 0.9)
 step(1); facingV=1.0004; step(0.2); check("tiny drift does not count as a move", mouselook==true)
 facingV=1.2; step(0.2)
 check("pointer back when the mouse moves", mouselook==false)
+check("mouse look speed back to normal", cvars.cameraYawMoveSpeed=="180" and cvars.cameraPitchMoveSpeed=="90" and HUDFadeDB.restore.cameraYawMoveSpeed==nil)
 step(3); check("hidden again after 2 s still", mouselook==true)
 fire("PLAYER_REGEN_DISABLED"); step(0.2)
 check("pointer back in combat", mouselook==false)
@@ -216,6 +218,7 @@ fire("PLAYER_REGEN_ENABLED"); step(0.3)
 -- Flight paths: the route turns you, so only a click or a key brings the pointer back
 buttons.RightButton=nil; MouselookStop(); cx=cx+40; step(0.2); onTaxi=true; flying=true; step(2.5)
 check("pointer hides on a flight path (even though it counts as flying)", mouselook==true)
+check("normal mouse look speed on a flight path (the mouse turns the camera there)", cvars.cameraYawMoveSpeed=="180")
 for i=1,20 do facingV=facingV+0.05; step(0.1) end
 check("the route turning you does not bring it back", mouselook==true)
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); check("any key brings it back on a flight path", mouselook==false)
@@ -232,11 +235,12 @@ check("lined up by a right-drag: hides again", mouselook==true)
 flying=true; step(0.2); check("not hidden while flying unless asked", mouselook==false)
 check("why names the setting", HUDFade.PointerWhy():find("Even when flying") ~= nil)
 HUDFadeDB.hideCursorSteer=true; step(0.2); check("even when flying: hidden", mouselook==true)
+check("normal mouse look speed while steering", cvars.cameraYawMoveSpeed=="180")
 for i=1,20 do facingV=facingV+0.05; step(0.1) end
 check("steering with the mouse keeps it hidden, and the HUD too", mouselook==true and UIParent.alpha==0)
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); check("any key brings it back while flying", mouselook==false)
 step(2.5); check("hidden again when still", mouselook==true)
-flying=false; step(0.2); check("still hidden after landing", mouselook==true)
+flying=false; step(0.2); check("still hidden after landing", mouselook==true and tonumber(cvars.cameraYawMoveSpeed)==18)
 step(0.5); facingV=facingV+0.2; step(0.2); check("on the ground a mouse move brings it back again", mouselook==false)
 swimming=true; step(2.5); check("hidden while swimming too", mouselook==true)
 facingV=facingV+0.2; step(0.2); check("steering while swimming keeps it hidden", mouselook==true)
@@ -404,7 +408,11 @@ UIParent.points = { {"TOPLEFT", nil, "TOPLEFT", 0, 0}, {"BOTTOMRIGHT", nil, "BOT
 check("gives up after another addon fights it 3 times", select(1, uiOffset())==0 and HUDFade.ShiftStatus():find("stopped", 1, true))
 SlashCmdList.HUDFADE("shift on"); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
 check("/hudfade shift on tries again", select(1, uiOffset())~=0)
+HUDFade.Hide(); HUDFadeDB.hideCursor=true; cx=cx+40; step(3)
+local slowedAtLogout = tonumber(cvars.cameraYawMoveSpeed)==18
 fire("PLAYER_LOGOUT")
+check("logout puts mouse look speed back", slowedAtLogout and cvars.cameraYawMoveSpeed=="180")
+HUDFadeDB.hideCursor=false
 check("logout puts the interface back exactly", #UIParent.points==2 and UIParent.points[1][4]==0 and UIParent.points[1][5]==0 and UIParent.points[2][4]==0 and UIParent.points[2][5]==0)
 step(1.1); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
 SlashCmdList.HUDFADE("shift off")

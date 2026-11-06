@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.9
+
+- Hidden pointer: moving the mouse to bring the pointer back no longer turns the camera noticeably. While the pointer is hidden, mouse look speed is turned down to a tenth, and your own setting comes back with the pointer (also after a crash, at the next login). Flight paths and steering while flying keep the normal speed.
+
 ## 0.2.8
 
 - New option "You move the mouse" (on by default) under "While hidden, bring the HUD back when". Off: once the HUD has hidden for being idle, only keys bring it back, so a bumped mouse or coming back from alt-tab leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.
