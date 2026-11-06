@@ -33,6 +33,8 @@ local DEFAULTS = {
 	hideNames = true,      -- floating player/NPC names
 	hideNameplates = true,
 	hideCursor = false,    -- hide the mouse pointer while the HUD is hidden and the mouse is still (experimental)
+	activeCamera = false,  -- turning the camera counts as activity for the idle timer
+	activeAutorun = false, -- auto-run, follow and flight paths count as activity for the idle timer
 	hideMinimap = true,    -- the minimap's icons and arrow ignore the UI's opacity, so the map is hidden instead
 	replaceAltZ = true,    -- the game's own "hide UI" key (Alt+Z) does OLED HUD's toggle instead
 	cleanPrintScreen = false, -- the game's screenshot key leaves the HUD out
@@ -384,15 +386,21 @@ end
 
 local releaseOnKey -- (set further down, with the mouse pointer)
 local keys = CreateFrame("Frame")
-local function onKey()
+local held = {} -- keys held down right now (holding W to run counts as activity the whole time)
+local function onKey(_, key)
+	if key then held[key] = true end
 	input()
 	if releaseOnKey then releaseOnKey() end
+end
+local function onKeyUp(_, key)
+	if key then held[key] = nil end
 end
 local function listenToKeys()
 	-- Only take keyboard events if they can pass straight through to the game; otherwise we would swallow keys.
 	if keys.SetPropagateKeyboardInput and pcall(keys.SetPropagateKeyboardInput, keys, true) then
 		keys:EnableKeyboard(true)
 		keys:SetScript("OnKeyDown", onKey)
+		keys:SetScript("OnKeyUp", onKeyUp)
 		return true
 	end
 	return false
@@ -471,13 +479,19 @@ local function pollMouse()
 			lastX, lastY = x, y
 			state.lastMouseMove = t
 			input()
-		elseif (IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")))
-			or (IsMouselooking and IsMouselooking()) then
-			state.lastMouseMove = t
-			input()
-		elseif state.moving then
-			input()
+		else
+			local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
+			local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
+			if left or right or (IsMouselooking and IsMouselooking()) then
+				state.lastMouseMove = t
+				-- Running with both buttons is moving yourself; turning the camera only counts if you want it to.
+				if (left and right) or DB.activeCamera then input() end
+			end
 		end
+	end
+	if state.moving then
+		-- Moving counts while you hold a key for it. Auto-run, follow and flight paths only count if you want them to.
+		if next(held) or DB.activeAutorun then input() end
 	end
 	-- Pointer hidden only while the HUD is hidden, out of combat, with the mouse still for a moment and nothing open.
 	-- Not while moving either: in mouselook the turn keys strafe, so keyboard turners would feel the difference.
@@ -674,9 +688,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "PLAYER_STARTED_MOVING" then
 		state.moving = true
 		releasePointer(true)
-		input()
 	elseif event == "PLAYER_STOPPED_MOVING" then
 		state.moving = false
+		wipe(held) -- (a key whose release the game never passed on, e.g. after Alt+Tab, cannot keep you "active")
 	elseif event == "UPDATE_BINDINGS" then
 		applyOverrides()
 	elseif event == "SCREENSHOT_SUCCEEDED" or event == "SCREENSHOT_FAILED" then

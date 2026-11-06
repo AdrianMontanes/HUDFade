@@ -155,6 +155,10 @@ local function build()
 	slider("hiddenAlpha", "Opacity while hidden", 0, 50, 5, -468, 320, "%d%%", 100)
 	slider("fadeOut", "Fade out", 0, 3, 0.1, -518, 16, "%.1f s")
 	slider("fadeIn", "Fade in", 0, 1, 0.05, -518, 320, "%.2f s")
+
+	header("Hide when idle also waits while", -566)
+	checkbox("activeCamera", "Turning the camera", "Off: you can look around with the mouse and the HUD stays hidden.", -586)
+	checkbox("activeAutorun", "Auto-running or following", "Off: auto-run, follow and flight paths count as idle, so the HUD hides even while your character keeps moving. Holding a movement key always counts as active.", -586, 320)
 end
 
 local function refreshAll()

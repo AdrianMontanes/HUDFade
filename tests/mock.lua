@@ -45,7 +45,8 @@ function GetCurrentKeyBoardFocus() return nil end
 function GetCursorInfo() return nil end
 local cx=0
 function GetCursorPosition() return cx, 0 end
-function IsMouseButtonDown() return false end
+buttons={}
+function IsMouseButtonDown(b) return buttons[b] or false end
 local target=false
 function UnitExists(u) return target end
 function UnitIsDead() return false end
@@ -140,6 +141,22 @@ step(70); check("no idle hiding while off", UIParent.alpha==1)
 SlashCmdList.OLEDHUD("on")
 check("on takes the key again", binds["ALT-Z"]=="OLEDHUD_TOGGLE")
 OLEDHUD.Toggle(); step(2); check("toggle works again", UIParent.alpha==0)
+-- Idle and what counts as activity
+OLEDHUD.Toggle(); step(0.5); check("shown for the idle tests", UIParent.alpha==1)
+OLEDHUDDB.idleSeconds = 5; OLEDHUDDB.hideCursor = false
+local keyFrame; for _,f in ipairs(frames) do if f.scripts.OnKeyDown then keyFrame=f end end
+keyFrame.scripts.OnKeyDown(keyFrame, "W"); fire("PLAYER_STARTED_MOVING"); step(8)
+check("holding W keeps the HUD up", UIParent.alpha==1)
+keyFrame.scripts.OnKeyUp(keyFrame, "W"); step(7)
+check("auto-run (moving, no key held) goes idle", UIParent.alpha==0)
+fire("PLAYER_STOPPED_MOVING")
+cx=cx+40; step(0.5); check("pointer move wakes", UIParent.alpha==1)
+buttons.LeftButton=true; step(7)
+check("turning the camera does not keep the HUD up", UIParent.alpha==0)
+buttons.LeftButton=nil
+OLEDHUDDB.activeCamera=true; cx=cx+40; step(0.5); buttons.LeftButton=true; step(7)
+check("unless that option is on", UIParent.alpha==1)
+buttons.LeftButton=nil; OLEDHUDDB.activeCamera=false
 fire("PLAYER_LOGOUT")
 check("logout restores cvars", cvars.UnitNameNPC=="1" and cvars.nameplateShowEnemies=="1" and next(OLEDHUDDB.restore)==nil)
 SlashCmdList.OLEDHUD("why")

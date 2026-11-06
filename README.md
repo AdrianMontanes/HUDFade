@@ -14,7 +14,7 @@ OLED HUD never touches a single frame. It fades the layer every UI frame sits on
 
 - **One key hides everything.** Uses your Hide UI key (Alt+Z by default), but fades smoothly and is safe in combat.
 - **Comes back when it matters:** combat, a target, a window or popup, typing in chat, being dead. Each one can be switched off.
-- **Away protection:** after 30 seconds with no input (adjustable) the HUD fades out, and comes back the moment you touch the mouse or keyboard.
+- **Hide when idle:** after 30 seconds with no input (adjustable) the HUD fades out, and comes back the moment you move the mouse or press a key. Looking around with the camera and auto-running don't count as input unless you want them to, so you can take in the view with no HUD.
 - **Clean screenshots:** a key that takes a screenshot with no HUD and no names, then puts everything back.
 - **Hold to peek:** a key that shows the HUD only while held.
 - **Hide the mouse pointer** when it's still (optional, experimental).
