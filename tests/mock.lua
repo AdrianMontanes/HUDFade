@@ -83,7 +83,8 @@ buttons={}
 function IsMouseButtonDown(b) return buttons[b] or false end
 local target=false
 function UnitExists(u) return target end
-function UnitIsDead() return false end
+dead=false
+function UnitIsDead() return dead end
 mouselook=false; facingV=1.0
 function MouselookStart() mouselook=true end
 mlBinds = {}
@@ -279,6 +280,22 @@ target=false; fire("PLAYER_TARGET_CHANGED"); HUDFadeDB.showTarget=true
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
 check("Tab while idle-hidden, 'target' on: shows", UIParent.alpha==1)
 target=false; fire("PLAYER_TARGET_CHANGED")
+-- Dying brings the HUD up once, then idle hides it again while you stay dead
+step(7); check("idle-hidden before dying", UIParent.alpha==0)
+dead=true; local deathPopup = CreateFrame("Frame", "StaticPopup1"); deathPopup.which="DEATH"; fire("PLAYER_DEAD"); step(0.5)
+check("dying brings the HUD back", UIParent.alpha==1)
+check("why says you died", table.concat(HUDFade.Explain(), "\n"):find("idling") ~= nil)
+step(6); check("still dead, Release Spirit popup up: hides again after the idle time", UIParent.alpha==0)
+cx=cx+40; step(0.5); check("a mouse move while dead shows it as usual", UIParent.alpha==1)
+deathPopup:Hide(); dead=false; step(6); check("as a ghost idle works as usual", UIParent.alpha==0)
+HUDFade.Show(); step(0.5); HUDFade.Hide(); step(2); check("hidden with the key", UIParent.alpha==0)
+dead=true; deathPopup:Show(); fire("PLAYER_DEAD"); step(0.5)
+check("dying shows it even after hiding it with the key", UIParent.alpha==1)
+check("why lists it", table.concat(HUDFade.Explain(), "\n"):find("You died") ~= nil)
+step(6); check("and it hides again after the idle time", UIParent.alpha==0)
+HUDFadeDB.showDead=false; dead=false; deathPopup:Hide(); HUDFade.Show(); step(7)
+dead=true; fire("PLAYER_DEAD"); step(0.5); check("'You die' off: dying while idle-hidden keeps it hidden", UIParent.alpha==0)
+dead=false; HUDFadeDB.showDead=true; cx=cx+40; step(0.5)
 -- /hudfade why
 local realPrint, out = print, {}
 local function why()

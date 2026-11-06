@@ -169,7 +169,8 @@ local function build()
 	checkbox("showCombat", "In combat", nil, -356)
 	checkbox("showTarget", "You have a target", nil, -356, 320)
 	checkbox("showCasting", "Casting", nil, -382)
-	checkbox("showDead", "You are dead", nil, -382, 320)
+	checkbox("showDead", "You die",
+		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. As a ghost everything works as usual.", -382, 320)
 	checkbox("showWindows", "A window, popup or bag is open, or you are typing", nil, -408)
 
 	header("Timing", -448)

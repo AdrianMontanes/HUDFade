@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.3
+
+- "You are dead" is now "You die": the HUD comes back the moment you die, then hides again after your idle time even if you stay dead, so lying dead while away no longer keeps the HUD on screen. The Release Spirit popup no longer counts as an open window. As a ghost everything works as usual.
+
 ## 0.2.2
 
 - New option under pointer hiding: Even when flying or swimming (off by default). The pointer also hides while flying, swimming or in a vehicle. Moving the mouse then steers you, as with the right button held, and a click or any key brings the pointer back.

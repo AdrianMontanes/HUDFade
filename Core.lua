@@ -426,6 +426,7 @@ local WINDOWS = {
 local function shown(name)
 	local f = _G[name]
 	if type(f) ~= "table" then return false end
+	if f.which == "DEATH" then return false end -- (see "dying" below)
 	return ask(f, "IsVisible") == true
 end
 
@@ -448,7 +449,6 @@ end
 local function urgentReasons(out)
 	if state.peek then out.peek = true end
 	if DB.showCombat and state.inCombat then out.combat = true end
-	if DB.showDead and is(UnitIsDead, "player") then out.dead = true end
 	if DB.showWindows then
 		local w = windowOpen()
 		if w then out.window = w end
@@ -456,7 +456,11 @@ local function urgentReasons(out)
 end
 
 -- Reasons that bring it back only while you are playing (not idle).
+-- Dying counts as activity the moment it happens (see PLAYER_DEAD), so the HUD comes up and then hides again after
+-- your idle time, even if you stay dead: lying dead while away must not leave the HUD on screen for hours. For the
+-- same reason the Release Spirit popup, which stays up the whole time, does not count as an open window.
 local function softReasons(out)
+	if DB.showDead and is(UnitIsDead, "player") then out.dead = true end
 	if DB.showTarget and is(UnitExists, "target") then out.target = true end
 	if DB.showCasting and state.casting then out.casting = true end
 end
@@ -508,7 +512,7 @@ HUDFade.Update = update
 -- "HUD Fade:" label.
 local REASON_ORDER = { "peek", "combat", "dead", "window", "target", "casting" }
 local REASON_TEXT = {
-	peek = "Peek key held", combat = "In combat", dead = "You are dead",
+	peek = "Peek key held", combat = "In combat", dead = "You died",
 	target = "You have a target", casting = "Casting",
 }
 
@@ -1103,6 +1107,7 @@ events:RegisterEvent("PLAYER_LOGOUT")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_TARGET_CHANGED")
+events:RegisterEvent("PLAYER_DEAD")
 pcall(events.RegisterEvent, events, "PLAYER_FOCUS_CHANGED")
 events:RegisterEvent("PLAYER_STARTED_MOVING")
 events:RegisterEvent("PLAYER_STOPPED_MOVING")
@@ -1177,6 +1182,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		scanSoon()
 		state.suppressed.target = nil
 		if DB.showTarget and is(UnitExists, "target") then input() end
+		update()
+	elseif event == "PLAYER_DEAD" then
+		state.suppressed.dead = nil
+		if DB.showDead then input() end
 		update()
 	elseif event == "PLAYER_STARTED_MOVING" then
 		state.moving = true
