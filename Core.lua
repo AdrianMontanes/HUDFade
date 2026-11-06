@@ -655,18 +655,44 @@ local function getFacing()
 	return nil
 end
 
+-- While you auto-run with the pointer hidden, a left press counts as both buttons (the game's run-with-the-mouse),
+-- which ends auto-run and stops you as you let go. So while you move with the pointer hidden, the left button points
+-- at this invisible button instead: the first press only brings the pointer back and you keep running. Standing
+-- still the left button is left alone, so a left-drag turns the camera straight away.
+local wake = CreateFrame("Button", "HUDFadeWakeButton", UIParent)
+wake:SetSize(1, 1)
+wake:EnableMouse(false)
+if wake.RegisterForClicks then wake:RegisterForClicks("AnyDown", "AnyUp") end
+local WAKE_BIND = "CLICK HUDFadeWakeButton:LeftButton"
+local leftOverridden = false
+
+local function syncLeftOverride()
+	local want = (ours and state.moving) and true or false
+	if want == leftOverridden or not SetMouselookOverrideBinding then return end
+	if InCombatLockdown and InCombatLockdown() then return end
+	if pcall(SetMouselookOverrideBinding, "BUTTON1", want and WAKE_BIND or nil) then leftOverridden = want end
+end
+
 local function releasePointer(stop, moved)
 	if not ours then return end
 	ours = false
 	if stop and MouselookStop then pcall(MouselookStop) end
+	syncLeftOverride()
 	if moved then state.lastMouseMove = now() end
 end
+
+wake:SetScript("OnClick", function()
+	if not ours then return end
+	state.wakeClick = true -- (this press turned nothing, so it is no camera drag: see cameraFree below)
+	releasePointer(true, true)
+end)
 
 local function hidePointer()
 	if ours or not MouselookStart then return end
 	if IsMouselooking and IsMouselooking() then return end -- (you are already steering)
 	if pcall(MouselookStart) then
 		ours = true
+		syncLeftOverride()
 		facing = getFacing()
 		startedAt = now()
 		state.cameraFree = false -- (hiding turned your character to the camera)
@@ -841,10 +867,12 @@ local function pollMouse()
 	-- (any left press on the 3D world may turn the camera, even a tiny tweak)
 	if left and not right then
 		if not leftSince then leftSince, leftOnWorld = t, mouseOverWorld() end
-		if leftOnWorld then state.cameraFree, state.cameraFreeSince = true, t end
+		if leftOnWorld and not state.wakeClick then state.cameraFree, state.cameraFreeSince = true, t end
 	else
 		leftSince = nil
+		if not left then state.wakeClick = false end
 	end
+	syncLeftOverride() -- (you started or stopped moving)
 	if right then state.cameraFree = false end
 	if state.cameraFree and state.moving and not anyButton and cameraFollows() then
 		followSince = followSince or t

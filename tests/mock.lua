@@ -252,6 +252,15 @@ buttons.RightButton=nil; mouselook=false; cx=cx-300
 for _,f in ipairs(frames) do if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, 0.01) end end
 check("right-drag release: hidden again the same frame", mouselook==true)
 step(0.5); check("and the HUD stays hidden", mouselook==true and UIParent.alpha==0)
+-- Auto-running with the pointer hidden: a left press only brings the pointer back (it would end auto-run)
+check("standing still, the left button is left alone", mlBinds.BUTTON1 == nil)
+fire("PLAYER_STARTED_MOVING"); step(0.2)
+check("auto-running: the left button points at the wake button", mlBinds.BUTTON1 == "CLICK HUDFadeWakeButton:LeftButton")
+pressLeft(); step(0.1); check("a left press brings the pointer back", mouselook==false and mlBinds.BUTTON1 == nil)
+buttons.LeftButton=nil; step(2.5); check("that press turned no camera: hidden again soon", mouselook==true)
+fire("PLAYER_REGEN_DISABLED"); check("combat undoes it before lockdown", mlBinds.BUTTON1 == nil and mouselook==false)
+fire("PLAYER_REGEN_ENABLED"); step(2.5); check("back after combat", mlBinds.BUTTON1 ~= nil and mouselook==true)
+fire("PLAYER_STOPPED_MOVING"); step(0.2); check("stopped: the left button is left alone again", mlBinds.BUTTON1 == nil and mouselook==true)
 -- Hiding over an open window takes the pointer too
 cx=cx+40; HUDFade.Show(); step(0.5)
 local map = CreateFrame("Frame", "WorldMapFrame"); step(0.5)

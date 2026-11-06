@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.6
+
+- Hidden pointer: a left click while auto-running no longer stops your character. The first click only brings the pointer back, and you keep running.
+
 ## 0.2.5
 
 - Hidden pointer: letting go of a right-drag no longer flashes the pointer back for a moment.
