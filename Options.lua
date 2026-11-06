@@ -36,7 +36,8 @@ local function checkbox(key, label, tip, y, x, onChange, master)
 	cb:SetSize(26, 26)
 	local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	fs:SetPoint("LEFT", cb, "RIGHT", 4, 0)
-	fs:SetText(label)
+	local function text() return type(label) == "function" and label() or label end
+	fs:SetText(text())
 	cb:SetScript("OnClick", function(self)
 		db()[key] = self:GetChecked() and true or false
 		if onChange then onChange() end
@@ -45,13 +46,16 @@ local function checkbox(key, label, tip, y, x, onChange, master)
 	if tip then
 		cb:SetScript("OnEnter", function(self)
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			GameTooltip:SetText(label, 1, 1, 1)
+			GameTooltip:SetText(text(), 1, 1, 1)
 			GameTooltip:AddLine(tip, nil, nil, nil, true)
 			GameTooltip:Show()
 		end)
 		cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	end
-	cb.refresh = function() cb:SetChecked(db()[key] and true or false) end
+	cb.refresh = function()
+		cb:SetChecked(db()[key] and true or false)
+		fs:SetText(text())
+	end
 	cb.setActive = function(on)
 		if on then cb:Enable() else cb:Disable() end
 		fs:SetTextColor(on and 1 or 0.5, on and 1 or 0.5, on and 1 or 0.5)
@@ -118,7 +122,12 @@ local function build()
 		-76, 16, function() OLEDHUD.SetEnabled(db().enabled) end, true)
 
 	header("Hiding", -120)
-	checkbox("replaceAltZ", "Use the game's Hide UI key (" .. (GetBindingKey("TOGGLEUI") or "unbound") .. ") for OLED HUD",
+	checkbox("replaceAltZ", function()
+			-- (your own key for the game's Hide UI, read each time the page opens)
+			local key = GetBindingKey("TOGGLEUI")
+			local shown = key and (GetBindingText and GetBindingText(key) or key) or "not bound"
+			return "Use the game's Hide UI key (" .. shown .. ") for OLED HUD"
+		end,
 		"Your Hide UI key fades the HUD out and back in instead of switching it off, and the HUD still comes back when something needs it.",
 		-140, 16, OLEDHUD.ApplyOverrides)
 	checkbox("cleanPrintScreen", "Leave the HUD out of screenshots (Print Screen)",
