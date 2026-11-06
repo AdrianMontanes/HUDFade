@@ -30,7 +30,7 @@ local DEFAULTS = {
 	showCasting = false,
 	showWindows = true,    -- bags, map, popups, chat typing, any window you open
 	showDead = true,
-	hideNames = true,      -- floating player/NPC names
+	hideNames = true,      -- floating player/NPC names and chat bubbles
 	hideNameplates = true,
 	hideCursor = false,    -- hide the mouse pointer while the HUD is hidden and the mouse is still (experimental)
 	hideCursorSteer = false, -- ...also while flying, swimming or in a vehicle, where the mouse then steers you
@@ -105,6 +105,7 @@ local NAME_CVARS = {
 	"UnitNameNonCombatCreatureName", "UnitNameFriendlyPlayerName", "UnitNameEnemyPlayerName",
 	"UnitNameFriendlyPetName", "UnitNameEnemyPetName", "UnitNameFriendlyGuardianName", "UnitNameEnemyGuardianName",
 	"UnitNameFriendlyTotemName", "UnitNameEnemyTotemName", "UnitNameFriendlyMinionName", "UnitNameEnemyMinionName",
+	"chatBubbles", "chatBubblesParty", -- (chat bubbles float in the game world too, like the names)
 }
 -- nameplateShowFriendlyPlayers drives EllesmereUI's name-only plates over other players.
 local PLATE_CVARS = { "nameplateShowEnemies", "nameplateShowFriends", "nameplateShowFriendlyPlayers", "nameplateShowFriendlyNPCs" }
@@ -493,6 +494,9 @@ local function update(instant)
 		if state.target < 0.999 or state.current < 0.999 or state.cvarsHidden then setTarget(1, true) end
 		return
 	end
+	-- Typing (chat and the like) is activity: once you send, the idle timer starts from there, not from when you
+	-- opened the chat box.
+	if DB.showWindows and GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus() then state.lastInput = t end
 	local idle = isIdle(t)
 	local base = not state.hudOff and not idle
 	local reason = next(currentReasons(idle)) ~= nil

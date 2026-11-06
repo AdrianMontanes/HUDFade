@@ -178,8 +178,8 @@ local function build()
 	checkbox("cleanPrintScreen", "Leave the HUD out of screenshots (Print Screen)",
 		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back.", -166, 16, HUDFade.ApplyOverrides)
 	checkbox("startHidden", "Start each session with the HUD hidden", nil, -192)
-	checkbox("hideNames", "Hide player and NPC names while hidden",
-		"The floating names above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after.", -218)
+	checkbox("hideNames", "Hide names and chat bubbles while hidden",
+		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after.", -218)
 	checkbox("hideNameplates", "Hide nameplates while hidden",
 		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.", -244)
 	checkbox("hideMinimap", "Hide the minimap while hidden",

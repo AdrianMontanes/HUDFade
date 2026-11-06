@@ -2,7 +2,7 @@
 -- Minimal WoW API mock to run HUD Fade's logic outside the game.
 local T = 0
 function GetTime() return T end
-local cvars = { cameraYawMoveSpeed="180", cameraPitchMoveSpeed="90", UnitNameNPC="1", UnitNameOwn="0", nameplateShowEnemies="1", nameplateShowFriends="1", nameplateShowFriendlyPlayers="1" }
+local cvars = { chatBubbles="1", cameraYawMoveSpeed="180", cameraPitchMoveSpeed="90", UnitNameNPC="1", UnitNameOwn="0", nameplateShowEnemies="1", nameplateShowFriends="1", nameplateShowFriendlyPlayers="1" }
 C_CVar = { GetCVar=function(n) return cvars[n] end, SetCVar=function(n,v) if lockdown and n:find("nameplate") then error("blocked") end cvars[n]=v end }
 lockdown=false
 function InCombatLockdown() return lockdown end
@@ -77,7 +77,8 @@ function GetBindingAction(k) local m={W="MOVEFORWARD", D="TURNRIGHT", NUMLOCK="T
 binds = {}
 function SetOverrideBinding(o,p,k,c) binds[k]=c end
 function ClearOverrideBindings() binds={} end
-function GetCurrentKeyBoardFocus() return nil end
+typingIn=nil
+function GetCurrentKeyBoardFocus() return typingIn end
 function GetCursorInfo() return nil end
 local cx=0
 function GetCursorPosition() return cx, 0 end
@@ -306,6 +307,11 @@ target=false; fire("PLAYER_TARGET_CHANGED"); HUDFadeDB.showTarget=true
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
 check("Tab while idle-hidden, 'target' on: shows", UIParent.alpha==1)
 target=false; fire("PLAYER_TARGET_CHANGED")
+-- Typing in chat counts as activity: after sending, the idle time starts over
+step(7); check("idle-hidden before chatting", UIParent.alpha==0 and cvars.chatBubbles=="0")
+typingIn={}; step(0.5); check("typing brings the HUD and chat bubbles back", UIParent.alpha==1 and cvars.chatBubbles=="1")
+step(10); typingIn=nil; step(1.5); check("after sending, it stays up for the idle time", UIParent.alpha==1)
+step(5); check("then hides again", UIParent.alpha==0)
 -- "You move the mouse" off: the mouse keeps the HUD up, but only keys bring it back once idle
 HUDFadeDB.mouseWakes=false; step(7); check("idle-hidden", UIParent.alpha==0)
 cx=cx+40; step(0.5); check("mouse wake off: moving the mouse leaves it hidden", UIParent.alpha==0)
