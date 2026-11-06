@@ -33,6 +33,7 @@ local DEFAULTS = {
 	hideNames = true,      -- floating player/NPC names
 	hideNameplates = true,
 	hideCursor = false,    -- hide the mouse pointer while the HUD is hidden and the mouse is still (experimental)
+	hideCursorSteer = false, -- ...also while flying, swimming or in a vehicle, where the mouse then steers you
 	activeCamera = false,  -- turning the camera counts as activity for the idle timer
 	activeAutorun = false, -- auto-run, follow and flight paths count as activity for the idle timer
 	hideMinimap = true,    -- the minimap's icons and arrow ignore the UI's opacity, so the map is hidden instead
@@ -662,9 +663,7 @@ local function hidePointer()
 	if IsMouselooking and IsMouselooking() then return end -- (you are already steering)
 	if pcall(MouselookStart) then
 		ours = true
-		-- (on a flight path the game turns you along the route, so the facing says nothing about the mouse: there
-		-- any key or click brings the pointer back, see releaseOnKey and the watcher)
-		facing = not state.onTaxi and getFacing() or nil
+		facing = getFacing()
 		startedAt = now()
 	end
 end
@@ -672,8 +671,9 @@ end
 releaseOnKey = function(key)
 	if not ours then return end
 	-- With the pointer hidden, the turn keys would strafe instead of turn: give it back first (this runs before the
-	-- game acts on the key). And where the facing is secret a mouse move cannot be seen, so any key brings it back.
-	if isTurnKey(key) or not facing then releasePointer(true, true) end
+	-- game acts on the key). Where a mouse move does not bring it back (secret facing, a flight path, steering with
+	-- the mouse), any key does.
+	if isTurnKey(key) or not facing or state.onTaxi or state.steering then releasePointer(true, true) end
 end
 
 local watcher = CreateFrame("Frame")
@@ -708,7 +708,15 @@ watcher:SetScript("OnUpdate", function()
 	end
 	local d = math.abs(f - facing)
 	if d > math.pi then d = 2 * math.pi - d end -- (the facing wraps around at a full turn)
-	if d > TURN then releasePointer(true, true) end
+	if d <= TURN then return end
+	if state.steering then
+		-- Flying, swimming or in a vehicle with "even when flying" on: the mouse steers you and the pointer stays
+		-- hidden. Steering counts like turning the camera with the right button, so only if you want it to.
+		facing = f
+		if DB.activeCamera then input() end
+	else
+		releasePointer(true, true)
+	end
 end)
 
 -- An open window keeps the pointer only while it is also what keeps the HUD up. Once you hide the HUD over a
@@ -745,6 +753,16 @@ end
 local lastX, lastY = 0, 0
 local leftSince, leftOnWorld, followSince
 
+-- Flying or swimming the mouse sets your pitch as well as your facing, and in a vehicle it often steers or aims the
+-- vehicle. Hiding the pointer there turns you to where the camera points, up and down included, and moving the mouse
+-- then steers you as with the right button held. So the pointer only hides there if you ask for it.
+local function steerPlace()
+	if is(IsFlying) then return "flying" end
+	if is(IsSwimming) then return "swimming" end
+	if is(UnitInVehicle, "player") then return "in a vehicle" end
+	return nil
+end
+
 -- Why the pointer has to stay visible right now (nil = it can hide). Also used by /hudfade why.
 local function pointerBlock(t, anyButton)
 	if not (DB.enabled and DB.hideCursor) then return "pointer hiding is off" end
@@ -752,14 +770,11 @@ local function pointerBlock(t, anyButton)
 	if state.peek then return "peek key held" end
 	if state.inCombat then return "in combat" end
 	if anyButton then return "a mouse button is held" end
-	if not state.onTaxi then
-		-- (in the air or in water the camera also sets your pitch, so hiding could tip your character up or down;
-		-- on a flight path you cannot steer, so there it is fine)
-		if is(IsFlying) then return "flying" end
-		if is(IsSwimming) then return "swimming" end
+	-- (on a flight path you cannot steer, so there it is fine; elsewhere only if you asked for it)
+	if not (state.onTaxi or state.steering) then
+		local place = steerPlace()
+		if place then return place .. " (see Even when flying or swimming)" end
 	end
-	-- (in a vehicle the mouse often aims or steers the vehicle itself)
-	if is(UnitInVehicle, "player") then return "in a vehicle" end
 	if turnKeyHeld() then return "turning with the keyboard" end
 	if windowKeepsPointer() then return "a window is open, or you are typing" end
 	if state.cameraFree then return "the camera points away from your character (a right-drag or moving lines them up)" end
@@ -771,13 +786,18 @@ end
 local function pollMouse()
 	local t = now()
 	local taxi = is(UnitOnTaxi, "player")
+	local steer = not taxi and DB.hideCursorSteer and steerPlace() ~= nil
 	if state.onTaxi and not taxi then
 		-- Landed. The mouse was turning the camera, not you: hand it back, and since the camera may now point anywhere,
 		-- wait for it to line up with your character before hiding again (see cameraFollows above).
 		releasePointer(true)
 		state.cameraFree = true
+	elseif state.steering and not steer and ours then
+		-- Landed, or out of the water or the vehicle. Camera and character are lined up (the mouse was steering), so
+		-- the pointer can stay hidden: from here a mouse move brings it back again.
+		facing, startedAt = getFacing(), t
 	end
-	state.onTaxi = taxi
+	state.onTaxi, state.steering = taxi, steer
 	local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
 	local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
 	local anyButton = left or right

@@ -65,6 +65,8 @@ flying=false
 function IsFlying() return flying end
 onTaxi=false
 function UnitOnTaxi() return onTaxi end
+swimming=false
+function IsSwimming() return swimming end
 function EnumerateFrames(f) if not f then return frames[1] end for i,x in ipairs(frames) do if x==f then return frames[i+1] end end end
 C_Timer = { After=function(d,fn) table.insert(timers,{T+d,fn}) end, NewTicker=function(d,fn) ticker=fn end }
 timers = {}
@@ -223,6 +225,21 @@ check("landing hands the mouse back", mouselook==false)
 step(3); check("and waits for camera and character to line up", mouselook==false)
 buttons.RightButton=true; step(0.1); buttons.RightButton=nil; mouselook=false; step(0.2)
 check("lined up by a right-drag: hides again", mouselook==true)
+-- Flying, swimming and vehicles: only if asked, and then the mouse steers
+flying=true; step(0.2); check("not hidden while flying unless asked", mouselook==false)
+check("why names the setting", HUDFade.PointerWhy():find("Even when flying") ~= nil)
+HUDFadeDB.hideCursorSteer=true; step(0.2); check("even when flying: hidden", mouselook==true)
+for i=1,20 do facingV=facingV+0.05; step(0.1) end
+check("steering with the mouse keeps it hidden, and the HUD too", mouselook==true and UIParent.alpha==0)
+keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); check("any key brings it back while flying", mouselook==false)
+step(2.5); check("hidden again when still", mouselook==true)
+flying=false; step(0.2); check("still hidden after landing", mouselook==true)
+step(0.5); facingV=facingV+0.2; step(0.2); check("on the ground a mouse move brings it back again", mouselook==false)
+swimming=true; step(2.5); check("hidden while swimming too", mouselook==true)
+facingV=facingV+0.2; step(0.2); check("steering while swimming keeps it hidden", mouselook==true)
+HUDFadeDB.activeCamera=true; facingV=facingV+0.2; step(0.2)
+check("steering counts as activity when turning the camera does", HUDFade.state.lastInput >= GetTime() - 0.25)
+HUDFadeDB.activeCamera=false; swimming=false; HUDFadeDB.hideCursorSteer=false; step(0.2)
 -- Hiding over an open window takes the pointer too
 cx=cx+40; HUDFade.Show(); step(0.5)
 local map = CreateFrame("Frame", "WorldMapFrame"); step(0.5)

@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.2
+
+- New option under pointer hiding: Even when flying or swimming (off by default). The pointer also hides while flying, swimming or in a vehicle. Moving the mouse then steers you, as with the right button held, and a click or any key brings the pointer back.
+
 ## 0.2.1
 
 - Pointer hiding now also works on flight paths. Moving the mouse turns the camera as usual, and a click or any key brings the pointer back. After landing it stays visible until the camera lines up with your character again.
