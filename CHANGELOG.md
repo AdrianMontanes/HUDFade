@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.4
+
+- The settings page scrolls when the settings window is too short for it, instead of the last options spilling over the window's border.
+
 ## 0.2.3
 
 - "You are dead" is now "You die": the HUD comes back the moment you die, then hides again after your idle time even if you stay dead, so lying dead while away no longer keeps the HUD on screen. The Release Spirit popup no longer counts as an open window. As a ghost everything works as usual.

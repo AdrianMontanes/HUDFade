@@ -371,4 +371,20 @@ check("turning it off puts the interface back exactly", #UIParent.points==2 and 
 fire("PLAYER_LOGOUT")
 check("logout restores cvars", cvars.UnitNameNPC=="1" and cvars.nameplateShowEnemies=="1" and next(HUDFadeDB.restore)==nil)
 SlashCmdList.HUDFADE("reset")
+-- The settings pages build (font strings and templates are stubs here)
+local function stub() return setmetatable({}, {__index=function() return function() end end}) end
+for _,f in ipairs(frames) do rawset(f, "CreateFontString", stub) end
+local realCreate = CreateFrame
+local templates = {}
+CreateFrame = function(kind, name, parent, template)
+  if template then templates[#templates+1] = template end
+  if template == "ScrollFrameTemplate" then error("no such template") end -- (the fallback must cope)
+  local f = realCreate(kind, name, parent); rawset(f, "CreateFontString", stub); return f
+end
+local pages = {}
+for _,f in ipairs(frames) do if f.scripts.OnShow then pages[#pages+1]=f end end
+local ok, err = pcall(function() for _,f in ipairs(pages) do f.scripts.OnShow(f) end end)
+check("settings pages build without errors ("..tostring(err)..")", ok and #pages==2)
+check("the main page scrolls (falls back to the older scroll template)", table.concat(templates, " "):find("UIPanelScrollFrameTemplate") ~= nil)
+CreateFrame = realCreate
 os.exit(failed and 1 or 0)

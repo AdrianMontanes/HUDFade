@@ -130,11 +130,35 @@ end
 local SHIFT_TIP = "Moves the whole interface a pixel or two every few minutes, so nothing sits on the same pixels for hours. "
 	.. "Everything moves together, so your layout stays as it is. Distance and timing are on the Burn-in protection page under HUD Fade."
 
+-- The settings go on a scrolling page, so on a short settings window the last ones scroll into view instead of
+-- spilling over the window's border.
+local function scrollPage(page, height)
+	local ok, scroll = pcall(CreateFrame, "ScrollFrame", nil, page, "ScrollFrameTemplate")
+	if not ok then ok, scroll = pcall(CreateFrame, "ScrollFrame", nil, page, "UIPanelScrollFrameTemplate") end
+	if not ok then scroll = CreateFrame("ScrollFrame", nil, page) end
+	scroll:SetPoint("TOPLEFT", 0, -4)
+	scroll:SetPoint("BOTTOMRIGHT", -28, 4) -- (room for the scroll bar on the right)
+	local content = CreateFrame("Frame", nil, scroll)
+	content:SetSize(600, height)
+	scroll:SetScrollChild(content)
+	scroll:HookScript("OnSizeChanged", function(_, w)
+		if type(w) == "number" and w > 0 then content:SetWidth(w) end
+	end)
+	if not scroll:GetScript("OnMouseWheel") then -- (the templates scroll with the wheel themselves)
+		scroll:EnableMouseWheel(true)
+		scroll:SetScript("OnMouseWheel", function(self, delta)
+			local range = self:GetVerticalScrollRange() or 0
+			self:SetVerticalScroll(math.max(0, math.min(range, self:GetVerticalScroll() - delta * 40)))
+		end)
+	end
+	return content
+end
+
 local built = false
 local function build()
 	if built then return end
 	built = true
-	canvas = panel
+	canvas = scrollPage(panel, 630)
 	pageTitle("HUD Fade")
 	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
 
