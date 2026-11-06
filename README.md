@@ -41,7 +41,7 @@ Hover it and type `/hudfade what`, then [open an issue](https://github.com/Adria
 
 ## Recording in HDR
 
-If you play in HDR and want to capture it, take a look at **REPLAYD**.
+If you capture your HDR gameplay, try [REPLAYD](https://replayd.download/with/hudfade), a game recorder for Windows.
 
 ## License
 
