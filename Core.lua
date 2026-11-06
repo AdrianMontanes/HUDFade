@@ -426,11 +426,11 @@ local function getFacing()
 	return nil
 end
 
-local function releasePointer(stop)
+local function releasePointer(stop, moved)
 	if not ours then return end
 	ours = false
 	if stop and MouselookStop then pcall(MouselookStop) end
-	state.lastMouseMove = now()
+	if moved then state.lastMouseMove = now() end
 end
 
 local function hidePointer()
@@ -445,14 +445,21 @@ end
 
 releaseOnKey = function()
 	-- Where the facing is secret a mouse move cannot be seen, so any key brings the pointer back there.
-	if ours and not facing then releasePointer(true) end
+	if ours and not facing then releasePointer(true, true) end
 end
 
 local watcher = CreateFrame("Frame")
 watcher:SetScript("OnUpdate", function()
 	if not ours then return end
-	if IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")) then
-		releasePointer(false) -- (you took the mouse: the game's own drag carries on from here)
+	local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
+	local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
+	if right then
+		releasePointer(false) -- (right drag steers anyway: the game's own drag carries on from here)
+		return
+	elseif left then
+		-- Left drag only turns the camera, but with our mouselook still on it would steer your character too.
+		-- Switch ours off so the game's own camera drag takes over.
+		releasePointer(true)
 		return
 	end
 	if IsMouselooking and not IsMouselooking() then
@@ -467,12 +474,13 @@ watcher:SetScript("OnUpdate", function()
 	end
 	local d = math.abs(f - facing)
 	if d > math.pi then d = 2 * math.pi - d end -- (the facing wraps around at a full turn)
-	if d > TURN then releasePointer(true) end
+	if d > TURN then releasePointer(true, true) end
 end)
 
 local lastX, lastY = 0, 0
 local function pollMouse()
 	local t = now()
+	local anyButton = IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton"))
 	if not ours then -- (while ours, the pointer is frozen and the watcher above looks for moves)
 		local x, y = GetCursorPosition()
 		if math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2 then
@@ -483,7 +491,7 @@ local function pollMouse()
 			local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
 			local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
 			if left or right or (IsMouselooking and IsMouselooking()) then
-				state.lastMouseMove = t
+				-- (not a pointer move: after a drag the pointer can hide again straight away)
 				-- Running with both buttons is moving yourself; turning the camera only counts if you want it to.
 				if (left and right) or DB.activeCamera then input() end
 			end
@@ -496,8 +504,9 @@ local function pollMouse()
 	-- Pointer hidden only while the HUD is hidden, out of combat, with the mouse still for a moment and nothing open.
 	-- Not while moving either: in mouselook the turn keys strafe, so keyboard turners would feel the difference.
 	local want = DB.enabled and DB.hideCursor and state.target < 0.999 and not state.peek and not state.inCombat
-		and not state.moving and (t - (state.lastMouseMove or 0)) >= 2 and not windowOpen()
-	if want then hidePointer() elseif ours then releasePointer(true) end
+		and not state.moving and not anyButton and (t - (state.lastMouseMove or 0)) >= 2 and not windowOpen()
+	-- (with a button held, the watcher above decides how to hand the mouse back)
+	if want then hidePointer() elseif ours and not anyButton then releasePointer(true) end
 end
 
 ---------------------------------------------------------------------------

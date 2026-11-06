@@ -141,6 +141,18 @@ step(70); check("no idle hiding while off", UIParent.alpha==1)
 SlashCmdList.OLEDHUD("on")
 check("on takes the key again", binds["ALT-Z"]=="OLEDHUD_TOGGLE")
 OLEDHUD.Toggle(); step(2); check("toggle works again", UIParent.alpha==0)
+-- Dragging while the pointer is hidden
+OLEDHUD.Toggle(); step(0.5); OLEDHUDDB.hideCursor = true; OLEDHUD.Hide(); step(4)
+check("pointer hidden before the drag", mouselook==true)
+buttons.LeftButton=true; step(0.1)
+check("left drag hands over to the game's camera drag", mouselook==false)
+step(1); check("no re-hide while a button is held", mouselook==false)
+buttons.LeftButton=nil; step(0.2)
+check("pointer hides again right after the drag", mouselook==true)
+buttons.RightButton=true; step(0.1)
+check("right drag keeps the game's steering", mouselook==true)
+buttons.RightButton=nil; mouselook=false; step(0.2)
+check("pointer hides again right after a right drag", mouselook==true)
 -- Idle and what counts as activity
 OLEDHUD.Toggle(); step(0.5); check("shown for the idle tests", UIParent.alpha==1)
 OLEDHUDDB.idleSeconds = 5; OLEDHUDDB.hideCursor = false
