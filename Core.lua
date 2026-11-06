@@ -1044,6 +1044,7 @@ local shift = {
 	base = nil,     -- UIParent's own anchors, while we have it moved
 	sig = nil,      -- what its anchors looked like right after our last move
 	px = 0, py = 0, -- current offset, in pixels
+	inset = 0,      -- how far in from every screen edge the interface is kept, in pixels
 	fights = 0, since = 0, gaveUp = false,
 	lastSync = -100,
 }
@@ -1070,9 +1071,16 @@ local function anchorSig(t)
 	return table.concat(parts, ";")
 end
 
-local function placeUI(t, dx, dy)
+-- Moves the interface by dx, dy, kept "inset" in from every screen edge. With the inset as large as the furthest
+-- move, a frame you placed against an edge never goes past it: at most it comes back to exactly where you put it.
+local function placeUI(t, dx, dy, inset)
 	UIParent:ClearAllPoints()
-	for _, a in ipairs(t) do UIParent:SetPoint(a[1], a[2], a[3], a[4] + dx, a[5] + dy) end
+	for _, a in ipairs(t) do
+		local point, x, y = a[1], a[4] + dx, a[5] + dy
+		if point:find("LEFT") then x = x + inset elseif point:find("RIGHT") then x = x - inset end
+		if point:find("TOP") then y = y - inset elseif point:find("BOTTOM") then y = y + inset end
+		UIParent:SetPoint(point, a[2], a[3], x, y)
+	end
 end
 
 -- One screen pixel in UIParent's own units.
@@ -1092,8 +1100,16 @@ local function pixelUnit()
 	return factor / scale
 end
 
-local function editModeOpen()
-	return EditModeManagerFrame and ask(EditModeManagerFrame, "IsShown") == true
+-- While you arrange your frames (the game's Edit Mode, EllesmereUI's unlock mode) the interface goes back to its
+-- exact place, so the positions you save are never off by the shift.
+local function layoutModeOpen()
+	if EditModeManagerFrame and ask(EditModeManagerFrame, "IsShown") == true then return true end
+	local eui = _G.EllesmereUI
+	if type(eui) == "table" and type(eui.IsUnlockModeActive) == "function" then
+		local ok, on = pcall(eui.IsUnlockModeActive, eui)
+		if ok and readable(on) == true then return true end
+	end
+	return false
 end
 
 local function syncShift(force)
@@ -1106,7 +1122,7 @@ local function syncShift(force)
 	-- Something else moved the interface since our last move (an ultrawide addon, the game): that is the new normal.
 	-- If it keeps happening, step aside instead of fighting over it.
 	if shift.base and anchorSig(cur) ~= shift.sig then
-		shift.base, shift.px, shift.py = nil, 0, 0
+		shift.base, shift.px, shift.py, shift.inset = nil, 0, 0, 0
 		if t - shift.since > 10 then shift.since, shift.fights = t, 0 end
 		shift.fights = shift.fights + 1
 		if shift.fights >= 3 and not shift.gaveUp then
@@ -1114,34 +1130,41 @@ local function syncShift(force)
 			say("pixel shift stopped: another addon keeps moving the interface back. /hudfade shift on tries again.")
 		end
 	end
-	local px, py = 0, 0
-	if DB.enabled and DB.pixelShift and not shift.gaveUp and not editModeOpen() then
+	local px, py, inset = 0, 0, 0
+	if DB.enabled and DB.pixelShift and not shift.gaveUp and not layoutModeOpen() then
 		if t >= shift.nextAt then
 			shift.index = shift.index % #SHIFT_STEPS + 1
 			shift.nextAt = t + math.max(DB.shiftMinutes or 3, 0.5) * 60
 		end
 		local step = SHIFT_STEPS[shift.index]
 		local d = DB.shiftPixels or 2
-		px, py = step[1] * d, step[2] * d
+		px, py, inset = step[1] * d, step[2] * d, d
 	end
 	local unit = pixelUnit()
 	if not unit then return end
 	-- (a changed UI scale changes what a pixel is, so that counts as a change too)
-	if px == shift.px and py == shift.py and (unit == shift.unit or (px == 0 and py == 0)) then return end
+	if px == shift.px and py == shift.py and inset == shift.inset and (unit == shift.unit or inset == 0) then return end
 	local base = shift.base or cur
-	if not pcall(placeUI, base, px * unit, py * unit) then
+	if not pcall(placeUI, base, px * unit, py * unit, inset * unit) then
 		-- Never leave the interface without a position.
-		pcall(placeUI, base, 0, 0)
-		shift.base, shift.px, shift.py, shift.gaveUp = nil, 0, 0, true
+		pcall(placeUI, base, 0, 0, 0)
+		shift.base, shift.px, shift.py, shift.inset, shift.gaveUp = nil, 0, 0, 0, true
 		say("pixel shift stopped: the game refused to move the interface.")
 		return
 	end
-	if px == 0 and py == 0 then
+	if inset == 0 then -- (back in its own place: nothing of ours to keep)
 		shift.base, shift.sig = nil, nil
 	else
 		shift.base, shift.sig = base, anchorSig(readAnchors(UIParent))
 	end
-	shift.px, shift.py, shift.unit = px, py, unit
+	shift.px, shift.py, shift.inset, shift.unit = px, py, inset, unit
+end
+
+-- Nothing of the shift is saved: put the interface back in its own place before logging out or reloading, in case
+-- another addon saves frame positions from where they are on screen.
+local function restoreShift()
+	if shift.base and not InCombatLockdown() then pcall(placeUI, shift.base, 0, 0, 0) end
+	shift.base, shift.sig, shift.px, shift.py, shift.inset = nil, nil, 0, 0, 0
 end
 
 function HUDFade.UpdateShift()
@@ -1159,7 +1182,7 @@ function HUDFade.ShiftStatus()
 	local text = "pixel shift is on: " .. DB.shiftPixels .. " px every " .. DB.shiftMinutes .. " min"
 	if not DB.enabled then return text .. ", but HUD Fade is turned off." end
 	if shift.gaveUp then return text .. ", stopped because another addon keeps moving the interface back." end
-	text = text .. ". Offset now " .. shift.px .. "," .. shift.py .. " px"
+	text = text .. ". Offset now " .. shift.px .. "," .. shift.py .. " px, kept " .. shift.inset .. " px in from the screen edges"
 	if InCombatLockdown() then return text .. ", waiting for combat to end." end
 	return text .. string.format(", next move in %d s.", math.max(0, shift.nextAt - now()))
 end
@@ -1225,6 +1248,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		end
 	elseif event == "PLAYER_LOGOUT" then
 		restoreAllCVars()
+		restoreShift()
 	elseif event == "PLAYER_REGEN_DISABLED" then
 		-- Runs just before combat lockdown starts: the last moment nameplates can be turned back on.
 		state.inCombat = true

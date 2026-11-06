@@ -1,5 +1,10 @@
 # HUD Fade
 
+## 0.2.7
+
+- Pixel shift keeps the interface its shift distance in from the screen edges, so a frame you placed against an edge never goes past it. At most it comes back to exactly where you put it.
+- Pixel shift steps aside while EllesmereUI's unlock mode is open (as it already did for Edit Mode), and puts the interface back in place before logout or reload, so no addon can save a shifted position.
+
 ## 0.2.6
 
 - Hidden pointer: a left click while auto-running no longer stops your character. The first click only brings the pointer back, and you keep running.

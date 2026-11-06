@@ -213,12 +213,14 @@ local function build()
 	pageTitle("Burn-in protection")
 	note("Pixel shift moves the whole interface a pixel or two every few minutes, around a small circle, so the same pixels "
 		.. "never show the same shapes for hours. Blizzard UI, EllesmereUI and every other addon move together, so your "
-		.. "layout stays exactly as it is and nothing is saved. It never moves during combat and steps aside while Edit Mode is open.", -40)
+		.. "layout stays exactly as it is and nothing is saved. It never moves during combat and steps aside while Edit Mode or EllesmereUI's unlock mode is open.", -40)
 	header("Pixel shift", -110)
 	checkbox("pixelShift", "Pixel shift (burn-in protection)", nil, -130, 16, shiftChanged)
 	slider("shiftPixels", "Distance", 1, 4, 1, -170, 16, function(v) return string.format("%d px", v) end)
 	slider("shiftMinutes", "Move every", 1, 10, 1, -170, 320, function(v) return string.format("%d min", v) end)
-	note("Many OLED monitors also shift the whole picture on their own. Using both is fine. Type /hudfade shift now to see a move straight away.", -230)
+	note("The interface is also kept that distance in from the screen edges, so a frame you placed against an edge never goes past it. "
+		.. "Nothing is saved: each login starts from your own layout. Many OLED monitors also shift the whole picture on their own; "
+		.. "using both is fine. Type /hudfade shift now to see a move straight away.", -230)
 	canvas = panel
 end
 

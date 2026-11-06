@@ -35,7 +35,9 @@ function UIParent:ClearAllPoints() if lockdown then error("blocked") end self.po
 function UIParent:SetPoint(p, r, rp, x, y) if lockdown then error("blocked") end table.insert(self.points, {p, r, rp, x, y}) end
 function UIParent:GetScale() return 0.5 end
 function GetPhysicalScreenSize() return 2560, 1536 end -- (768/1536 = 0.5 units a pixel at scale 1, so 1 px = 1 unit here)
-local function uiOffset() local a = UIParent.points[1]; return a and a[4] or 0, a and a[5] or 0 end
+-- Where the middle of the interface is (its offset), and how far in from the screen edges it is kept.
+local function uiOffset() local a, b = UIParent.points[1], UIParent.points[2]; return (a[4] + b[4]) / 2, (a[5] + b[5]) / 2 end
+local function uiInset() local a, b = UIParent.points[1], UIParent.points[2]; return (a[4] - b[4]) / 2, (b[5] - a[5]) / 2 end
 Minimap = newFrame(); Minimap.parent = UIParent
 function hooksecurefunc(t, name, fn) local orig=t[name]; rawset(t, name, function(...) local r=orig(...); fn(...); return r end) end
 function CreateFrame(kind, name, parent) local f=newFrame(kind); f.parent=parent; if name then _G[name]=f end; return f end
@@ -366,7 +368,11 @@ local visited, nonzero = {}, false
 for i=1,9 do HUDFade.ShiftNow(); local x,y = uiOffset(); visited[x..","..y]=true; if x~=0 or y~=0 then nonzero=true end end
 local n=0; for _ in pairs(visited) do n=n+1 end
 check("shift walks the 9 spots of the circle", n==9 and nonzero and visited["2,0"] and visited["-2,-2"])
-check("both anchors move together", UIParent.points[1][4]==UIParent.points[2][4] and #UIParent.points==2)
+check("kept the distance in from every edge", select(1, uiInset())==2 and select(2, uiInset())==2 and #UIParent.points==2)
+local inside = true
+for i=1,9 do HUDFade.ShiftNow(); local a, b = UIParent.points[1], UIParent.points[2]
+  if a[4] < 0 or a[5] > 0 or b[4] > 0 or b[5] < 0 then inside = false end end
+check("never past a screen edge on any spot", inside)
 repeat HUDFade.ShiftNow() until select(1, uiOffset())==2
 lockdown=true; HUDFade.ShiftNow(); step(1.1)
 check("no move during combat", select(1, uiOffset())==2)
@@ -377,6 +383,10 @@ check("distance follows the setting", math.abs(x1)<=1 and math.abs(y1)<=1)
 EditModeManagerFrame = CreateFrame("Frame", "EditModeManagerFrame"); step(1.1)
 check("back in place while Edit Mode is open", select(1, uiOffset())==0 and select(2, uiOffset())==0)
 EditModeManagerFrame:Hide(); HUDFade.ShiftNow(); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
+EllesmereUI = { _unlockModeSessionActive = true }
+function EllesmereUI:IsUnlockModeActive() return self._unlockModeSessionActive == true end
+step(1.1); check("back in place while EllesmereUI's unlock mode is open", select(1, uiOffset())==0 and select(1, uiInset())==0)
+EllesmereUI._unlockModeSessionActive = false; repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
 SlashCmdList.HUDFADE("off")
 check("addon off puts the interface back", select(1, uiOffset())==0 and select(2, uiOffset())==0)
 SlashCmdList.HUDFADE("on"); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
@@ -386,6 +396,9 @@ UIParent.points = { {"TOPLEFT", nil, "TOPLEFT", 0, 0}, {"BOTTOMRIGHT", nil, "BOT
 check("gives up after another addon fights it 3 times", select(1, uiOffset())==0 and HUDFade.ShiftStatus():find("stopped", 1, true))
 SlashCmdList.HUDFADE("shift on"); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
 check("/hudfade shift on tries again", select(1, uiOffset())~=0)
+fire("PLAYER_LOGOUT")
+check("logout puts the interface back exactly", #UIParent.points==2 and UIParent.points[1][4]==0 and UIParent.points[1][5]==0 and UIParent.points[2][4]==0 and UIParent.points[2][5]==0)
+step(1.1); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
 SlashCmdList.HUDFADE("shift off")
 check("turning it off puts the interface back exactly", #UIParent.points==2 and UIParent.points[1][4]==0 and UIParent.points[1][5]==0 and UIParent.points[2][4]==0)
 fire("PLAYER_LOGOUT")
