@@ -1,5 +1,10 @@
 # HUD Fade
 
+## 0.2.11
+
+- Shorter, clearer settings: "While HUD is hidden, also hide" (names and chat bubbles, nameplates, minimap, mouse pointer), "While HUD is hidden, bring it back on" (mouse moving, combat, target, casting, death, windows) and "Keep HUD visible during" (camera turning, auto-run or follow).
+- Hidden pointer: the left-click guard while auto-running now switches on before the pointer hides, so a left click or drag really keeps you running. /hudfade why shows when it is on.
+
 ## 0.2.10
 
 - Typing in chat counts as activity: after you send, the HUD stays for your idle time instead of hiding at once.

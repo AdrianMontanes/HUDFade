@@ -517,8 +517,8 @@ HUDFade.Update = update
 -- "HUD Fade:" label.
 local REASON_ORDER = { "peek", "combat", "dead", "window", "target", "casting" }
 local REASON_TEXT = {
-	peek = "Peek key held", combat = "In combat", dead = "You died",
-	target = "You have a target", casting = "Casting",
+	peek = "Peek key held", combat = "Combat", dead = "Death",
+	target = "Target", casting = "Casting",
 }
 
 local function windowText(v)
@@ -722,14 +722,18 @@ end)
 local function hidePointer()
 	if ours or not MouselookStart then return end
 	if IsMouselooking and IsMouselooking() then return end -- (you are already steering)
-	if pcall(MouselookStart) then
-		ours = true
+	-- The left button's override has to be in place before mouselook starts, or the game may not use it.
+	ours = true
+	syncLeftOverride()
+	if not pcall(MouselookStart) then
+		ours = false
 		syncLeftOverride()
-		slowMouse(not (state.onTaxi or state.steering))
-		facing = getFacing()
-		startedAt = now()
-		state.cameraFree = false -- (hiding turned your character to the camera)
+		return
 	end
+	slowMouse(not (state.onTaxi or state.steering))
+	facing = getFacing()
+	startedAt = now()
+	state.cameraFree = false -- (hiding turned your character to the camera)
 end
 
 -- After a right-drag the game shows the pointer again as you let go. This checks every frame for a moment after a
@@ -843,7 +847,7 @@ local function pointerBlock(t, anyButton)
 	-- (on a flight path you cannot steer, so there it is fine; elsewhere only if you asked for it)
 	if not (state.onTaxi or state.steering) then
 		local place = steerPlace()
-		if place then return place .. " (see Even when flying or swimming)" end
+		if place then return place .. " (see Also when flying or swimming)" end
 	end
 	if turnKeyHeld() then return "turning with the keyboard" end
 	if windowKeepsPointer() then return "a window is open, or you are typing" end
@@ -908,7 +912,15 @@ local function pollMouse()
 		leftSince = nil
 		if not left then state.wakeClick = false end
 	end
-	syncLeftOverride() -- (you started or stopped moving)
+	-- You started or stopped moving with the pointer hidden. Starting to move points the left button at the wake
+	-- button, and mouselook is restarted around it so the game picks the change up (within one frame: the pointer
+	-- does not show).
+	if ours and (state.moving and true or false) ~= leftOverridden then
+		local was = leftOverridden
+		if not was and MouselookStop then pcall(MouselookStop) end
+		syncLeftOverride()
+		if not was and MouselookStart then pcall(MouselookStart) end
+	end
 	if right then state.cameraFree = false end
 	if state.cameraFree and state.moving and not anyButton and cameraFollows() then
 		followSince = followSince or t
@@ -951,7 +963,7 @@ end)
 
 function HUDFade.PointerWhy()
 	if not (DB.enabled and DB.hideCursor) then return nil end
-	if ours then return "hidden" end
+	if ours then return leftOverridden and "hidden (moving: a left click only brings it back)" or "hidden" end
 	local anyButton = IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton"))
 	return pointerBlock(now(), anyButton) or "about to hide"
 end

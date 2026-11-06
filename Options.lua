@@ -158,7 +158,7 @@ local built = false
 local function build()
 	if built then return end
 	built = true
-	canvas = scrollPage(panel, 656)
+	canvas = scrollPage(panel, 610)
 	pageTitle("HUD Fade")
 	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
 
@@ -171,44 +171,47 @@ local function build()
 			-- (your own key for the game's Hide UI, read each time the page opens)
 			local key = GetBindingKey("TOGGLEUI")
 			local shown = key and (GetBindingText and GetBindingText(key) or key) or "not bound"
-			return "Use the game's Hide UI key (" .. shown .. ") for HUD Fade"
+			return "Use Hide UI key (" .. shown .. ")"
 		end,
 		"Your Hide UI key fades the HUD out and back in instead of switching it off, and the HUD still comes back when something needs it.",
 		-140, 16, HUDFade.ApplyOverrides)
-	checkbox("cleanPrintScreen", "Leave the HUD out of screenshots (Print Screen)",
+	checkbox("startHidden", "Start hidden", "Each session starts with the HUD hidden.", -140, 320)
+	checkbox("cleanPrintScreen", "HUD-free screenshots (Print Screen)",
 		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back.", -166, 16, HUDFade.ApplyOverrides)
-	checkbox("startHidden", "Start each session with the HUD hidden", nil, -192)
-	checkbox("hideNames", "Hide names and chat bubbles while hidden",
-		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after.", -218)
-	checkbox("hideNameplates", "Hide nameplates while hidden",
-		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.", -244)
-	checkbox("hideMinimap", "Hide the minimap while hidden",
-		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, so the minimap is switched off instead.", -270)
-	checkbox("hideCursor", "Hide the mouse pointer when still",
-		"Experimental. While the HUD is hidden and you are out of combat, the pointer disappears after 2 seconds without moving the mouse. Moving the mouse brings it back. While it is hidden, mouse look speed is turned down to a tenth, so that first move barely turns the camera (your setting comes back with the pointer). On a flight path a click or any key brings it back instead, since the mouse only turns the camera there. After you turn the camera with a left-drag it stays until a right-drag or a short run lines camera and character up again, since hiding it turns your character to the camera. If neither happens it hides anyway once the mouse has been still for your idle time. Flying, swimming and in vehicles it stays, unless you tick Even when flying or swimming.", -296)
-	checkbox("hideCursorSteer", "Even when flying or swimming",
-		"Also hide the pointer while flying, swimming or in a vehicle. There the mouse steers you, as when you hold the right button, and a click or any key brings the pointer back. When the pointer hides, your character turns to where the camera points, up or down too, so if you are moving you may climb or dive a little. Needs Hide the mouse pointer.", -296, 320)
 
-	header("While hidden, bring the HUD back when", -336)
-	checkbox("showCombat", "In combat", nil, -356)
-	checkbox("showTarget", "You have a target", nil, -356, 320)
-	checkbox("showCasting", "Casting", nil, -382)
-	checkbox("showDead", "You die",
-		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. As a ghost everything works as usual.", -382, 320)
-	checkbox("mouseWakes", "You move the mouse",
-		"After the HUD hides for being idle, moving the mouse brings it back. Off: only keys bring it back (moving, targeting, opening a window and so on), so a bumped mouse or coming back from alt-tab leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.", -408)
-	checkbox("showWindows", "A window, popup or bag is open, or you are typing", nil, -434)
+	header("While HUD is hidden, also hide", -206)
+	checkbox("hideNames", "Names and chat bubbles",
+		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after.", -226)
+	checkbox("hideNameplates", "Nameplates",
+		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.", -226, 320)
+	checkbox("hideMinimap", "Minimap",
+		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, so the minimap is switched off instead.", -252)
+	checkbox("hideCursor", "Mouse pointer when still",
+		"Experimental. Out of combat, the pointer disappears after 2 seconds without moving the mouse, and moving the mouse brings it back. While it is hidden, mouse look speed is turned down to a tenth, so that first move barely turns the camera (your setting comes back with the pointer). On a flight path a click or any key brings it back instead, since the mouse only turns the camera there. After a left-drag it stays until a right-drag or a short run lines camera and character up again, since hiding it turns your character to the camera; if neither happens it hides anyway once the mouse has been still for your idle time. Flying, swimming and in vehicles it stays, unless Also when flying or swimming is on.", -278)
+	checkbox("hideCursorSteer", "Also when flying or swimming",
+		"Also hide the pointer while flying, swimming or in a vehicle. There the mouse steers you, as when you hold the right button, and a click or any key brings the pointer back. When the pointer hides, your character turns to where the camera points, up or down too, so if you are moving you may climb or dive a little. Needs Mouse pointer when still.", -278, 320)
 
-	header("Timing", -474)
-	slider("idleSeconds", "Hide when idle", 0, 120, 5, -494, 16,
+	header("While HUD is hidden, bring it back on", -318)
+	checkbox("mouseWakes", "Mouse moving",
+		"After the HUD hides for being idle, moving the mouse brings it back. Off: only keys bring it back (moving, targeting, opening a window and so on), so a bumped mouse or coming back from alt-tab leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.", -338)
+	checkbox("showCombat", "Combat", nil, -338, 320)
+	checkbox("showTarget", "Target", nil, -364)
+	checkbox("showCasting", "Casting", nil, -364, 320)
+	checkbox("showDead", "Death",
+		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. As a ghost everything works as usual.", -390)
+	checkbox("showWindows", "Windows, popups, bags or typing",
+		"Any window you open, a popup, your bags, or typing in chat. Typing also counts as activity, so after you send a message the HUD stays for your idle time.", -390, 320)
+
+	header("Timing", -430)
+	slider("idleSeconds", "Hide when idle", 0, 120, 5, -450, 16,
 		function(v) return v == 0 and "Never" or string.format("after %d s", v) end)
-	slider("hiddenAlpha", "Opacity while hidden", 0, 50, 5, -494, 320, "%d%%", 100)
-	slider("fadeOut", "Fade out", 0, 3, 0.1, -544, 16, "%.1f s")
-	slider("fadeIn", "Fade in", 0, 1, 0.05, -544, 320, "%.2f s")
+	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -450, 320, "%d%%", 100)
+	slider("fadeOut", "Fade out", 0, 3, 0.1, -500, 16, "%.1f s")
+	slider("fadeIn", "Fade in", 0, 1, 0.05, -500, 320, "%.2f s")
 
-	header("Keep the HUD visible while", -592)
-	checkbox("activeCamera", "Turning the camera", "On: looking around with the mouse keeps the HUD visible and brings it back. Off: you can look around and the HUD stays hidden.", -612)
-	checkbox("activeAutorun", "Auto-running or following", "On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides while your character keeps moving. Holding a movement key always counts as activity.", -612, 320)
+	header("Keep HUD visible during", -548)
+	checkbox("activeCamera", "Camera turning", "On: looking around with the mouse keeps the HUD visible and brings it back. Off: you can look around and the HUD stays hidden.", -568)
+	checkbox("activeAutorun", "Auto-run or follow", "On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides while your character keeps moving. Holding a movement key always counts as activity.", -568, 320)
 
 	-- Burn-in protection page
 	canvas = shiftPanel
