@@ -1,5 +1,11 @@
 # HUD Fade
 
+## 0.2.5
+
+- Hidden pointer: letting go of a right-drag no longer flashes the pointer back for a moment.
+- After a left-drag the pointer no longer stays on screen until you move: once the mouse has been still for your idle time it hides again (turning your character to where the camera points, as a right-click would).
+- Where the game puts the pointer back after a drag no longer counts as moving the mouse.
+
 ## 0.2.4
 
 - The settings page scrolls when the settings window is too short for it, instead of the last options spilling over the window's border.

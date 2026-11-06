@@ -241,6 +241,17 @@ facingV=facingV+0.2; step(0.2); check("steering while swimming keeps it hidden",
 HUDFadeDB.activeCamera=true; facingV=facingV+0.2; step(0.2)
 check("steering counts as activity when turning the camera does", HUDFade.state.lastInput >= GetTime() - 0.25)
 HUDFadeDB.activeCamera=false; swimming=false; HUDFadeDB.hideCursorSteer=false; step(0.2)
+-- After a left-drag the pointer still goes once the mouse has been still for the idle time
+step(0.5); check("hidden before the left-drag", mouselook==true)
+pressLeft(); step(0.3); buttons.LeftButton=nil; step(3)
+check("left-drag: the pointer stays for now", mouselook==false)
+step(28); check("and hides after the idle time without moving the mouse", mouselook==true)
+-- A right-drag hands it straight back, even if the game parked the pointer somewhere else meanwhile
+buttons.RightButton=true; step(0.2); cx=cx+300; step(0.5)
+buttons.RightButton=nil; mouselook=false; cx=cx-300
+for _,f in ipairs(frames) do if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, 0.01) end end
+check("right-drag release: hidden again the same frame", mouselook==true)
+step(0.5); check("and the HUD stays hidden", mouselook==true and UIParent.alpha==0)
 -- Hiding over an open window takes the pointer too
 cx=cx+40; HUDFade.Show(); step(0.5)
 local map = CreateFrame("Frame", "WorldMapFrame"); step(0.5)

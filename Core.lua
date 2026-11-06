@@ -669,8 +669,14 @@ local function hidePointer()
 		ours = true
 		facing = getFacing()
 		startedAt = now()
+		state.cameraFree = false -- (hiding turned your character to the camera)
 	end
 end
+
+-- After a right-drag the game shows the pointer again as you let go. This checks every frame for a moment after a
+-- drag, so the pointer is taken back straight away instead of flashing up until the next regular check.
+local dragEnd = CreateFrame("Frame")
+dragEnd:Hide()
 
 releaseOnKey = function(key)
 	if not ours then return end
@@ -687,6 +693,7 @@ watcher:SetScript("OnUpdate", function()
 	local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
 	if right then
 		releasePointer(false) -- (right drag steers anyway: the game's own drag carries on from here)
+		dragEnd:Show()
 		return
 	elseif left then
 		-- Left drag only turns the camera, but with our mouselook still on it would steer your character too.
@@ -781,7 +788,15 @@ local function pointerBlock(t, anyButton)
 	end
 	if turnKeyHeld() then return "turning with the keyboard" end
 	if windowKeepsPointer() then return "a window is open, or you are typing" end
-	if state.cameraFree then return "the camera points away from your character (a right-drag or moving lines them up)" end
+	if state.cameraFree then
+		-- After a left-drag. Once the mouse has been still for your idle time the pointer goes anyway, turning your
+		-- character to the camera, so a pointer never sits on screen for hours.
+		local wait = DB.idleSeconds > 0 and DB.idleSeconds or 30
+		local still = t - math.max(state.cameraFreeSince or 0, state.lastMouseMove or 0)
+		if still < wait then
+			return string.format("the camera points away from your character (a right-drag or moving lines them up, or it hides anyway after %d s without moving the mouse)", wait)
+		end
+	end
 	if state.pointerRefused then return "the game took the mouse back, e.g. alt-tab (move the mouse to try again)" end
 	if (t - (state.lastMouseMove or 0)) < 2 then return "the mouse moved less than 2 s ago" end
 	return nil
@@ -795,7 +810,7 @@ local function pollMouse()
 		-- Landed. The mouse was turning the camera, not you: hand it back, and since the camera may now point anywhere,
 		-- wait for it to line up with your character before hiding again (see cameraFollows above).
 		releasePointer(true)
-		state.cameraFree = true
+		state.cameraFree, state.cameraFreeSince = true, t
 	elseif state.steering and not steer and ours then
 		-- Landed, or out of the water or the vehicle. Camera and character are lined up (the mouse was steering), so
 		-- the pointer can stay hidden: from here a mouse move brings it back again.
@@ -807,21 +822,26 @@ local function pollMouse()
 	local anyButton = left or right
 	if not ours then -- (while ours, the pointer is frozen and the watcher above looks for moves)
 		local x, y = GetCursorPosition()
-		if math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2 then
+		if anyButton or (IsMouselooking and IsMouselooking()) then
+			-- A button is turning the camera or steering, so the pointer is parked: where the game puts it back as you
+			-- let go is not you moving the mouse. Running with both buttons is moving yourself; turning the camera only
+			-- counts if you want it to.
+			lastX, lastY, state.dragAt = x, y, t
+			if (left and right) or DB.activeCamera then input() end
+		elseif t - (state.dragAt or -1) < 0.3 then
+			lastX, lastY = x, y
+		elseif math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2 then
 			lastX, lastY = x, y
 			state.lastMouseMove = t
 			state.pointerRefused = false
 			input()
-		elseif anyButton or (IsMouselooking and IsMouselooking()) then
-			-- Running with both buttons is moving yourself; turning the camera only counts if you want it to.
-			if (left and right) or DB.activeCamera then input() end
 		end
 	end
 	-- Camera and character lined up or not (see cameraFollows above).
 	-- (any left press on the 3D world may turn the camera, even a tiny tweak)
 	if left and not right then
 		if not leftSince then leftSince, leftOnWorld = t, mouseOverWorld() end
-		if leftOnWorld then state.cameraFree = true end
+		if leftOnWorld then state.cameraFree, state.cameraFreeSince = true, t end
 	else
 		leftSince = nil
 	end
@@ -843,8 +863,27 @@ local function pollMouse()
 		if next(held) or DB.activeAutorun then input() end
 	end
 	-- (with a button held, the watcher above decides how to hand the mouse back)
+	if anyButton and DB.hideCursor then dragEnd:Show() end
 	if not pointerBlock(t, anyButton) then hidePointer() elseif ours and not anyButton then releasePointer(true) end
 end
+
+local dragGone
+dragEnd:SetScript("OnUpdate", function(self)
+	if ours or not DB then self:Hide() return end
+	if IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton")) then
+		dragGone = nil
+		return
+	end
+	local t = now()
+	dragGone = dragGone or t
+	if t - dragGone > 0.5 then
+		dragGone = nil
+		self:Hide()
+		return
+	end
+	if IsMouselooking and IsMouselooking() then return end -- (the game is still letting go)
+	if not pointerBlock(t, false) then hidePointer() end
+end)
 
 function HUDFade.PointerWhy()
 	if not (DB.enabled and DB.hideCursor) then return nil end
