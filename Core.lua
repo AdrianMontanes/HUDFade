@@ -428,12 +428,14 @@ end
 OLEDHUD.Update = update
 
 -- What is keeping the HUD up right now, for /ohud why.
-function OLEDHUD.Explain()
+function OLEDHUD.Explain(skipTyping)
 	local t = now()
 	local idle = isIdle(t)
 	local list = {}
 	for k, v in pairs(currentReasons(idle)) do
-		list[#list + 1] = (v == true) and k or (k .. " (" .. tostring(v) .. ")")
+		if not (skipTyping and v == "typing") then
+			list[#list + 1] = (v == true) and k or (k .. " (" .. tostring(v) .. ")")
+		end
 	end
 	local mode = state.hudOff and "hidden by you" or "on"
 	if idle then
@@ -762,7 +764,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 			DB.welcomed = true
 			local key = GetBindingKey("TOGGLEUI")
 			say("installed. " .. (DB.replaceAltZ and key and ("Press " .. key .. " to hide or show the HUD. ") or "")
-				.. "Type /ohud for options.")
+				.. "Type /ohud for settings.")
 		end
 	elseif event == "PLAYER_LOGOUT" then
 		restoreAllCVars()

@@ -205,13 +205,12 @@ loader:SetScript("OnEvent", register)
 -- /ohud
 ---------------------------------------------------------------------------
 local HELP = {
-	"/ohud - hide or show the HUD",
-	"/ohud show | hide",
+	"/ohud - open the settings",
+	"/ohud toggle | show | hide - hide or show the HUD",
 	"/ohud on | off - turn the whole addon on or off",
 	"/ohud shot - screenshot without the HUD",
 	"/ohud why - what is keeping the HUD up right now",
 	"/ohud what - name the UI element under the mouse (for reporting something that stays visible)",
-	"/ohud options - open the settings",
 	"/ohud reset - back to default settings",
 }
 
@@ -219,7 +218,9 @@ SLASH_OLEDHUD1 = "/ohud"
 SLASH_OLEDHUD2 = "/oledhud"
 SlashCmdList.OLEDHUD = function(msg)
 	local cmd = (msg or ""):lower():match("^%s*(%S*)")
-	if cmd == "" or cmd == "toggle" then
+	if cmd == "" or cmd == "options" or cmd == "config" or cmd == "settings" then
+		OLEDHUD.OpenOptions()
+	elseif cmd == "toggle" then
 		OLEDHUD.Toggle()
 	elseif cmd == "on" or cmd == "off" then
 		OLEDHUD.SetEnabled(cmd == "on")
@@ -230,12 +231,13 @@ SlashCmdList.OLEDHUD = function(msg)
 	elseif cmd == "shot" or cmd == "screenshot" then
 		OLEDHUD.CleanScreenshot()
 	elseif cmd == "why" then
-		local mode, list = OLEDHUD.Explain()
-		say("mode: " .. mode .. ". Showing because: " .. (#list > 0 and table.concat(list, ", ") or "nothing"))
+		-- (asked a moment later, once the chat box you typed this in has closed)
+		C_Timer.After(0.5, function()
+			local mode, list = OLEDHUD.Explain(true)
+			say("mode: " .. mode .. ". Showing because: " .. (#list > 0 and table.concat(list, ", ") or "nothing"))
+		end)
 	elseif cmd == "what" then
 		say("under the mouse: " .. OLEDHUD.DescribeMouseFrame())
-	elseif cmd == "options" or cmd == "config" or cmd == "settings" then
-		OLEDHUD.OpenOptions()
 	elseif cmd == "reset" then
 		local d = db()
 		for k, v in pairs(OLEDHUD.DEFAULTS) do

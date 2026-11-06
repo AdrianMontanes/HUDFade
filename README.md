@@ -21,7 +21,7 @@ OLED HUD never touches a single frame. It fades the layer every UI frame sits on
 - **One switch for everything:** turn OLED HUD off and on from its settings, a key, or `/ohud off` / `/ohud on`, with no reload.
 - **Dim instead of hide:** set the hidden opacity anywhere from 0% (true black) to 50%.
 
-Type `/ohud` to toggle, `/ohud options` for settings, `/ohud why` to see what is keeping the HUD up.
+Type `/ohud` for settings, `/ohud toggle` to hide or show the HUD, `/ohud why` to see what is keeping it up, and `/ohud what` to name a UI element under the mouse.
 
 ## Supported versions
 
