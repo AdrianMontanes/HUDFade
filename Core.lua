@@ -662,7 +662,9 @@ local function hidePointer()
 	if IsMouselooking and IsMouselooking() then return end -- (you are already steering)
 	if pcall(MouselookStart) then
 		ours = true
-		facing = getFacing()
+		-- (on a flight path the game turns you along the route, so the facing says nothing about the mouse: there
+		-- any key or click brings the pointer back, see releaseOnKey and the watcher)
+		facing = not state.onTaxi and getFacing() or nil
 		startedAt = now()
 	end
 end
@@ -695,6 +697,9 @@ watcher:SetScript("OnUpdate", function()
 		state.pointerRefused = true
 		return
 	end
+	-- On a flight path moving the mouse only turns the camera (you cannot steer), so the pointer stays hidden until
+	-- a click or a key.
+	if state.onTaxi then return end
 	local f = getFacing()
 	if not f then return end
 	if not facing or now() - startedAt < SETTLE then
@@ -747,11 +752,13 @@ local function pointerBlock(t, anyButton)
 	if state.peek then return "peek key held" end
 	if state.inCombat then return "in combat" end
 	if anyButton then return "a mouse button is held" end
-	-- (in the air or in water the camera also sets your pitch, so hiding could tip your character up or down)
-	if is(IsFlying) then return "flying" end
-	if is(IsSwimming) then return "swimming" end
-	-- (on a flight path or in a vehicle the view turns by itself, which would read as you moving the mouse)
-	if is(UnitOnTaxi, "player") then return "on a flight path" end
+	if not state.onTaxi then
+		-- (in the air or in water the camera also sets your pitch, so hiding could tip your character up or down;
+		-- on a flight path you cannot steer, so there it is fine)
+		if is(IsFlying) then return "flying" end
+		if is(IsSwimming) then return "swimming" end
+	end
+	-- (in a vehicle the mouse often aims or steers the vehicle itself)
 	if is(UnitInVehicle, "player") then return "in a vehicle" end
 	if turnKeyHeld() then return "turning with the keyboard" end
 	if windowKeepsPointer() then return "a window is open, or you are typing" end
@@ -763,6 +770,14 @@ end
 
 local function pollMouse()
 	local t = now()
+	local taxi = is(UnitOnTaxi, "player")
+	if state.onTaxi and not taxi then
+		-- Landed. The mouse was turning the camera, not you: hand it back, and since the camera may now point anywhere,
+		-- wait for it to line up with your character before hiding again (see cameraFollows above).
+		releasePointer(true)
+		state.cameraFree = true
+	end
+	state.onTaxi = taxi
 	local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
 	local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
 	local anyButton = left or right

@@ -208,10 +208,21 @@ step(1.5); check("moving with the camera following lines them up: hidden", mouse
 fire("PLAYER_STOPPED_MOVING")
 fire("PLAYER_REGEN_DISABLED"); check("pointer back as combat starts", mouselook==false)
 fire("PLAYER_REGEN_ENABLED"); step(0.3)
--- No pointer hiding on a flight path
-buttons.RightButton=nil; MouselookStop(); onTaxi=true; step(0.3); MouselookStop(); step(3)
-check("pointer left alone on a flight path", mouselook==false)
-onTaxi=false
+-- Flight paths: the route turns you, so only a click or a key brings the pointer back
+buttons.RightButton=nil; MouselookStop(); cx=cx+40; step(0.2); onTaxi=true; flying=true; step(2.5)
+check("pointer hides on a flight path (even though it counts as flying)", mouselook==true)
+for i=1,20 do facingV=facingV+0.05; step(0.1) end
+check("the route turning you does not bring it back", mouselook==true)
+keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); check("any key brings it back on a flight path", mouselook==false)
+step(2.5); check("hidden again when still", mouselook==true)
+pressLeft(); step(0.1); check("a click brings it back", mouselook==false)
+buttons.LeftButton=nil; buttons.RightButton=true; step(0.1); buttons.RightButton=nil; step(2.5)
+check("hidden again before landing", mouselook==true)
+onTaxi=false; flying=false; step(0.1)
+check("landing hands the mouse back", mouselook==false)
+step(3); check("and waits for camera and character to line up", mouselook==false)
+buttons.RightButton=true; step(0.1); buttons.RightButton=nil; mouselook=false; step(0.2)
+check("lined up by a right-drag: hides again", mouselook==true)
 -- Hiding over an open window takes the pointer too
 cx=cx+40; HUDFade.Show(); step(0.5)
 local map = CreateFrame("Frame", "WorldMapFrame"); step(0.5)

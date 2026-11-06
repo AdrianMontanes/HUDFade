@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.1
+
+- Pointer hiding now also works on flight paths. Moving the mouse turns the camera as usual, and a click or any key brings the pointer back. After landing it stays visible until the camera lines up with your character again.
+
 ## 0.2.0
 
 First public release.
