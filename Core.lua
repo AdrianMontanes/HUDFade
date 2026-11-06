@@ -38,6 +38,9 @@ local DEFAULTS = {
 	hideMinimap = true,    -- the minimap's icons and arrow ignore the UI's opacity, so the map is hidden instead
 	replaceAltZ = true,    -- the game's own "hide UI" key (Alt+Z) does OLED HUD's toggle instead
 	cleanPrintScreen = false, -- the game's screenshot key leaves the HUD out
+	pixelShift = false,    -- burn-in protection: move the whole UI a pixel or two every few minutes
+	shiftPixels = 2,       -- how far, in screen pixels
+	shiftMinutes = 3,      -- how often
 	welcomed = false,
 }
 OLEDHUD.DEFAULTS = DEFAULTS
@@ -735,6 +738,7 @@ function OLEDHUD.SetEnabled(on)
 	input()
 	OLEDHUD.ApplyOverrides(true)
 	update(true)
+	OLEDHUD.UpdateShift()
 	if OLEDHUD.RefreshOptions then OLEDHUD.RefreshOptions() end
 	say(DB.enabled and "on." or "off. The HUD stays up and your Hide UI key works as normal.")
 end
@@ -797,6 +801,140 @@ end
 OLEDHUD.ApplyOverrides = applyOverrides
 
 ---------------------------------------------------------------------------
+-- Pixel shift (burn-in protection). Every few minutes the whole interface moves a pixel or two around a small
+-- circle, so the same pixels never show the same shapes for hours. Like the fade, it moves the one layer every
+-- frame hangs from (UIParent): Blizzard UI, EllesmereUI and every other addon move together and keep their layout.
+-- Nothing is saved. The normal position is remembered and put back when the option or the addon is turned off and
+-- while Edit Mode is open. Nothing moves during combat (the game forbids it, and a jump mid-fight would be rude).
+---------------------------------------------------------------------------
+local SHIFT_STEPS = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 }, { 0, -1 }, { 1, -1 } }
+local shift = {
+	index = (math.random and math.random(#SHIFT_STEPS)) or 1, -- (each session starts somewhere else on the circle)
+	nextAt = 0,
+	base = nil,     -- UIParent's own anchors, while we have it moved
+	sig = nil,      -- what its anchors looked like right after our last move
+	px = 0, py = 0, -- current offset, in pixels
+	fights = 0, since = 0, gaveUp = false,
+	lastSync = -100,
+}
+
+local function readAnchors(f)
+	local n = ask(f, "GetNumPoints")
+	if type(n) ~= "number" or n < 1 then return nil end
+	local t = {}
+	for i = 1, n do
+		local ok, point, rel, relPoint, x, y = pcall(f.GetPoint, f, i)
+		x, y = readable(x), readable(y)
+		if not ok or type(point) ~= "string" or type(x) ~= "number" or type(y) ~= "number" then return nil end
+		t[i] = { point, rel, relPoint, x, y }
+	end
+	return t
+end
+
+local function anchorSig(t)
+	if not t then return "" end
+	local parts = {}
+	for i, a in ipairs(t) do
+		parts[i] = string.format("%s|%s|%s|%.2f|%.2f", a[1], tostring(a[2]), tostring(a[3]), a[4], a[5])
+	end
+	return table.concat(parts, ";")
+end
+
+local function placeUI(t, dx, dy)
+	UIParent:ClearAllPoints()
+	for _, a in ipairs(t) do UIParent:SetPoint(a[1], a[2], a[3], a[4] + dx, a[5] + dy) end
+end
+
+-- One screen pixel in UIParent's own units.
+local function pixelUnit()
+	local factor
+	if PixelUtil and PixelUtil.GetPixelToUIUnitFactor then
+		local ok, f = pcall(PixelUtil.GetPixelToUIUnitFactor)
+		factor = ok and readable(f) or nil
+	end
+	if type(factor) ~= "number" and GetPhysicalScreenSize then
+		local ok, _, h = pcall(GetPhysicalScreenSize)
+		h = ok and readable(h) or nil
+		if type(h) == "number" and h > 0 then factor = 768 / h end
+	end
+	local scale = ask(UIParent, "GetScale")
+	if type(factor) ~= "number" or type(scale) ~= "number" or scale <= 0 then return nil end
+	return factor / scale
+end
+
+local function editModeOpen()
+	return EditModeManagerFrame and ask(EditModeManagerFrame, "IsShown") == true
+end
+
+local function syncShift(force)
+	local t = now()
+	if not force and t - shift.lastSync < 1 then return end
+	shift.lastSync = t
+	if not DB or InCombatLockdown() then return end
+	local cur = readAnchors(UIParent)
+	if not cur then return end
+	-- Something else moved the interface since our last move (an ultrawide addon, the game): that is the new normal.
+	-- If it keeps happening, step aside instead of fighting over it.
+	if shift.base and anchorSig(cur) ~= shift.sig then
+		shift.base, shift.px, shift.py = nil, 0, 0
+		if t - shift.since > 10 then shift.since, shift.fights = t, 0 end
+		shift.fights = shift.fights + 1
+		if shift.fights >= 3 and not shift.gaveUp then
+			shift.gaveUp = true
+			say("pixel shift stopped: another addon keeps moving the interface back. /ohud shift on tries again.")
+		end
+	end
+	local px, py = 0, 0
+	if DB.enabled and DB.pixelShift and not shift.gaveUp and not editModeOpen() then
+		if t >= shift.nextAt then
+			shift.index = shift.index % #SHIFT_STEPS + 1
+			shift.nextAt = t + math.max(DB.shiftMinutes or 3, 0.5) * 60
+		end
+		local step = SHIFT_STEPS[shift.index]
+		local d = DB.shiftPixels or 2
+		px, py = step[1] * d, step[2] * d
+	end
+	local unit = pixelUnit()
+	if not unit then return end
+	-- (a changed UI scale changes what a pixel is, so that counts as a change too)
+	if px == shift.px and py == shift.py and (unit == shift.unit or (px == 0 and py == 0)) then return end
+	local base = shift.base or cur
+	if not pcall(placeUI, base, px * unit, py * unit) then
+		-- Never leave the interface without a position.
+		pcall(placeUI, base, 0, 0)
+		shift.base, shift.px, shift.py, shift.gaveUp = nil, 0, 0, true
+		say("pixel shift stopped: the game refused to move the interface.")
+		return
+	end
+	if px == 0 and py == 0 then
+		shift.base, shift.sig = nil, nil
+	else
+		shift.base, shift.sig = base, anchorSig(readAnchors(UIParent))
+	end
+	shift.px, shift.py, shift.unit = px, py, unit
+end
+
+function OLEDHUD.UpdateShift()
+	if DB and DB.pixelShift and shift.gaveUp then shift.gaveUp, shift.fights = false, 0 end
+	syncShift(true)
+end
+
+function OLEDHUD.ShiftNow()
+	shift.nextAt = 0
+	syncShift(true)
+end
+
+function OLEDHUD.ShiftStatus()
+	if not DB.pixelShift then return "pixel shift is off." end
+	local text = "pixel shift is on: " .. DB.shiftPixels .. " px every " .. DB.shiftMinutes .. " min"
+	if not DB.enabled then return text .. ", but OLED HUD is turned off." end
+	if shift.gaveUp then return text .. ", stopped because another addon keeps moving the interface back." end
+	text = text .. ". Offset now " .. shift.px .. "," .. shift.py .. " px"
+	if InCombatLockdown() then return text .. ", waiting for combat to end." end
+	return text .. string.format(", next move in %d s.", math.max(0, shift.nextAt - now()))
+end
+
+---------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------
 local events = CreateFrame("Frame")
@@ -842,6 +980,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		C_Timer.NewTicker(0.1, function()
 			pollMouse()
 			update()
+			syncShift()
 		end)
 		update(true)
 		if not DB.welcomed then
@@ -868,6 +1007,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 			showMinimap() -- (in case combat stopped it coming back)
 		end
 		update()
+		syncShift(true)
 	elseif event == "PLAYER_TARGET_CHANGED" then
 		state.suppressed.target = nil
 		if DB.showTarget and is(UnitExists, "target") then input() end

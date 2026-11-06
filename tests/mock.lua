@@ -28,6 +28,14 @@ local function newFrame(kind)
   return f
 end
 UIParent = newFrame()
+UIParent.points = { {"TOPLEFT", nil, "TOPLEFT", 0, 0}, {"BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0} }
+function UIParent:GetNumPoints() return #self.points end
+function UIParent:GetPoint(i) local a = self.points[i]; return a[1], a[2], a[3], a[4], a[5] end
+function UIParent:ClearAllPoints() if lockdown then error("blocked") end self.points = {} end
+function UIParent:SetPoint(p, r, rp, x, y) if lockdown then error("blocked") end table.insert(self.points, {p, r, rp, x, y}) end
+function UIParent:GetScale() return 0.5 end
+function GetPhysicalScreenSize() return 2560, 1536 end -- (768/1536 = 0.5 units a pixel at scale 1, so 1 px = 1 unit here)
+local function uiOffset() local a = UIParent.points[1]; return a and a[4] or 0, a and a[5] or 0 end
 Minimap = newFrame(); Minimap.parent = UIParent
 function hooksecurefunc(t, name, fn) local orig=t[name]; rawset(t, name, function(...) local r=orig(...); fn(...); return r end) end
 function CreateFrame(kind, name, parent) local f=newFrame(kind); f.parent=parent; if name then _G[name]=f end; return f end
@@ -242,6 +250,35 @@ OLEDHUDDB.idleSeconds=5
 OLEDHUD.SetEnabled(false); w = why()
 check("why: disabled", w:find("Disabled", 1, true) and not w:find("visible due to", 1, true))
 OLEDHUD.SetEnabled(true)
+-- Pixel shift
+check("pixel shift off by default", select(1, uiOffset())==0 and select(2, uiOffset())==0)
+SlashCmdList.OLEDHUD("shift on"); step(1.1)
+local visited, nonzero = {}, false
+for i=1,9 do OLEDHUD.ShiftNow(); local x,y = uiOffset(); visited[x..","..y]=true; if x~=0 or y~=0 then nonzero=true end end
+local n=0; for _ in pairs(visited) do n=n+1 end
+check("shift walks the 9 spots of the circle", n==9 and nonzero and visited["2,0"] and visited["-2,-2"])
+check("both anchors move together", UIParent.points[1][4]==UIParent.points[2][4] and #UIParent.points==2)
+repeat OLEDHUD.ShiftNow() until select(1, uiOffset())==2
+lockdown=true; OLEDHUD.ShiftNow(); step(1.1)
+check("no move during combat", select(1, uiOffset())==2)
+lockdown=false; fire("PLAYER_REGEN_ENABLED"); step(0.1)
+check("moves on after combat", select(1, uiOffset())~=2 or select(2, uiOffset())~=0)
+OLEDHUDDB.shiftPixels=1; step(1.1); local x1, y1 = uiOffset()
+check("distance follows the setting", math.abs(x1)<=1 and math.abs(y1)<=1)
+EditModeManagerFrame = CreateFrame("Frame", "EditModeManagerFrame"); step(1.1)
+check("back in place while Edit Mode is open", select(1, uiOffset())==0 and select(2, uiOffset())==0)
+EditModeManagerFrame:Hide(); OLEDHUD.ShiftNow(); repeat OLEDHUD.ShiftNow() until select(1, uiOffset())~=0
+SlashCmdList.OLEDHUD("off")
+check("addon off puts the interface back", select(1, uiOffset())==0 and select(2, uiOffset())==0)
+SlashCmdList.OLEDHUD("on"); repeat OLEDHUD.ShiftNow() until select(1, uiOffset())~=0
+-- Another addon keeps putting it back: step aside
+for i=1,3 do UIParent.points = { {"TOPLEFT", nil, "TOPLEFT", 0, 0}, {"BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0} }; OLEDHUD.ShiftNow() end
+UIParent.points = { {"TOPLEFT", nil, "TOPLEFT", 0, 0}, {"BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0} }; step(1.1)
+check("gives up after another addon fights it 3 times", select(1, uiOffset())==0 and OLEDHUD.ShiftStatus():find("stopped", 1, true))
+SlashCmdList.OLEDHUD("shift on"); repeat OLEDHUD.ShiftNow() until select(1, uiOffset())~=0
+check("/ohud shift on tries again", select(1, uiOffset())~=0)
+SlashCmdList.OLEDHUD("shift off")
+check("turning it off puts the interface back exactly", #UIParent.points==2 and UIParent.points[1][4]==0 and UIParent.points[1][5]==0 and UIParent.points[2][4]==0)
 fire("PLAYER_LOGOUT")
 check("logout restores cvars", cvars.UnitNameNPC=="1" and cvars.nameplateShowEnemies=="1" and next(OLEDHUDDB.restore)==nil)
 SlashCmdList.OLEDHUD("reset")

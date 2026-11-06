@@ -18,10 +18,11 @@ OLED HUD never touches a single frame. It fades the layer every UI frame sits on
 - **Clean screenshots:** a key that takes a screenshot with no HUD and no names, then puts everything back.
 - **Hold to peek:** a key that shows the HUD only while held.
 - **Hide the mouse pointer** when it's still (optional, experimental).
+- **Pixel shift (burn-in protection):** every few minutes the whole interface moves a pixel or two, Blizzard UI and EllesmereUI together, so nothing sits on the same pixels for hours. Never during combat, and your layout is never changed. Optional.
 - **One switch for everything:** turn OLED HUD off and on from its settings, a key, or `/ohud off` / `/ohud on`, with no reload.
 - **Dim instead of hide:** set the hidden opacity anywhere from 0% (true black) to 50%.
 
-Type `/ohud` for settings, `/ohud toggle` to hide or show the HUD, `/ohud why` to see what is keeping it up, and `/ohud what` to name a UI element under the mouse.
+Type `/ohud` for settings, `/ohud toggle` to hide or show the HUD, `/ohud why` to see what is keeping it up, `/ohud shift now` to try pixel shift, and `/ohud what` to name a UI element under the mouse.
 
 ## Supported versions
 

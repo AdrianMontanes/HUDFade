@@ -8,13 +8,20 @@ local panel = CreateFrame("Frame")
 panel.name = "OLED HUD"
 panel:Hide()
 
+-- A second page, listed under OLED HUD in the game's settings.
+local shiftPanel = CreateFrame("Frame")
+shiftPanel.name = "Burn-in protection"
+shiftPanel:Hide()
+
+local canvas = panel -- the page the helpers below draw on
+
 local widgets = {}  -- every setting below the on/off switch
 local dimmable = {} -- headers, greyed out with them while the addon is off
 
 local function db() return OLEDHUD.db end
 
 local function header(text, y)
-	local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	local fs = canvas:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 	fs:SetPoint("TOPLEFT", 16, y)
 	fs:SetText(text)
 	dimmable[#dimmable + 1] = fs
@@ -22,7 +29,7 @@ local function header(text, y)
 end
 
 local function note(text, y, x)
-	local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	local fs = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	fs:SetPoint("TOPLEFT", x or 16, y)
 	fs:SetWidth(560)
 	fs:SetJustifyH("LEFT")
@@ -31,10 +38,10 @@ local function note(text, y, x)
 end
 
 local function checkbox(key, label, tip, y, x, onChange, master)
-	local cb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+	local cb = CreateFrame("CheckButton", nil, canvas, "UICheckButtonTemplate")
 	cb:SetPoint("TOPLEFT", x or 16, y)
 	cb:SetSize(26, 26)
-	local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	local fs = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	fs:SetPoint("LEFT", cb, "RIGHT", 4, 0)
 	local function text() return type(label) == "function" and label() or label end
 	fs:SetText(text())
@@ -66,7 +73,7 @@ end
 
 local function slider(key, label, minV, maxV, step, y, x, fmt, scale)
 	scale = scale or 1
-	local s = CreateFrame("Slider", nil, panel, BackdropTemplateMixin and "BackdropTemplate" or nil)
+	local s = CreateFrame("Slider", nil, canvas, BackdropTemplateMixin and "BackdropTemplate" or nil)
 	s:SetPoint("TOPLEFT", (x or 16) + 4, y - 18)
 	s:SetSize(220, 16)
 	s:SetOrientation("HORIZONTAL")
@@ -82,7 +89,7 @@ local function slider(key, label, minV, maxV, step, y, x, fmt, scale)
 			insets = { left = 3, right = 3, top = 6, bottom = 6 },
 		})
 	end
-	local title = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	local title = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	title:SetPoint("BOTTOMLEFT", s, "TOPLEFT", -4, 4)
 	local function show(v)
 		local text = type(fmt) == "function" and fmt(v) or string.format(fmt, v)
@@ -109,17 +116,31 @@ local function slider(key, label, minV, maxV, step, y, x, fmt, scale)
 	return s
 end
 
+local function pageTitle(text)
+	local title = canvas:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	title:SetPoint("TOPLEFT", 16, -16)
+	title:SetText(text)
+end
+
+local function shiftChanged()
+	OLEDHUD.UpdateShift()
+	if OLEDHUD.RefreshOptions then OLEDHUD.RefreshOptions() end -- (the switch is on both pages)
+end
+
+local SHIFT_TIP = "Moves the whole interface a pixel or two every few minutes, so nothing sits on the same pixels for hours. "
+	.. "Everything moves together, so your layout stays as it is. Distance and timing are on the Burn-in protection page under OLED HUD."
+
 local built = false
 local function build()
 	if built then return end
 	built = true
-	local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-	title:SetPoint("TOPLEFT", 16, -16)
-	title:SetText("OLED HUD")
+	canvas = panel
+	pageTitle("OLED HUD")
 	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and take clean screenshots. Bind keys under Key Bindings > AddOns > OLED HUD.", -40)
 
 	panel.master = checkbox("enabled", "Enable OLED HUD", "Off: the HUD stays up, names and minimap stay as they are, and your Hide UI key does its normal job. No reload needed. You can also bind a key for this under Key Bindings > AddOns.",
 		-76, 16, function() OLEDHUD.SetEnabled(db().enabled) end, true)
+	checkbox("pixelShift", "Pixel shift (burn-in protection)", SHIFT_TIP, -76, 320, shiftChanged)
 
 	header("Hiding", -120)
 	checkbox("replaceAltZ", function()
@@ -159,6 +180,19 @@ local function build()
 	header("Hide when idle also waits while", -566)
 	checkbox("activeCamera", "Turning the camera", "Off: you can look around with the mouse and the HUD stays hidden.", -586)
 	checkbox("activeAutorun", "Auto-running or following", "Off: auto-run, follow and flight paths count as idle, so the HUD hides even while your character keeps moving. Holding a movement key always counts as active.", -586, 320)
+
+	-- Burn-in protection page
+	canvas = shiftPanel
+	pageTitle("Burn-in protection")
+	note("Pixel shift moves the whole interface a pixel or two every few minutes, around a small circle, so the same pixels "
+		.. "never show the same shapes for hours. Blizzard UI, EllesmereUI and every other addon move together, so your "
+		.. "layout stays exactly as it is and nothing is saved. It never moves during combat and steps aside while Edit Mode is open.", -40)
+	header("Pixel shift", -110)
+	checkbox("pixelShift", "Pixel shift (burn-in protection)", nil, -130, 16, shiftChanged)
+	slider("shiftPixels", "Distance", 1, 4, 1, -170, 16, function(v) return string.format("%d px", v) end)
+	slider("shiftMinutes", "Move every", 1, 10, 1, -170, 320, function(v) return string.format("%d min", v) end)
+	note("Many OLED monitors also shift the whole picture on their own. Using both is fine. Type /ohud shift now to see a move straight away.", -230)
+	canvas = panel
 end
 
 local function refreshAll()
@@ -173,18 +207,25 @@ local function refreshAll()
 end
 OLEDHUD.RefreshOptions = refreshAll
 
-panel:SetScript("OnShow", function()
+local function onShow()
 	build()
 	refreshAll()
-end)
+end
+panel:SetScript("OnShow", onShow)
+shiftPanel:SetScript("OnShow", onShow)
 
 local category
 local function register()
 	if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
 		category = Settings.RegisterCanvasLayoutCategory(panel, "OLED HUD")
+		if Settings.RegisterCanvasLayoutSubcategory then
+			Settings.RegisterCanvasLayoutSubcategory(category, shiftPanel, "Burn-in protection")
+		end
 		Settings.RegisterAddOnCategory(category)
 	elseif InterfaceOptions_AddCategory then
 		InterfaceOptions_AddCategory(panel)
+		shiftPanel.parent = panel.name
+		InterfaceOptions_AddCategory(shiftPanel)
 	end
 end
 
@@ -209,6 +250,7 @@ local HELP = {
 	"/ohud toggle | show | hide - hide or show the HUD",
 	"/ohud on | off - turn the whole addon on or off",
 	"/ohud shot - screenshot without the HUD",
+	"/ohud shift [on | off | now] - pixel shift status, switch it, or move now to see it",
 	"/ohud why - what is keeping the HUD up right now",
 	"/ohud what - name the UI element under the mouse (for reporting something that stays visible)",
 	"/ohud reset - back to default settings",
@@ -237,6 +279,19 @@ SlashCmdList.OLEDHUD = function(msg)
 			say(lines[1])
 			for i = 2, #lines do print(lines[i]) end
 		end)
+	elseif cmd == "shift" then
+		local arg = (msg or ""):lower():match("^%s*%S+%s+(%S+)")
+		if arg == "on" or arg == "off" then
+			db().pixelShift = (arg == "on")
+			shiftChanged()
+		elseif arg == "now" then
+			if not db().pixelShift then
+				db().pixelShift = true
+				shiftChanged()
+			end
+			OLEDHUD.ShiftNow()
+		end
+		say(OLEDHUD.ShiftStatus())
 	elseif cmd == "what" then
 		say("under the mouse: " .. OLEDHUD.DescribeMouseFrame())
 	elseif cmd == "reset" then
