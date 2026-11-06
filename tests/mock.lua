@@ -41,7 +41,8 @@ function UnitOnTaxi() return onTaxi end
 function EnumerateFrames(f) if not f then return frames[1] end for i,x in ipairs(frames) do if x==f then return frames[i+1] end end end
 C_Timer = { After=function(d,fn) table.insert(timers,{T+d,fn}) end, NewTicker=function(d,fn) ticker=fn end }
 timers = {}
-function GetBindingKey(c) if c=="TOGGLEUI" then return "ALT-Z" end end
+function GetBindingKey(c) if c=="TOGGLEUI" then return "ALT-Z" end if c=="TOGGLEAUTORUN" then return "NUMLOCK" end end
+function GetBindingAction(k) local m={W="MOVEFORWARD", NUMLOCK="TOGGLEAUTORUN", TAB="TARGETNEARESTENEMY"}; return m[k] or "" end
 binds = {}
 function SetOverrideBinding(o,p,k,c) binds[k]=c end
 function ClearOverrideBindings() binds={} end
@@ -163,10 +164,15 @@ check("pointer hides again right after a right drag", mouselook==true)
 buttons.RightButton=nil; MouselookStop(); onTaxi=true; step(0.3); MouselookStop(); step(3)
 check("pointer left alone on a flight path", mouselook==false)
 onTaxi=false
+-- A stuck non-movement key must not keep you "active" (Tab used to)
 -- Idle and what counts as activity
 OLEDHUD.Toggle(); step(0.5); check("shown for the idle tests", UIParent.alpha==1)
 OLEDHUDDB.idleSeconds = 5; OLEDHUDDB.hideCursor = false
 local keyFrame; for _,f in ipairs(frames) do if f.scripts.OnKeyDown then keyFrame=f end end
+keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); step(0.2)
+keyFrame.scripts.OnKeyDown(keyFrame, "NUMLOCK"); fire("PLAYER_STARTED_MOVING"); step(7)
+check("auto-run after Tab (key-up never seen) still goes idle", UIParent.alpha==0)
+fire("PLAYER_STOPPED_MOVING"); cx=cx+40; step(0.5)
 keyFrame.scripts.OnKeyDown(keyFrame, "W"); fire("PLAYER_STARTED_MOVING"); step(8)
 check("holding W keeps the HUD up", UIParent.alpha==1)
 keyFrame.scripts.OnKeyUp(keyFrame, "W"); step(7)
@@ -179,6 +185,13 @@ buttons.LeftButton=nil
 OLEDHUDDB.activeCamera=true; cx=cx+40; step(0.5); buttons.LeftButton=true; step(7)
 check("unless that option is on", UIParent.alpha==1)
 buttons.LeftButton=nil; OLEDHUDDB.activeCamera=false
+step(7); check("idle again", UIParent.alpha==0)
+OLEDHUDDB.showTarget=false; keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
+check("Tab while idle-hidden, 'target' off: stays hidden", UIParent.alpha==0)
+target=false; fire("PLAYER_TARGET_CHANGED"); OLEDHUDDB.showTarget=true
+keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
+check("Tab while idle-hidden, 'target' on: shows", UIParent.alpha==1)
+target=false; fire("PLAYER_TARGET_CHANGED")
 fire("PLAYER_LOGOUT")
 check("logout restores cvars", cvars.UnitNameNPC=="1" and cvars.nameplateShowEnemies=="1" and next(OLEDHUDDB.restore)==nil)
 SlashCmdList.OLEDHUD("why")

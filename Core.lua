@@ -43,6 +43,7 @@ local DEFAULTS = {
 OLEDHUD.DEFAULTS = DEFAULTS
 
 local GRACE = 1 -- seconds
+local held = {} -- movement keys held down right now (holding W to run counts as activity the whole time)
 
 local DB
 local state = {
@@ -435,7 +436,15 @@ function OLEDHUD.Explain()
 		list[#list + 1] = (v == true) and k or (k .. " (" .. tostring(v) .. ")")
 	end
 	local mode = state.hudOff and "hidden by you" or "on"
-	if idle then mode = mode .. ", idle" end
+	if idle then
+		mode = mode .. ", idle"
+	elseif DB.idleSeconds > 0 then
+		mode = mode .. string.format(", idle in %d s", math.max(0, DB.idleSeconds - (t - state.lastInput)))
+	end
+	local keysHeld = {}
+	for k in pairs(held) do keysHeld[#keysHeld + 1] = k end
+	if #keysHeld > 0 then mode = mode .. ", keys held: " .. table.concat(keysHeld, " ") end
+	if state.moving then mode = mode .. ", moving" end
 	return mode, list
 end
 
@@ -448,10 +457,23 @@ end
 
 local releaseOnKey -- (set further down, with the mouse pointer)
 local keys = CreateFrame("Frame")
-local held = {} -- keys held down right now (holding W to run counts as activity the whole time)
+-- Only movement keys count as you being active. Any other key acts through what it does: Tab gives you a target
+-- (shown if "You have a target" is ticked), an ability starts a cast or a fight, B opens your bags, and so on.
+local MOVE_ACTIONS = {
+	MOVEFORWARD = true, MOVEBACKWARD = true, STRAFELEFT = true, STRAFERIGHT = true, TURNLEFT = true,
+	TURNRIGHT = true, JUMP = true, SITORSTAND = true, MOVEANDSTEER = true, PITCHUP = true, PITCHDOWN = true,
+	TOGGLEAUTORUN = true,
+}
+local function isMoveKey(key)
+	if not (key and GetBindingAction) then return false end
+	local ok, action = pcall(GetBindingAction, key, true)
+	return ok and action and MOVE_ACTIONS[action] or false
+end
 local function onKey(_, key)
-	if key then held[key] = true end
-	input()
+	if isMoveKey(key) then
+		if key ~= GetBindingKey("TOGGLEAUTORUN") then held[key] = true end
+		input()
+	end
 	if releaseOnKey then releaseOnKey() end
 end
 local function onKeyUp(_, key)
@@ -557,6 +579,12 @@ local function pollMouse()
 				-- Running with both buttons is moving yourself; turning the camera only counts if you want it to.
 				if (left and right) or DB.activeCamera then input() end
 			end
+		end
+	end
+	if IsKeyDown then -- (drop keys whose release never reached us)
+		for k in pairs(held) do
+			local ok, down = pcall(IsKeyDown, k)
+			if ok and down == false then held[k] = nil end
 		end
 	end
 	if state.moving then
@@ -756,7 +784,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		update()
 	elseif event == "PLAYER_TARGET_CHANGED" then
 		state.suppressed.target = nil
-		if UnitExists("target") then input() end
+		if UnitExists("target") and DB.showTarget then input() end
 		update()
 	elseif event == "PLAYER_STARTED_MOVING" then
 		state.moving = true
@@ -776,6 +804,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" then
 		state.casting = true
 		state.suppressed.casting = nil
+		if DB.showCasting then input() end
 		update()
 	elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
 		state.casting = false

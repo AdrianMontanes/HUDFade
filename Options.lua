@@ -142,7 +142,7 @@ local function build()
 	checkbox("hideCursor", "Hide the mouse pointer when it is still (experimental)",
 		"While the HUD is hidden and you are out of combat, the pointer disappears after 2 seconds without moving the mouse, the same way it does while you drag the camera. The first move brings it back, and turns your character very slightly.", -296)
 
-	header("While hidden, show the HUD when", -336)
+	header("While hidden, bring the HUD back when", -336)
 	checkbox("showCombat", "In combat", nil, -356)
 	checkbox("showTarget", "You have a target", nil, -356, 320)
 	checkbox("showCasting", "Casting", nil, -382)
