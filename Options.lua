@@ -150,12 +150,11 @@ local function build()
 	checkbox("showWindows", "A window, popup or bag is open, or you are typing", nil, -408)
 
 	header("Timing", -448)
-	slider("idleSeconds", "Hide when away", 0, 300, 5, -468, 16,
+	slider("idleSeconds", "Hide when idle", 0, 120, 5, -468, 16,
 		function(v) return v == 0 and "Never" or string.format("after %d s", v) end)
-	slider("linger", "Hide after", 0, 10, 0.5, -468, 320, "%.1f s")
+	slider("hiddenAlpha", "Opacity while hidden", 0, 50, 5, -468, 320, "%d%%", 100)
 	slider("fadeOut", "Fade out", 0, 3, 0.1, -518, 16, "%.1f s")
 	slider("fadeIn", "Fade in", 0, 1, 0.05, -518, 320, "%.2f s")
-	slider("hiddenAlpha", "Opacity while hidden", 0, 50, 5, -568, 16, "%d%%", 100)
 end
 
 local function refreshAll()

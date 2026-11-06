@@ -21,11 +21,10 @@ BINDING_NAME_OLEDHUD_ENABLE = "Turn OLED HUD on / off"
 local DEFAULTS = {
 	enabled = true,        -- the whole addon; off = the game behaves as if OLED HUD were not installed
 	startHidden = false,   -- begin each session with the HUD hidden
-	idleSeconds = 60,      -- hide after this long with no input at all (0 = never)
+	idleSeconds = 30,      -- hide after this long with no input at all (0 = never)
 	hiddenAlpha = 0,       -- opacity while hidden (0 = true black)
 	fadeOut = 1.0,         -- seconds to fade out
 	fadeIn = 0.2,          -- seconds to fade back in
-	linger = 3,            -- seconds the HUD stays up after the last reason to show it ends
 	showCombat = true,
 	showTarget = true,
 	showCasting = false,
@@ -41,6 +40,8 @@ local DEFAULTS = {
 }
 OLEDHUD.DEFAULTS = DEFAULTS
 
+local GRACE = 1 -- seconds
+
 local DB
 local state = {
 	current = 1,        -- the opacity OLED HUD last gave UIParent
@@ -52,7 +53,7 @@ local state = {
 	casting = false,
 	moving = false,
 	lastInput = 0,
-	lastWanted = -math.huge, -- last time something wanted the HUD shown (for the linger)
+	lastWanted = -math.huge, -- last time a reason to show the HUD was active (for the short grace below)
 	suppressed = {},    -- reasons that were active when you pressed hide; ignored until they end
 	cvarsHidden = false,
 }
@@ -346,14 +347,12 @@ local function update(instant)
 		return
 	end
 	local idle = isIdle(t)
-	local want
-	if not state.hudOff and not idle then
-		want = true
-	else
-		want = next(currentReasons(idle)) ~= nil
-	end
-	if want then state.lastWanted = t end
-	local show = want or (t - state.lastWanted) < DB.linger
+	local base = not state.hudOff and not idle
+	local reason = next(currentReasons(idle)) ~= nil
+	if reason then state.lastWanted = t end
+	-- A short grace after a reason ends (a target cleared between two pulls, a window closed), so the HUD does not
+	-- blink. None when you go idle or press hide: those happen exactly when you set them.
+	local show = base or reason or (not idle and (t - state.lastWanted) < GRACE)
 	setTarget(show and 1 or DB.hiddenAlpha, instant)
 	-- While hidden and still: put our opacity back if something else changed it, and catch models that just appeared.
 	if state.target < 0.999 and not driver:IsShown() then
@@ -407,6 +406,10 @@ end
 ---------------------------------------------------------------------------
 local ours = false -- mouselook was started by OLED HUD
 local facing       -- the character's facing when it started (nil where the game keeps it secret, e.g. instances)
+local startedAt = 0
+-- Starting mouselook turns the character to where the camera points. That turn is not you moving the mouse, so the
+-- facing is only watched once it has settled; and only a turn above about a third of a degree counts.
+local SETTLE, TURN = 0.4, 0.006
 
 local function getFacing()
 	if not GetPlayerFacing then return nil end
@@ -428,6 +431,7 @@ local function hidePointer()
 	if pcall(MouselookStart) then
 		ours = true
 		facing = getFacing()
+		startedAt = now()
 	end
 end
 
@@ -448,7 +452,14 @@ watcher:SetScript("OnUpdate", function()
 		return
 	end
 	local f = getFacing()
-	if f and facing and math.abs(f - facing) > 0.0001 then releasePointer(true) end
+	if not f then return end
+	if not facing or now() - startedAt < SETTLE then
+		facing = f
+		return
+	end
+	local d = math.abs(f - facing)
+	if d > math.pi then d = 2 * math.pi - d end -- (the facing wraps around at a full turn)
+	if d > TURN then releasePointer(true) end
 end)
 
 local lastX, lastY = 0, 0
