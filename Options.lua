@@ -210,6 +210,7 @@ local HELP = {
 	"/ohud on | off - turn the whole addon on or off",
 	"/ohud shot - screenshot without the HUD",
 	"/ohud why - what is keeping the HUD up right now",
+	"/ohud what - name the UI element under the mouse (for reporting something that stays visible)",
 	"/ohud options - open the settings",
 	"/ohud reset - back to default settings",
 }
@@ -231,6 +232,8 @@ SlashCmdList.OLEDHUD = function(msg)
 	elseif cmd == "why" then
 		local mode, list = OLEDHUD.Explain()
 		say("mode: " .. mode .. ". Showing because: " .. (#list > 0 and table.concat(list, ", ") or "nothing"))
+	elseif cmd == "what" then
+		say("under the mouse: " .. OLEDHUD.DescribeMouseFrame())
 	elseif cmd == "options" or cmd == "config" or cmd == "settings" then
 		OLEDHUD.OpenOptions()
 	elseif cmd == "reset" then

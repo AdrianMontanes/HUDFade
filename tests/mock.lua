@@ -34,6 +34,10 @@ function CreateFrame(kind, name, parent) local f=newFrame(kind); f.parent=parent
 local model = newFrame("PlayerModel"); model.parent = UIParent; model.malpha=1
 function model:SetModelAlpha(a) self.malpha=a end
 function model:GetModelAlpha() return self.malpha end
+local lone = newFrame(); lone.parent = UIParent
+function lone:IsIgnoringParentAlpha() return true end
+onTaxi=false
+function UnitOnTaxi() return onTaxi end
 function EnumerateFrames(f) if not f then return frames[1] end for i,x in ipairs(frames) do if x==f then return frames[i+1] end end end
 C_Timer = { After=function(d,fn) table.insert(timers,{T+d,fn}) end, NewTicker=function(d,fn) ticker=fn end }
 timers = {}
@@ -83,12 +87,14 @@ check("NPC names off", cvars.UnitNameNPC=="0" and OLEDHUDDB.restore.UnitNameNPC=
 check("own name untouched (was 0)", cvars.UnitNameOwn=="0" and OLEDHUDDB.restore.UnitNameOwn==nil)
 check("plates off", cvars.nameplateShowEnemies=="0")
 check("model faded", model.malpha==0)
+check("frame that ignores parent opacity faded", lone.alpha==0)
 check("minimap hidden", Minimap.shown==false)
 Minimap:Show(); check("minimap stays hidden if another addon shows it", Minimap.shown==false)
 check("friendly player plates off", cvars.nameplateShowFriendlyPlayers=="0")
 target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
 check("target shows", UIParent.alpha==1 and cvars.UnitNameNPC=="1")
 check("model back", model.malpha==1)
+check("that frame back", lone.alpha==1)
 check("minimap back", Minimap.shown==true)
 target=false; fire("PLAYER_TARGET_CHANGED"); step(0.5)
 check("short grace after the target clears", UIParent.alpha==1)
@@ -153,6 +159,10 @@ buttons.RightButton=true; step(0.1)
 check("right drag keeps the game's steering", mouselook==true)
 buttons.RightButton=nil; mouselook=false; step(0.2)
 check("pointer hides again right after a right drag", mouselook==true)
+-- No pointer hiding on a flight path
+buttons.RightButton=nil; MouselookStop(); onTaxi=true; step(0.3); MouselookStop(); step(3)
+check("pointer left alone on a flight path", mouselook==false)
+onTaxi=false
 -- Idle and what counts as activity
 OLEDHUD.Toggle(); step(0.5); check("shown for the idle tests", UIParent.alpha==1)
 OLEDHUDDB.idleSeconds = 5; OLEDHUDDB.hideCursor = false

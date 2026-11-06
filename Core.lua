@@ -183,21 +183,83 @@ local function underUIParent(f)
 	return false
 end
 
+-- Frames set to ignore their parent's opacity (the game's own vehicle and flight "leave" button is one) would
+-- stay fully visible too, so they get their own opacity the same way.
+local loners = {}
+local lonerBase = setmetatable({}, { __mode = "k" })
+local lonerWritten = setmetatable({}, { __mode = "k" })
+
 local function scanModels()
 	if not EnumerateFrames then return end
 	wipe(models)
+	wipe(loners)
 	local f = EnumerateFrames()
 	while f do
 		local ok, kind = pcall(f.GetObjectType, f)
 		if ok and MODEL_TYPES[kind] and f.SetModelAlpha and underUIParent(f) then
 			models[#models + 1] = f
+		elseif f.IsIgnoringParentAlpha then
+			local okI, ignoring = pcall(f.IsIgnoringParentAlpha, f)
+			if okI and ignoring == true and underUIParent(f) then loners[#loners + 1] = f end
 		end
 		f = EnumerateFrames(f)
+	end
+	-- Named here too in case the game draws it some other way: alpha on a normal child is harmless.
+	for _, name in ipairs({ "MainMenuBarVehicleLeaveButton" }) do
+		local b = _G[name]
+		if type(b) == "table" and b.SetAlpha then
+			local dup = false
+			for _, x in ipairs(loners) do if x == b then dup = true end end
+			if not dup then loners[#loners + 1] = b end
+		end
 	end
 	lastScan = now()
 end
 
+-- For /ohud what: the frame under the mouse and how it relates to UIParent.
+function OLEDHUD.DescribeMouseFrame()
+	local f
+	if GetMouseFoci then f = (GetMouseFoci() or {})[1] elseif GetMouseFocus then f = GetMouseFocus() end
+	if not f then return "nothing (the 3D world)" end
+	local chain, x = {}, f
+	for _ = 1, 8 do
+		if not x then break end
+		local okN, name = pcall(x.GetName, x)
+		chain[#chain + 1] = (okN and name) or tostring(x.GetObjectType and x:GetObjectType() or "?")
+		if x == UIParent then break end
+		local okP, p = pcall(x.GetParent, x)
+		x = okP and p or nil
+	end
+	local okI, ign = pcall(function() return f:IsIgnoringParentAlpha() end)
+	return table.concat(chain, " < ") .. ((okI and ign) and " (ignores the UI's opacity)" or "")
+end
+
+local function num(v) return type(v) == "number" and not (issecretvalue and issecretvalue(v)) end
+
+local function applyLoners(a)
+	for _, f in ipairs(loners) do
+		if a >= 0.999 then
+			if lonerBase[f] then
+				pcall(f.SetAlpha, f, lonerBase[f])
+				lonerBase[f], lonerWritten[f] = nil, nil
+			end
+		else
+			local okV, visible = pcall(f.IsVisible, f)
+			if okV and visible then
+				local okA, now = pcall(f.GetAlpha, f)
+				-- Its owner changed it since we last wrote: take that as its own opacity from now on.
+				if okA and num(now) and (lonerBase[f] == nil or math.abs(now - (lonerWritten[f] or -1)) > 0.01) then
+					lonerBase[f] = now
+				end
+				local want = (lonerBase[f] or 1) * a
+				if pcall(f.SetAlpha, f, want) then lonerWritten[f] = want end
+			end
+		end
+	end
+end
+
 local function applyModels(a)
+	applyLoners(a)
 	for _, m in ipairs(models) do
 		if a >= 0.999 then
 			local base = baseAlpha[m]
@@ -505,6 +567,8 @@ local function pollMouse()
 	-- Not while moving either: in mouselook the turn keys strafe, so keyboard turners would feel the difference.
 	local want = DB.enabled and DB.hideCursor and state.target < 0.999 and not state.peek and not state.inCombat
 		and not state.moving and not anyButton and (t - (state.lastMouseMove or 0)) >= 2 and not windowOpen()
+		-- (on a flight path or in a vehicle the view turns by itself, which would read as you moving the mouse)
+		and not (UnitOnTaxi and UnitOnTaxi("player")) and not (UnitInVehicle and UnitInVehicle("player"))
 	-- (with a button held, the watcher above decides how to hand the mouse back)
 	if want then hidePointer() elseif ours and not anyButton then releasePointer(true) end
 end
