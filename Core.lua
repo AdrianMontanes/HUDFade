@@ -618,7 +618,10 @@ watcher:SetScript("OnUpdate", function()
 		return
 	end
 	if IsMouselooking and not IsMouselooking() then
+		-- Something else ended it (the game, another addon). Wait for a real mouse move before trying again, so
+		-- the pointer never flickers on and off.
 		releasePointer(false)
+		state.pointerRefused = true
 		return
 	end
 	local f = getFacing()
@@ -632,6 +635,16 @@ watcher:SetScript("OnUpdate", function()
 	if d > TURN then releasePointer(true, true) end
 end)
 
+-- An open window keeps the pointer only while it is also what keeps the HUD up. Once you hide the HUD over a
+-- window (or windows are set not to bring the HUD back), the pointer can go as well. Typing and an item held on
+-- the pointer always keep it.
+local function windowKeepsPointer()
+	local w = windowOpen()
+	if not w then return false end
+	if w == "typing" or w == "holding something on the cursor" then return true end
+	return DB.showWindows and not state.suppressed.window
+end
+
 local lastX, lastY = 0, 0
 local function pollMouse()
 	local t = now()
@@ -641,6 +654,7 @@ local function pollMouse()
 		if math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2 then
 			lastX, lastY = x, y
 			state.lastMouseMove = t
+			state.pointerRefused = false
 			input()
 		else
 			local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
@@ -665,7 +679,8 @@ local function pollMouse()
 	-- Pointer hidden only while the HUD is hidden, out of combat, with the mouse still for a moment and nothing open.
 	-- Not while moving either: in mouselook the turn keys strafe, so keyboard turners would feel the difference.
 	local want = DB.enabled and DB.hideCursor and state.target < 0.999 and not state.peek and not state.inCombat
-		and not state.moving and not anyButton and (t - (state.lastMouseMove or 0)) >= 2 and not windowOpen()
+		and not state.moving and not anyButton and (t - (state.lastMouseMove or 0)) >= 2 and not windowKeepsPointer()
+		and not state.pointerRefused
 		-- (on a flight path or in a vehicle the view turns by itself, which would read as you moving the mouse)
 		and not is(UnitOnTaxi, "player") and not is(UnitInVehicle, "player")
 	-- (with a button held, the watcher above decides how to hand the mouse back)

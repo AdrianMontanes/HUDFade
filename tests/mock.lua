@@ -182,6 +182,18 @@ check("pointer hides again right after a right drag", mouselook==true)
 buttons.RightButton=nil; MouselookStop(); onTaxi=true; step(0.3); MouselookStop(); step(3)
 check("pointer left alone on a flight path", mouselook==false)
 onTaxi=false
+-- Hiding over an open window takes the pointer too
+cx=cx+40; OLEDHUD.Show(); step(0.5)
+local map = CreateFrame("Frame", "WorldMapFrame"); step(0.5)
+check("an open window keeps the HUD up", UIParent.alpha==1 and mouselook==false)
+OLEDHUD.Hide(); step(3)
+check("hide over an open window hides the pointer too", UIParent.alpha==0 and mouselook==true)
+facingV=facingV+0.2; step(0.2); check("pointer back on the first move over the window", mouselook==false)
+step(3); check("and hides again when still", mouselook==true)
+map:Hide(); step(0.5)
+-- Something else ends our mouselook: no on/off flicker, wait for a real move
+MouselookStop(); step(4); check("no retry after the game ends it", mouselook==false)
+cx=cx+40; step(3); check("retries after a real mouse move", mouselook==true)
 -- A stuck non-movement key must not keep you "active" (Tab used to)
 -- Idle and what counts as activity
 OLEDHUD.Toggle(); step(0.5); check("shown for the idle tests", UIParent.alpha==1)
