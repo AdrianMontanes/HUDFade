@@ -218,7 +218,7 @@ local function why()
   return table.concat(out, "\n")
 end
 cx=cx+40; step(2.4); local w = why()
-check("why: enabled, idle progress", w:find("Enabled", 1, true) and w:find("HUD visible due to: Not enough time idling: 2/5s", 1, true))
+check("why: enabled, idle progress", w:find("Enabled", 1, true) and w:find("HUD visible due to: Not enough time idling (2/5s)", 1, true))
 step(5); w = why()
 check("why: hidden by idle", w:find("HUD hidden due to: Idle for", 1, true))
 OLEDHUDDB.showTarget=true; target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5); w = why()

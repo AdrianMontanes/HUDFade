@@ -503,15 +503,15 @@ function OLEDHUD.Explain(skipTyping)
 		if DB.idleSeconds <= 0 then
 			causes[#causes + 1] = "Hide when idle is set to Never"
 		else
-			local text = string.format("Not enough time idling: %d/%ds", idleFor, DB.idleSeconds)
+			local detail = string.format("%d/%ds", idleFor, DB.idleSeconds)
 			local keysHeld = {}
 			for k in pairs(held) do keysHeld[#keysHeld + 1] = k end
 			if #keysHeld > 0 then
-				text = text .. " (holding " .. table.concat(keysHeld, " ") .. ")"
+				detail = detail .. ", holding " .. table.concat(keysHeld, " ")
 			elseif state.moving and DB.activeAutorun then
-				text = text .. " (auto-running counts as active)"
+				detail = detail .. ", auto-running counts as active"
 			end
-			causes[#causes + 1] = text
+			causes[#causes + 1] = "Not enough time idling (" .. detail .. ")"
 		end
 	end
 	if #causes == 0 then causes[1] = "Something just ended, it hides in a moment" end
