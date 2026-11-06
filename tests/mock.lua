@@ -61,13 +61,15 @@ function secretLoner:GetAlpha() return SECRET end
 local brokenFrame = newFrame(); brokenFrame.parent = UIParent
 function brokenFrame:GetObjectType() error("forbidden") end
 function brokenFrame:IsIgnoringParentAlpha() error("forbidden") end
+flying=false
+function IsFlying() return flying end
 onTaxi=false
 function UnitOnTaxi() return onTaxi end
 function EnumerateFrames(f) if not f then return frames[1] end for i,x in ipairs(frames) do if x==f then return frames[i+1] end end end
 C_Timer = { After=function(d,fn) table.insert(timers,{T+d,fn}) end, NewTicker=function(d,fn) ticker=fn end }
 timers = {}
 function GetBindingKey(c) if c=="TOGGLEUI" then return "ALT-Z" end if c=="TOGGLEAUTORUN" then return "NUMLOCK" end end
-function GetBindingAction(k) local m={W="MOVEFORWARD", NUMLOCK="TOGGLEAUTORUN", TAB="TARGETNEARESTENEMY"}; return m[k] or "" end
+function GetBindingAction(k) local m={W="MOVEFORWARD", D="TURNRIGHT", NUMLOCK="TOGGLEAUTORUN", TAB="TARGETNEARESTENEMY"}; return m[k] or "" end
 binds = {}
 function SetOverrideBinding(o,p,k,c) binds[k]=c end
 function ClearOverrideBindings() binds={} end
@@ -82,6 +84,13 @@ function UnitExists(u) return target end
 function UnitIsDead() return false end
 mouselook=false; facingV=1.0
 function MouselookStart() mouselook=true end
+mlBinds = {}
+function SetMouselookOverrideBinding(k, b) if lockdown then error("blocked") end mlBinds[k]=b end
+-- A left press: while mouselooking with the override set, the game runs that binding instead (a CLICK on our button).
+function pressLeft()
+  buttons.LeftButton=true
+  if mouselook and mlBinds.BUTTON1 then local b=_G.OLEDHUDWakeButton; b.scripts.OnClick(b, "LeftButton", true) end
+end
 function MouselookStop() mouselook=false end
 function IsMouselooking() return mouselook end
 function GetPlayerFacing() return facingV end
@@ -162,8 +171,13 @@ fire("PLAYER_REGEN_DISABLED"); step(0.2)
 check("pointer back in combat", mouselook==false)
 fire("PLAYER_REGEN_ENABLED")
 step(5); check("hidden again out of combat", mouselook==true)
-fire("PLAYER_STARTED_MOVING"); check("pointer back when moving", mouselook==false)
-step(3); check("stays while moving", mouselook==false)
+local keyFrame; for _,f in ipairs(frames) do if f.scripts.OnKeyDown then keyFrame=f end end
+fire("PLAYER_STARTED_MOVING"); step(3); check("auto-run keeps the pointer hidden", mouselook==true)
+keyFrame.scripts.OnKeyDown(keyFrame, "D"); check("a turn key gives the pointer back before the game sees it", mouselook==false)
+step(3); check("not hidden while turning with keys", mouselook==false)
+keyFrame.scripts.OnKeyUp(keyFrame, "D"); step(0.2); check("hidden again after turning", mouselook==true)
+flying=true; step(0.2); check("pointer back while flying (the camera sets your pitch)", mouselook==false)
+flying=false; step(0.2); check("hidden again after landing", mouselook==true)
 fire("PLAYER_STOPPED_MOVING");OLEDHUD.Hide(); step(2)
 check("hidden before turning off", UIParent.alpha==0)
 SlashCmdList.OLEDHUD("off")
@@ -177,15 +191,27 @@ OLEDHUD.Toggle(); step(2); check("toggle works again", UIParent.alpha==0)
 -- Dragging while the pointer is hidden
 OLEDHUD.Toggle(); step(0.5); OLEDHUDDB.hideCursor = true; OLEDHUD.Hide(); step(4)
 check("pointer hidden before the drag", mouselook==true)
-buttons.LeftButton=true; step(0.1)
-check("left drag hands over to the game's camera drag", mouselook==false)
+check("left button points at the wake button only while hidden", mlBinds.BUTTON1=="CLICK OLEDHUDWakeButton:LeftButton")
+pressLeft(); step(0.1)
+check("first left press only brings the pointer back (nothing moves)", mouselook==false and mlBinds.BUTTON1==nil)
 step(1); check("no re-hide while a button is held", mouselook==false)
-buttons.LeftButton=nil; step(0.2)
-check("pointer hides again right after the drag", mouselook==true)
+buttons.LeftButton=nil; step(2.2)
+check("that press turned nothing, so the pointer hides again when still", mouselook==true)
+facingV=facingV+0.2; step(0.2); check("mouse move shows the pointer", mouselook==false)
+pressLeft(); step(0.5); buttons.LeftButton=nil; step(3)
+check("after a real left-drag the pointer stays (hiding would turn you to the camera)", mouselook==false)
+buttons.RightButton=true; step(0.1); buttons.RightButton=nil; step(0.2)
+check("a right-drag lines camera and character up: pointer hides again", mouselook==true)
 buttons.RightButton=true; step(0.1)
-check("right drag keeps the game's steering", mouselook==true)
+check("right drag keeps the game's steering", mouselook==true and mlBinds.BUTTON1==nil)
 buttons.RightButton=nil; mouselook=false; step(0.2)
 check("pointer hides again right after a right drag", mouselook==true)
+facingV=facingV+0.2; step(0.2); pressLeft(); step(0.3); buttons.LeftButton=nil; step(0.2)
+fire("PLAYER_STARTED_MOVING"); step(1); check("after a drag, still visible at the start of a run", mouselook==false)
+step(1.5); check("moving with the camera following lines them up: hidden", mouselook==true)
+fire("PLAYER_STOPPED_MOVING")
+fire("PLAYER_REGEN_DISABLED"); check("combat undoes the left-button override before lockdown", mlBinds.BUTTON1==nil and mouselook==false)
+fire("PLAYER_REGEN_ENABLED"); step(0.3)
 -- No pointer hiding on a flight path
 buttons.RightButton=nil; MouselookStop(); onTaxi=true; step(0.3); MouselookStop(); step(3)
 check("pointer left alone on a flight path", mouselook==false)
@@ -199,14 +225,16 @@ check("hide over an open window hides the pointer too", UIParent.alpha==0 and mo
 facingV=facingV+0.2; step(0.2); check("pointer back on the first move over the window", mouselook==false)
 step(3); check("and hides again when still", mouselook==true)
 map:Hide(); step(0.5)
--- Something else ends our mouselook: no on/off flicker, wait for a real move
-MouselookStop(); step(4); check("no retry after the game ends it", mouselook==false)
-cx=cx+40; step(3); check("retries after a real mouse move", mouselook==true)
+-- Something else ends our mouselook (alt-tab): try again when still, backing off if it keeps happening
+MouselookStop(); step(1); check("not retried straight away after the game ends it", mouselook==false)
+step(1.2); check("retried once the mouse stayed still (back from alt-tab)", mouselook==true)
+MouselookStop(); step(2.2); MouselookStop(); step(2.2); MouselookStop(); step(5)
+check("third time in a row: waits longer", mouselook==false)
+step(5.5); check("and still tries again later", mouselook==true)
 -- A stuck non-movement key must not keep you "active" (Tab used to)
 -- Idle and what counts as activity
 OLEDHUD.Toggle(); step(0.5); check("shown for the idle tests", UIParent.alpha==1)
 OLEDHUDDB.idleSeconds = 5; OLEDHUDDB.hideCursor = false
-local keyFrame; for _,f in ipairs(frames) do if f.scripts.OnKeyDown then keyFrame=f end end
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); step(0.2)
 keyFrame.scripts.OnKeyDown(keyFrame, "NUMLOCK"); fire("PLAYER_STARTED_MOVING"); step(7)
 check("auto-run after Tab (key-up never seen) still goes idle", UIParent.alpha==0)
@@ -239,8 +267,10 @@ local function why()
 end
 cx=cx+40; step(2.4); local w = why()
 check("why: enabled, idle progress", w:find("Enabled", 1, true) and w:find("HUD visible due to: Not enough time idling (2/5s)", 1, true))
-step(5); w = why()
+OLEDHUDDB.hideCursor=true; buttons.RightButton=true; step(0.1); buttons.RightButton=nil; mouselook=false; step(5); w = why()
 check("why: hidden by idle", w:find("HUD hidden due to: Idle for", 1, true))
+check("why: pointer line", w:find("Pointer: hidden", 1, true))
+OLEDHUDDB.hideCursor=false
 OLEDHUDDB.showTarget=true; target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5); w = why()
 check("why: several causes on their own lines", w:find("HUD visible due to:\n   - You have a target\n   - Not enough time idling", 1, true))
 target=false; fire("PLAYER_TARGET_CHANGED")
@@ -250,6 +280,19 @@ OLEDHUDDB.idleSeconds=5
 OLEDHUD.SetEnabled(false); w = why()
 check("why: disabled", w:find("Disabled", 1, true) and not w:find("visible due to", 1, true))
 OLEDHUD.SetEnabled(true)
+-- Hide without a hitch: names go at the end of the fade, frames are scanned in the background
+OLEDHUD.Show(); step(0.5)
+local late = CreateFrame("PlayerModel", nil, UIParent); late.malpha=1
+function late:SetModelAlpha(a) self.malpha=a end
+function late:GetModelAlpha() return self.malpha end
+OLEDHUD.Hide(); step(0.3)
+check("names stay on during the fade", cvars.UnitNameNPC=="1")
+step(1.0); check("names off once the fade ends", cvars.UnitNameNPC=="0")
+step(0.2); check("nameplates off a moment after", cvars.nameplateShowEnemies=="0")
+check("hiding does not scan every frame at once (new model not seen yet)", late.malpha==1)
+OLEDHUD.Show(); step(20); OLEDHUD.Hide(); step(1.5)
+check("background scan finds frames made later", late.malpha==0)
+OLEDHUD.Show(); step(0.5)
 -- Pixel shift
 check("pixel shift off by default", select(1, uiOffset())==0 and select(2, uiOffset())==0)
 SlashCmdList.OLEDHUD("shift on"); step(1.1)

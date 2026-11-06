@@ -170,10 +170,15 @@ local function hookMinimap()
 end
 
 local function hideGameText()
-	if DB.hideNames then cvarsOff(NAME_CVARS) end
-	if DB.hideNameplates and not InCombatLockdown() then cvarsOff(PLATE_CVARS) end
-	hideMinimap()
 	state.cvarsHidden = true
+	if DB.hideNames then cvarsOff(NAME_CVARS) end
+	hideMinimap()
+	-- Nameplates a moment later: dropping every plate is the heaviest part, so it gets a frame of its own.
+	if DB.hideNameplates then
+		C_Timer.After(0.1, function()
+			if state.cvarsHidden and DB.hideNameplates and not InCombatLockdown() then cvarsOff(PLATE_CVARS) end
+		end)
+	end
 end
 
 local function showGameText()
@@ -215,36 +220,68 @@ local loners = {}
 local lonerBase = setmetatable({}, { __mode = "k" })
 local lonerWritten = setmetatable({}, { __mode = "k" })
 
-local function sortFrame(f)
+local function sortFrame(f, ms, ls)
 	local kind = ask(f, "GetObjectType")
 	if kind and MODEL_TYPES[kind] and f.SetModelAlpha then
-		if underUIParent(f) then models[#models + 1] = f end
+		if underUIParent(f) then ms[#ms + 1] = f end
 	elseif ask(f, "IsIgnoringParentAlpha") == true and underUIParent(f) then
 		-- (a frame that keeps this secret is left alone: we cannot tell, and guessing could leave it invisible)
-		loners[#loners + 1] = f
+		ls[#ls + 1] = f
 	end
 end
 
-local function scanModels()
-	if not EnumerateFrames then return end
-	lastScan = now() -- (set first: if anything below fails, the next try waits its turn instead of every tick)
-	wipe(models)
-	wipe(loners)
-	local f = EnumerateFrames()
-	while f do
-		pcall(sortFrame, f) -- (one odd frame never stops the scan)
-		f = EnumerateFrames(f)
-	end
-	-- Named here too in case the game draws it some other way: alpha on a normal child is harmless.
+-- Named here too in case the game draws it some other way: alpha on a normal child is harmless.
+local function addNamedLoners(ls)
 	for _, name in ipairs({ "MainMenuBarVehicleLeaveButton" }) do
 		local b = _G[name]
 		if type(b) == "table" and b.SetAlpha then
 			local dup = false
-			for _, x in ipairs(loners) do if x == b then dup = true end end
-			if not dup then loners[#loners + 1] = b end
+			for _, x in ipairs(ls) do if x == b then dup = true end end
+			if not dup then ls[#ls + 1] = b end
 		end
 	end
+end
+
+-- All frames at once: only at login, while the loading screen is up.
+local function scanModels()
+	if not EnumerateFrames then return end
 	lastScan = now()
+	local ms, ls = {}, {}
+	local f = EnumerateFrames()
+	while f do
+		pcall(sortFrame, f, ms, ls) -- (one odd frame never stops the scan)
+		f = EnumerateFrames(f)
+	end
+	addNamedLoners(ls)
+	models, loners = ms, ls
+end
+
+-- After that, a few hundred frames a tick in the background, and only while the HUD is fully up. (Walking through
+-- every frame in the game at the start of each hide caused a visible hitch.)
+local SCAN_BATCH, SCAN_EVERY = 300, 15
+local scan = {}
+local function scanStep()
+	if not EnumerateFrames or state.target < 0.999 or state.current < 0.999 then return end
+	if not scan.next then
+		if now() - lastScan < SCAN_EVERY then return end
+		local ok, first = pcall(EnumerateFrames)
+		if not (ok and first) then lastScan = now() return end
+		scan.next, scan.models, scan.loners = first, {}, {}
+	end
+	local f = scan.next
+	for _ = 1, SCAN_BATCH do
+		pcall(sortFrame, f, scan.models, scan.loners)
+		local ok, nxt = pcall(EnumerateFrames, f)
+		f = ok and nxt or nil
+		if not f then break end
+	end
+	scan.next = f
+	if not f then
+		addNamedLoners(scan.loners)
+		models, loners = scan.models, scan.loners
+		scan.models, scan.loners = nil, nil
+		lastScan = now()
+	end
 end
 
 -- For /ohud what: the frame under the mouse and how it relates to UIParent.
@@ -332,16 +369,23 @@ driver:SetScript("OnUpdate", function(self, elapsed)
 		cur = math.min(tgt, cur + elapsed * span / secs)
 	end
 	apply(cur)
-	if cur == tgt then self:Hide() end
+	if cur == tgt then
+		self:Hide()
+		if state.textPending and tgt < 0.999 then
+			state.textPending = false
+			hideGameText()
+		end
+	end
 end)
 
 local function setTarget(a, instant)
 	if a < state.target and a < 0.999 and not state.cvarsHidden then
-		-- Starting to hide. (Nothing in the scan may stop the hide itself.)
-		if now() - lastScan > 5 then pcall(scanModels) end
-		hideGameText()
-	elseif a >= 0.999 and state.cvarsHidden then
-		showGameText()
+		-- Starting to hide. Names, nameplates and the minimap go once the fade has finished: each makes the game
+		-- rebuild things, and doing all of it on the first frame of the fade was a visible hitch.
+		state.textPending = true
+	elseif a >= 0.999 then
+		state.textPending = false
+		if state.cvarsHidden then showGameText() end
 	end
 	state.target = a
 	if instant then
@@ -349,6 +393,10 @@ local function setTarget(a, instant)
 		driver:Hide()
 	elseif state.current ~= a then
 		driver:Show()
+	end
+	if state.textPending and a < 0.999 and (instant or state.current == a) then
+		state.textPending = false
+		hideGameText()
 	end
 end
 
@@ -489,6 +537,8 @@ function OLEDHUD.Explain(skipTyping)
 		if state.shot then why[#why + 1] = "Taking a screenshot" end
 		if #why == 0 then why[1] = "Something just ended, so it is hiding again" end
 		listLines(lines, "HUD hidden due to:", why)
+		local p = OLEDHUD.PointerWhy()
+		if p then lines[#lines + 1] = (p == "hidden" or p == "about to hide") and ("Pointer: " .. p) or ("Pointer visible due to: " .. p) end
 		return lines
 	end
 
@@ -543,12 +593,23 @@ local function isMoveKey(key)
 	local ok, action = pcall(GetBindingAction, key, true)
 	return ok and action and MOVE_ACTIONS[action] or false
 end
+local TURN_ACTIONS = { TURNLEFT = true, TURNRIGHT = true }
+local function isTurnKey(key)
+	if not (key and GetBindingAction) then return false end
+	local ok, action = pcall(GetBindingAction, key, true)
+	return ok and TURN_ACTIONS[action] or false
+end
+local function turnKeyHeld()
+	for k in pairs(held) do if isTurnKey(k) then return true end end
+	return false
+end
+
 local function onKey(_, key)
 	if isMoveKey(key) then
 		if key ~= GetBindingKey("TOGGLEAUTORUN") then held[key] = true end
 		input()
 	end
-	if releaseOnKey then releaseOnKey() end
+	if releaseOnKey then releaseOnKey(key) end
 end
 local function onKeyUp(_, key)
 	if key then held[key] = nil end
@@ -584,26 +645,54 @@ local function getFacing()
 	return nil
 end
 
+-- While the pointer is hidden, a left press would count as both buttons for a moment (the game's "run and steer"),
+-- nudging or turning your character before OLED HUD could react. So during our mouselook only, the left button is
+-- pointed at this invisible button instead: the first press just brings the pointer back, and nothing moves.
+local wake = CreateFrame("Button", "OLEDHUDWakeButton", UIParent)
+wake:SetSize(1, 1)
+wake:EnableMouse(false)
+if wake.RegisterForClicks then wake:RegisterForClicks("AnyDown", "AnyUp") end
+local WAKE_BIND = "CLICK OLEDHUDWakeButton:LeftButton"
+local leftOverridden = false
+
+local function setLeftOverride(on)
+	if not SetMouselookOverrideBinding or on == leftOverridden then return end
+	if InCombatLockdown() then return end
+	if pcall(SetMouselookOverrideBinding, "BUTTON1", on and WAKE_BIND or nil) then leftOverridden = on end
+end
+
 local function releasePointer(stop, moved)
 	if not ours then return end
 	ours = false
 	if stop and MouselookStop then pcall(MouselookStop) end
+	setLeftOverride(false)
 	if moved then state.lastMouseMove = now() end
 end
 
 local function hidePointer()
 	if ours or not MouselookStart then return end
 	if IsMouselooking and IsMouselooking() then return end -- (you are already steering)
+	setLeftOverride(true)
 	if pcall(MouselookStart) then
 		ours = true
 		facing = getFacing()
 		startedAt = now()
+	else
+		setLeftOverride(false)
 	end
 end
 
-releaseOnKey = function()
-	-- Where the facing is secret a mouse move cannot be seen, so any key brings the pointer back there.
-	if ours and not facing then releasePointer(true, true) end
+wake:SetScript("OnClick", function()
+	if not ours then return end
+	state.wakeClick = true -- (this press turned nothing: it must not count as a camera drag below)
+	releasePointer(true, true)
+end)
+
+releaseOnKey = function(key)
+	if not ours then return end
+	-- With the pointer hidden, the turn keys would strafe instead of turn: give it back first (this runs before the
+	-- game acts on the key). And where the facing is secret a mouse move cannot be seen, so any key brings it back.
+	if isTurnKey(key) or not facing then releasePointer(true, true) end
 end
 
 local watcher = CreateFrame("Frame")
@@ -621,10 +710,13 @@ watcher:SetScript("OnUpdate", function()
 		return
 	end
 	if IsMouselooking and not IsMouselooking() then
-		-- Something else ended it (the game, another addon). Wait for a real mouse move before trying again, so
-		-- the pointer never flickers on and off.
+		-- Something else ended it (alt-tab, the game, another addon). Try again once the mouse has been still for a
+		-- while, and wait longer each time it keeps happening, so the pointer never flickers on and off.
 		releasePointer(false)
-		state.pointerRefused = true
+		local t = now()
+		state.refusals = (t - (state.lastRefusal or -100) < 30) and ((state.refusals or 0) + 1) or 1
+		state.lastRefusal = t
+		state.retryAt = t + (state.refusals >= 3 and 10 or 2)
 		return
 	end
 	local f = getFacing()
@@ -648,26 +740,84 @@ local function windowKeepsPointer()
 	return DB.showWindows and not state.suppressed.window
 end
 
+-- The camera can point somewhere other than where your character faces (after a left-drag). Hiding the pointer
+-- switches on the same mode as a right-drag, which turns your character to face the camera. So after a left-drag the
+-- pointer stays until the two line up again: a right-drag lines them up, and so does moving for a moment with the
+-- game's camera following on (Camera Following Style other than Never).
+local function cameraFollows()
+	local ok, v = pcall(getCVar, "cameraSmoothStyle")
+	return not (ok and v == "0")
+end
+
+local function mouseOverWorld()
+	local f
+	if GetMouseFoci then
+		local ok, list = pcall(GetMouseFoci)
+		f = ok and type(list) == "table" and list[1] or nil
+	elseif GetMouseFocus then
+		local ok, x = pcall(GetMouseFocus)
+		f = ok and x or nil
+	end
+	return f == nil or f == WorldFrame
+end
+
 local lastX, lastY = 0, 0
+local leftSince, leftOnWorld, followSince
+
+-- Why the pointer has to stay visible right now (nil = it can hide). Also used by /ohud why.
+local function pointerBlock(t, anyButton)
+	if not (DB.enabled and DB.hideCursor) then return "pointer hiding is off" end
+	if state.target >= 0.999 then return "the HUD is visible" end
+	if state.peek then return "peek key held" end
+	if state.inCombat then return "in combat" end
+	if anyButton then return "a mouse button is held" end
+	-- (in the air or in water the camera also sets your pitch, so hiding could tip your character up or down)
+	if is(IsFlying) then return "flying" end
+	if is(IsSwimming) then return "swimming" end
+	-- (on a flight path or in a vehicle the view turns by itself, which would read as you moving the mouse)
+	if is(UnitOnTaxi, "player") then return "on a flight path" end
+	if is(UnitInVehicle, "player") then return "in a vehicle" end
+	if turnKeyHeld() then return "turning with the keyboard" end
+	if windowKeepsPointer() then return "a window is open, or you are typing" end
+	if state.cameraFree then return "the camera points away from your character (a right-drag or moving lines them up)" end
+	if state.retryAt and t < state.retryAt then return "the game took the mouse back a moment ago (alt-tab?)" end
+	if (t - (state.lastMouseMove or 0)) < 2 then return "the mouse moved less than 2 s ago" end
+	return nil
+end
+
 local function pollMouse()
 	local t = now()
-	local anyButton = IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton"))
+	local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
+	local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
+	local anyButton = left or right
 	if not ours then -- (while ours, the pointer is frozen and the watcher above looks for moves)
 		local x, y = GetCursorPosition()
 		if math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2 then
 			lastX, lastY = x, y
 			state.lastMouseMove = t
-			state.pointerRefused = false
+			state.retryAt, state.refusals = nil, 0
 			input()
-		else
-			local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
-			local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
-			if left or right or (IsMouselooking and IsMouselooking()) then
-				-- (not a pointer move: after a drag the pointer can hide again straight away)
-				-- Running with both buttons is moving yourself; turning the camera only counts if you want it to.
-				if (left and right) or DB.activeCamera then input() end
-			end
+		elseif anyButton or (IsMouselooking and IsMouselooking()) then
+			-- Running with both buttons is moving yourself; turning the camera only counts if you want it to.
+			if (left and right) or DB.activeCamera then input() end
 		end
+	end
+	-- Camera and character lined up or not (see cameraFollows above).
+	-- (any left press on the 3D world may turn the camera, even a tiny tweak; the press that only brings the
+	-- pointer back does not)
+	if left and not right then
+		if not leftSince then leftSince, leftOnWorld = t, mouseOverWorld() end
+		if leftOnWorld and not state.wakeClick then state.cameraFree = true end
+	else
+		leftSince = nil
+		if not left then state.wakeClick = false end
+	end
+	if right then state.cameraFree = false end
+	if state.cameraFree and state.moving and not anyButton and cameraFollows() then
+		followSince = followSince or t
+		if t - followSince >= 2 then state.cameraFree = false end
+	else
+		followSince = nil
 	end
 	if IsKeyDown then -- (drop keys whose release never reached us)
 		for k in pairs(held) do
@@ -679,15 +829,15 @@ local function pollMouse()
 		-- Moving counts while you hold a key for it. Auto-run, follow and flight paths only count if you want them to.
 		if next(held) or DB.activeAutorun then input() end
 	end
-	-- Pointer hidden only while the HUD is hidden, out of combat, with the mouse still for a moment and nothing open.
-	-- Not while moving either: in mouselook the turn keys strafe, so keyboard turners would feel the difference.
-	local want = DB.enabled and DB.hideCursor and state.target < 0.999 and not state.peek and not state.inCombat
-		and not state.moving and not anyButton and (t - (state.lastMouseMove or 0)) >= 2 and not windowKeepsPointer()
-		and not state.pointerRefused
-		-- (on a flight path or in a vehicle the view turns by itself, which would read as you moving the mouse)
-		and not is(UnitOnTaxi, "player") and not is(UnitInVehicle, "player")
 	-- (with a button held, the watcher above decides how to hand the mouse back)
-	if want then hidePointer() elseif ours and not anyButton then releasePointer(true) end
+	if not pointerBlock(t, anyButton) then hidePointer() elseif ours and not anyButton then releasePointer(true) end
+end
+
+function OLEDHUD.PointerWhy()
+	if not (DB.enabled and DB.hideCursor) then return nil end
+	if ours then return "hidden" end
+	local anyButton = IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton"))
+	return pointerBlock(now(), anyButton) or "about to hide"
 end
 
 ---------------------------------------------------------------------------
@@ -759,7 +909,7 @@ function OLEDHUD.CleanScreenshot()
 	state.shot = true
 	update(true)
 	-- Names and nameplates go away on the next frame; wait a moment so they are out of the picture.
-	C_Timer.After(0.15, function()
+	C_Timer.After(0.25, function()
 		Screenshot()
 		-- In case the game never tells us the screenshot finished.
 		C_Timer.After(2, function()
@@ -971,6 +1121,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "PLAYER_LOGIN" then
 		-- Logged out or crashed while hidden last time: put the names and nameplates back first.
 		restoreAllCVars()
+		pcall(scanModels) -- (the one full scan, under the loading screen)
 		state.inCombat = InCombatLockdown() and true or false
 		state.lastInput = now()
 		hookMinimap()
@@ -981,6 +1132,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 			pollMouse()
 			update()
 			syncShift()
+			scanStep()
 		end)
 		update(true)
 		if not DB.welcomed then
@@ -992,8 +1144,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "PLAYER_LOGOUT" then
 		restoreAllCVars()
 	elseif event == "PLAYER_REGEN_DISABLED" then
-		-- Runs just before combat lockdown starts: the last moment nameplates can be turned back on.
+		-- Runs just before combat lockdown starts: the last moment nameplates can be turned back on, and the left
+		-- button's pointer override can be undone.
 		state.inCombat = true
+		releasePointer(true)
 		cvarsBack(PLATE_CVARS)
 		update(DB.showCombat)
 	elseif event == "PLAYER_REGEN_ENABLED" then
@@ -1014,7 +1168,6 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		update()
 	elseif event == "PLAYER_STARTED_MOVING" then
 		state.moving = true
-		releasePointer(true)
 	elseif event == "PLAYER_STOPPED_MOVING" then
 		state.moving = false
 		wipe(held) -- (a key whose release the game never passed on, e.g. after Alt+Tab, cannot keep you "active")
