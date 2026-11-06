@@ -34,6 +34,7 @@ local DEFAULTS = {
 	hideNameplates = true,
 	hideCursor = false,    -- hide the mouse pointer while the HUD is hidden and the mouse is still (experimental)
 	hideCursorSteer = false, -- ...also while flying, swimming or in a vehicle, where the mouse then steers you
+	mouseWakes = true,     -- moving the mouse brings the HUD back after it hid for being idle (it always keeps it up)
 	activeCamera = false,  -- turning the camera counts as activity for the idle timer
 	activeAutorun = false, -- auto-run, follow and flight paths count as activity for the idle timer
 	hideMinimap = true,    -- the minimap's icons and arrow ignore the UI's opacity, so the map is hidden instead
@@ -533,7 +534,7 @@ end
 
 function HUDFade.Explain(skipTyping)
 	if not DB.enabled then
-		return { "|cffff4040Disabled|r", "The HUD stays up while HUD Fade is off. Turn it on with /hudfade on." }
+		return { "|cffff4040Disabled|r", "The HUD stays visible while HUD Fade is off. Turn it on with /hudfade on." }
 	end
 	local lines = { "|cff40ff40Enabled|r" }
 	local t = now()
@@ -860,7 +861,9 @@ local function pollMouse()
 			lastX, lastY = x, y
 			state.lastMouseMove = t
 			state.pointerRefused = false
-			input()
+			-- While the HUD is up, using the mouse keeps it up. Once it has hidden for being idle, the mouse only brings it
+			-- back if you want it to (otherwise keys do, e.g. coming back from alt-tab).
+			if DB.mouseWakes or not isIdle(t) then input() end
 		end
 	end
 	-- Camera and character lined up or not (see cameraFollows above).
@@ -970,7 +973,7 @@ function HUDFade.SetEnabled(on)
 	update(true)
 	HUDFade.UpdateShift()
 	if HUDFade.RefreshOptions then HUDFade.RefreshOptions() end
-	say(DB.enabled and "on." or "off. The HUD stays up and your Hide UI key works as normal.")
+	say(DB.enabled and "on." or "off. The HUD stays visible and your Hide UI key works as normal.")
 end
 
 function HUDFade.ToggleEnabled()

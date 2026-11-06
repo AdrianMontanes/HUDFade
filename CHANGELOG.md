@@ -1,5 +1,10 @@
 # HUD Fade
 
+## 0.2.8
+
+- New option "You move the mouse" (on by default) under "While hidden, bring the HUD back when". Off: once the HUD has hidden for being idle, only keys bring it back, so a bumped mouse or coming back from alt-tab leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.
+- "Hide when idle also waits while" is now "Keep the HUD visible while", with clearer tips.
+
 ## 0.2.7
 
 - Pixel shift keeps the interface its shift distance in from the screen edges, so a frame you placed against an edge never goes past it. At most it comes back to exactly where you put it.

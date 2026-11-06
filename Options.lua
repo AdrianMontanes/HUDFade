@@ -158,11 +158,11 @@ local built = false
 local function build()
 	if built then return end
 	built = true
-	canvas = scrollPage(panel, 630)
+	canvas = scrollPage(panel, 656)
 	pageTitle("HUD Fade")
 	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
 
-	panel.master = checkbox("enabled", "Enable HUD Fade", "Off: the HUD stays up, names and minimap stay as they are, and your Hide UI key does its normal job. No reload needed. You can also bind a key for this under Key Bindings > AddOns.",
+	panel.master = checkbox("enabled", "Enable HUD Fade", "Off: the HUD stays visible, names and minimap stay as they are, and your Hide UI key does its normal job. No reload needed. You can also bind a key for this under Key Bindings > AddOns.",
 		-76, 16, function() HUDFade.SetEnabled(db().enabled) end, true)
 	checkbox("pixelShift", "Pixel shift (burn-in protection)", SHIFT_TIP, -76, 320, shiftChanged)
 
@@ -195,18 +195,20 @@ local function build()
 	checkbox("showCasting", "Casting", nil, -382)
 	checkbox("showDead", "You die",
 		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. As a ghost everything works as usual.", -382, 320)
-	checkbox("showWindows", "A window, popup or bag is open, or you are typing", nil, -408)
+	checkbox("mouseWakes", "You move the mouse",
+		"After the HUD hides for being idle, moving the mouse brings it back. Off: only keys bring it back (moving, targeting, opening a window and so on), so a bumped mouse or coming back from alt-tab leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.", -408)
+	checkbox("showWindows", "A window, popup or bag is open, or you are typing", nil, -434)
 
-	header("Timing", -448)
-	slider("idleSeconds", "Hide when idle", 0, 120, 5, -468, 16,
+	header("Timing", -474)
+	slider("idleSeconds", "Hide when idle", 0, 120, 5, -494, 16,
 		function(v) return v == 0 and "Never" or string.format("after %d s", v) end)
-	slider("hiddenAlpha", "Opacity while hidden", 0, 50, 5, -468, 320, "%d%%", 100)
-	slider("fadeOut", "Fade out", 0, 3, 0.1, -518, 16, "%.1f s")
-	slider("fadeIn", "Fade in", 0, 1, 0.05, -518, 320, "%.2f s")
+	slider("hiddenAlpha", "Opacity while hidden", 0, 50, 5, -494, 320, "%d%%", 100)
+	slider("fadeOut", "Fade out", 0, 3, 0.1, -544, 16, "%.1f s")
+	slider("fadeIn", "Fade in", 0, 1, 0.05, -544, 320, "%.2f s")
 
-	header("Hide when idle also waits while", -566)
-	checkbox("activeCamera", "Turning the camera", "Off: you can look around with the mouse and the HUD stays hidden.", -586)
-	checkbox("activeAutorun", "Auto-running or following", "Off: auto-run, follow and flight paths count as idle, so the HUD hides even while your character keeps moving. Holding a movement key always counts as active.", -586, 320)
+	header("Keep the HUD visible while", -592)
+	checkbox("activeCamera", "Turning the camera", "On: looking around with the mouse keeps the HUD visible and brings it back. Off: you can look around and the HUD stays hidden.", -612)
+	checkbox("activeAutorun", "Auto-running or following", "On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides while your character keeps moving. Holding a movement key always counts as activity.", -612, 320)
 
 	-- Burn-in protection page
 	canvas = shiftPanel
@@ -280,7 +282,7 @@ local HELP = {
 	"/hudfade on | off - turn the whole addon on or off",
 	"/hudfade shot - screenshot without the HUD",
 	"/hudfade shift [on | off | now] - pixel shift status, switch it, or move now to see it",
-	"/hudfade why - what is keeping the HUD up right now",
+	"/hudfade why - what is keeping the HUD visible right now",
 	"/hudfade what - name the UI element under the mouse (for reporting something that stays visible)",
 	"/hudfade reset - back to default settings",
 }

@@ -24,7 +24,7 @@ HUD Fade never touches a single frame. It fades the layer every UI frame sits on
 - **One switch for everything:** turn HUD Fade off and on from its settings, a key, or `/hudfade off` / `/hudfade on`, with no reload.
 - **Dim instead of hide:** set the hidden opacity anywhere from 0% (true black) to 50%.
 
-Type `/hudfade` for settings, `/hudfade toggle` to hide or show the HUD, `/hudfade why` to see what is keeping it up, `/hudfade shift now` to try pixel shift, and `/hudfade what` to name a UI element under the mouse.
+Type `/hudfade` for settings, `/hudfade toggle` to hide or show the HUD, `/hudfade why` to see what is keeping it visible, `/hudfade shift now` to try pixel shift, and `/hudfade what` to name a UI element under the mouse.
 
 ## Install
 

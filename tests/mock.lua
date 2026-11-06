@@ -302,6 +302,14 @@ target=false; fire("PLAYER_TARGET_CHANGED"); HUDFadeDB.showTarget=true
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
 check("Tab while idle-hidden, 'target' on: shows", UIParent.alpha==1)
 target=false; fire("PLAYER_TARGET_CHANGED")
+-- "You move the mouse" off: the mouse keeps the HUD up, but only keys bring it back once idle
+HUDFadeDB.mouseWakes=false; step(7); check("idle-hidden", UIParent.alpha==0)
+cx=cx+40; step(0.5); check("mouse wake off: moving the mouse leaves it hidden", UIParent.alpha==0)
+keyFrame.scripts.OnKeyDown(keyFrame, "W"); keyFrame.scripts.OnKeyUp(keyFrame, "W"); step(0.5)
+check("a movement key brings it back", UIParent.alpha==1)
+for i=1,8 do cx=cx+40; step(1) end
+check("while it is up, using the mouse keeps it up", UIParent.alpha==1)
+HUDFadeDB.mouseWakes=true
 -- Dying brings the HUD up once, then idle hides it again while you stay dead
 step(7); check("idle-hidden before dying", UIParent.alpha==0)
 dead=true; local deathPopup = CreateFrame("Frame", "StaticPopup1"); deathPopup.which="DEATH"; fire("PLAYER_DEAD"); step(0.5)
