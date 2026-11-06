@@ -36,6 +36,23 @@ function model:SetModelAlpha(a) self.malpha=a end
 function model:GetModelAlpha() return self.malpha end
 local lone = newFrame(); lone.parent = UIParent
 function lone:IsIgnoringParentAlpha() return true end
+-- Secret values (game 12.0): the game hides some values from addons. Here, maths or indexing on one errors.
+SECRET = newproxy(true)
+getmetatable(SECRET).__index = function() error("attempt to index a secret value") end
+function issecretvalue(v) return rawequal(v, SECRET) end
+-- A frame (like EllesmereUI's target frame with its range fade) where even "ignores parent opacity" is secret.
+local secretFrame = newFrame(); secretFrame.parent = UIParent
+function secretFrame:IsIgnoringParentAlpha() return SECRET end
+function secretFrame:GetAlpha() return SECRET end
+function secretFrame:IsVisible() return SECRET end
+-- A frame that ignores its parent's opacity but keeps its own opacity secret: must never be left invisible.
+local secretLoner = newFrame(); secretLoner.parent = UIParent
+function secretLoner:IsIgnoringParentAlpha() return true end
+function secretLoner:GetAlpha() return SECRET end
+-- A frame whose every check errors.
+local brokenFrame = newFrame(); brokenFrame.parent = UIParent
+function brokenFrame:GetObjectType() error("forbidden") end
+function brokenFrame:IsIgnoringParentAlpha() error("forbidden") end
 onTaxi=false
 function UnitOnTaxi() return onTaxi end
 function EnumerateFrames(f) if not f then return frames[1] end for i,x in ipairs(frames) do if x==f then return frames[i+1] end end end
@@ -89,6 +106,7 @@ check("own name untouched (was 0)", cvars.UnitNameOwn=="0" and OLEDHUDDB.restore
 check("plates off", cvars.nameplateShowEnemies=="0")
 check("model faded", model.malpha==0)
 check("frame that ignores parent opacity faded", lone.alpha==0)
+check("frames with secret values left alone", secretFrame.alpha==1 and secretLoner.alpha==1)
 check("minimap hidden", Minimap.shown==false)
 Minimap:Show(); check("minimap stays hidden if another addon shows it", Minimap.shown==false)
 check("friendly player plates off", cvars.nameplateShowFriendlyPlayers=="0")
@@ -192,8 +210,27 @@ target=false; fire("PLAYER_TARGET_CHANGED"); OLEDHUDDB.showTarget=true
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
 check("Tab while idle-hidden, 'target' on: shows", UIParent.alpha==1)
 target=false; fire("PLAYER_TARGET_CHANGED")
+-- /ohud why
+local realPrint, out = print, {}
+local function why()
+  out = {}; print = function(s) out[#out+1] = s end
+  SlashCmdList.OLEDHUD("why"); step(0.6); print = realPrint
+  return table.concat(out, "\n")
+end
+cx=cx+40; step(2.4); local w = why()
+check("why: enabled, idle progress", w:find("Enabled", 1, true) and w:find("HUD visible due to: Not enough time idling: 2/5s", 1, true))
+step(5); w = why()
+check("why: hidden by idle", w:find("HUD hidden due to: Idle for", 1, true))
+OLEDHUDDB.showTarget=true; target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5); w = why()
+check("why: several causes on their own lines", w:find("HUD visible due to:\n   - You have a target\n   - Not enough time idling", 1, true))
+target=false; fire("PLAYER_TARGET_CHANGED")
+OLEDHUDDB.idleSeconds=0; step(0.2); w = why()
+check("why: idle set to Never", w:find("HUD visible due to: Hide when idle is set to Never", 1, true))
+OLEDHUDDB.idleSeconds=5
+OLEDHUD.SetEnabled(false); w = why()
+check("why: disabled", w:find("Disabled", 1, true) and not w:find("visible due to", 1, true))
+OLEDHUD.SetEnabled(true)
 fire("PLAYER_LOGOUT")
 check("logout restores cvars", cvars.UnitNameNPC=="1" and cvars.nameplateShowEnemies=="1" and next(OLEDHUDDB.restore)==nil)
-SlashCmdList.OLEDHUD("why"); step(1)
 SlashCmdList.OLEDHUD("reset")
 os.exit(failed and 1 or 0)

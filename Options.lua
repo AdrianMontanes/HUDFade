@@ -233,8 +233,9 @@ SlashCmdList.OLEDHUD = function(msg)
 	elseif cmd == "why" then
 		-- (asked a moment later, once the chat box you typed this in has closed)
 		C_Timer.After(0.5, function()
-			local mode, list = OLEDHUD.Explain(true)
-			say("mode: " .. mode .. ". Showing because: " .. (#list > 0 and table.concat(list, ", ") or "nothing"))
+			local lines = OLEDHUD.Explain(true)
+			say(lines[1])
+			for i = 2, #lines do print(lines[i]) end
 		end)
 	elseif cmd == "what" then
 		say("under the mouse: " .. OLEDHUD.DescribeMouseFrame())

@@ -69,6 +69,29 @@ local function say(msg)
 end
 OLEDHUD.Print = say
 
+-- Since 12.0 the game hands addons some values as "secrets" (a target frame's range fade, for one). Comparing a
+-- secret or doing maths on it is an error, so anything read from a frame goes through ask(): it calls the method
+-- safely and gives back nil for an error or a secret, which the code below treats as "could not tell".
+local function readable(v)
+	if issecretvalue and issecretvalue(v) then return nil end
+	return v
+end
+
+local function ask(f, method, arg)
+	local fn = f and f[method]
+	if type(fn) ~= "function" then return nil end
+	local ok, v = pcall(fn, f, arg)
+	if not ok then return nil end
+	return readable(v)
+end
+
+-- The same for yes/no game questions such as UnitExists("target"): an error or a secret answers "no".
+local function is(fn, arg)
+	if type(fn) ~= "function" then return false end
+	local ok, v = pcall(fn, arg)
+	return ok and readable(v) and true or false
+end
+
 ---------------------------------------------------------------------------
 -- Game settings changed while hidden (unit names, nameplates)
 ---------------------------------------------------------------------------
@@ -110,14 +133,13 @@ local minimapHiddenByUs = false
 local minimapBusy = false
 
 local function canTouch(f)
-	return not (InCombatLockdown() and f.IsProtected and f:IsProtected())
+	return not (InCombatLockdown() and ask(f, "IsProtected"))
 end
 
 local function hideMinimap()
 	local m = Minimap
 	if not (m and DB.hideMinimap) or not canTouch(m) then return end
-	local okS, isShown = pcall(m.IsShown, m)
-	if okS and isShown then
+	if ask(m, "IsShown") then
 		minimapBusy = true
 		if pcall(m.Hide, m) then minimapHiddenByUs = true end
 		minimapBusy = false
@@ -176,8 +198,8 @@ local lastScan = -100
 
 local function underUIParent(f)
 	for _ = 1, 25 do
-		local ok, p = pcall(f.GetParent, f)
-		if not ok or not p then return false end
+		local p = ask(f, "GetParent")
+		if type(p) ~= "table" then return false end
 		if p == UIParent then return true end
 		f = p
 	end
@@ -190,19 +212,24 @@ local loners = {}
 local lonerBase = setmetatable({}, { __mode = "k" })
 local lonerWritten = setmetatable({}, { __mode = "k" })
 
+local function sortFrame(f)
+	local kind = ask(f, "GetObjectType")
+	if kind and MODEL_TYPES[kind] and f.SetModelAlpha then
+		if underUIParent(f) then models[#models + 1] = f end
+	elseif ask(f, "IsIgnoringParentAlpha") == true and underUIParent(f) then
+		-- (a frame that keeps this secret is left alone: we cannot tell, and guessing could leave it invisible)
+		loners[#loners + 1] = f
+	end
+end
+
 local function scanModels()
 	if not EnumerateFrames then return end
+	lastScan = now() -- (set first: if anything below fails, the next try waits its turn instead of every tick)
 	wipe(models)
 	wipe(loners)
 	local f = EnumerateFrames()
 	while f do
-		local ok, kind = pcall(f.GetObjectType, f)
-		if ok and MODEL_TYPES[kind] and f.SetModelAlpha and underUIParent(f) then
-			models[#models + 1] = f
-		elseif f.IsIgnoringParentAlpha then
-			local okI, ignoring = pcall(f.IsIgnoringParentAlpha, f)
-			if okI and ignoring == true and underUIParent(f) then loners[#loners + 1] = f end
-		end
+		pcall(sortFrame, f) -- (one odd frame never stops the scan)
 		f = EnumerateFrames(f)
 	end
 	-- Named here too in case the game draws it some other way: alpha on a normal child is harmless.
@@ -224,18 +251,15 @@ function OLEDHUD.DescribeMouseFrame()
 	if not f then return "nothing (the 3D world)" end
 	local chain, x = {}, f
 	for _ = 1, 8 do
-		if not x then break end
-		local okN, name = pcall(x.GetName, x)
-		chain[#chain + 1] = (okN and name) or tostring(x.GetObjectType and x:GetObjectType() or "?")
+		if type(x) ~= "table" then break end
+		local name = ask(x, "GetName")
+		chain[#chain + 1] = tostring(name or ask(x, "GetObjectType") or "?")
 		if x == UIParent then break end
-		local okP, p = pcall(x.GetParent, x)
-		x = okP and p or nil
+		x = ask(x, "GetParent")
 	end
-	local okI, ign = pcall(function() return f:IsIgnoringParentAlpha() end)
-	return table.concat(chain, " < ") .. ((okI and ign) and " (ignores the UI's opacity)" or "")
+	local ign = ask(f, "IsIgnoringParentAlpha")
+	return table.concat(chain, " < ") .. ((ign == true) and " (ignores the UI's opacity)" or "")
 end
-
-local function num(v) return type(v) == "number" and not (issecretvalue and issecretvalue(v)) end
 
 local function applyLoners(a)
 	for _, f in ipairs(loners) do
@@ -244,15 +268,15 @@ local function applyLoners(a)
 				pcall(f.SetAlpha, f, lonerBase[f])
 				lonerBase[f], lonerWritten[f] = nil, nil
 			end
-		else
-			local okV, visible = pcall(f.IsVisible, f)
-			if okV and visible then
-				local okA, now = pcall(f.GetAlpha, f)
-				-- Its owner changed it since we last wrote: take that as its own opacity from now on.
-				if okA and num(now) and (lonerBase[f] == nil or math.abs(now - (lonerWritten[f] or -1)) > 0.01) then
-					lonerBase[f] = now
-				end
-				local want = (lonerBase[f] or 1) * a
+		elseif ask(f, "IsVisible") then
+			local cur = ask(f, "GetAlpha")
+			-- Its owner changed it since we last wrote: take that as its own opacity from now on.
+			if type(cur) == "number" and (lonerBase[f] == nil or math.abs(cur - (lonerWritten[f] or -1)) > 0.01) then
+				lonerBase[f] = cur
+			end
+			-- Only fade it if we know what to put back afterwards.
+			if lonerBase[f] then
+				local want = lonerBase[f] * a
 				if pcall(f.SetAlpha, f, want) then lonerWritten[f] = want end
 			end
 		end
@@ -268,15 +292,12 @@ local function applyModels(a)
 				pcall(m.SetModelAlpha, m, base)
 				baseAlpha[m] = nil
 			end
-		else
-			local okV, visible = pcall(m.IsVisible, m)
-			if okV and visible then
-				if baseAlpha[m] == nil then
-					local okA, own = pcall(m.GetModelAlpha, m)
-					baseAlpha[m] = (okA and type(own) == "number" and not (issecretvalue and issecretvalue(own))) and own or 1
-				end
-				pcall(m.SetModelAlpha, m, baseAlpha[m] * a)
+		elseif ask(m, "IsVisible") then
+			if baseAlpha[m] == nil then
+				local own = ask(m, "GetModelAlpha")
+				baseAlpha[m] = type(own) == "number" and own or 1
 			end
+			pcall(m.SetModelAlpha, m, baseAlpha[m] * a)
 		end
 	end
 end
@@ -313,8 +334,8 @@ end)
 
 local function setTarget(a, instant)
 	if a < state.target and a < 0.999 and not state.cvarsHidden then
-		-- Starting to hide.
-		if now() - lastScan > 5 then scanModels() end
+		-- Starting to hide. (Nothing in the scan may stop the hide itself.)
+		if now() - lastScan > 5 then pcall(scanModels) end
 		hideGameText()
 	elseif a >= 0.999 and state.cvarsHidden then
 		showGameText()
@@ -347,9 +368,8 @@ local WINDOWS = {
 
 local function shown(name)
 	local f = _G[name]
-	if type(f) ~= "table" or not f.IsVisible then return false end
-	local ok, s = pcall(f.IsVisible, f)
-	return ok and s
+	if type(f) ~= "table" then return false end
+	return ask(f, "IsVisible") == true
 end
 
 -- Returns what is open (for /ohud why), or nil.
@@ -371,7 +391,7 @@ end
 local function urgentReasons(out)
 	if state.peek then out.peek = true end
 	if DB.showCombat and state.inCombat then out.combat = true end
-	if DB.showDead and UnitIsDead("player") then out.dead = true end
+	if DB.showDead and is(UnitIsDead, "player") then out.dead = true end
 	if DB.showWindows then
 		local w = windowOpen()
 		if w then out.window = w end
@@ -380,7 +400,7 @@ end
 
 -- Reasons that bring it back only while you are playing (not idle).
 local function softReasons(out)
-	if DB.showTarget and UnitExists("target") then out.target = true end
+	if DB.showTarget and is(UnitExists, "target") then out.target = true end
 	if DB.showCasting and state.casting then out.casting = true end
 end
 
@@ -421,33 +441,82 @@ local function update(instant)
 	setTarget(show and 1 or DB.hiddenAlpha, instant)
 	-- While hidden and still: put our opacity back if something else changed it, and catch models that just appeared.
 	if state.target < 0.999 and not driver:IsShown() then
-		local ok, a = pcall(UIParent.GetAlpha, UIParent)
-		if ok and type(a) == "number" and math.abs(a - state.target) > 0.01 then apply(state.target) else applyModels(state.current) end
+		local a = ask(UIParent, "GetAlpha")
+		if type(a) == "number" and math.abs(a - state.target) > 0.01 then apply(state.target) else applyModels(state.current) end
 	end
 end
 OLEDHUD.Update = update
 
--- What is keeping the HUD up right now, for /ohud why.
+-- Why the HUD is up or hidden right now, for /ohud why. Returns the lines to print, first one without the
+-- "OLED HUD:" label.
+local REASON_ORDER = { "peek", "combat", "dead", "window", "target", "casting" }
+local REASON_TEXT = {
+	peek = "Peek key held", combat = "In combat", dead = "You are dead",
+	target = "You have a target", casting = "Casting",
+}
+
+local function windowText(v)
+	if v == "typing" then return "Typing" end
+	if v == "holding something on the cursor" then return "Holding something on the cursor" end
+	return "Window open (" .. tostring(v) .. ")"
+end
+
+local function listLines(lines, label, items)
+	if #items == 1 then
+		lines[#lines + 1] = label .. " " .. items[1]
+	else
+		lines[#lines + 1] = label
+		for _, item in ipairs(items) do lines[#lines + 1] = "   - " .. item end
+	end
+end
+
 function OLEDHUD.Explain(skipTyping)
+	if not DB.enabled then
+		return { "|cffff4040Disabled|r", "The HUD stays up while OLED HUD is off. Turn it on with /ohud on." }
+	end
+	local lines = { "|cff40ff40Enabled|r" }
 	local t = now()
 	local idle = isIdle(t)
-	local list = {}
-	for k, v in pairs(currentReasons(idle)) do
-		if not (skipTyping and v == "typing") then
-			list[#list + 1] = (v == true) and k or (k .. " (" .. tostring(v) .. ")")
+	local idleFor = math.max(0, math.floor(t - state.lastInput))
+
+	if state.target < 0.999 then
+		local why = {}
+		if state.hudOff then why[#why + 1] = "You hid it" end
+		if idle then why[#why + 1] = string.format("Idle for %ds", idleFor) end
+		if state.shot then why[#why + 1] = "Taking a screenshot" end
+		if #why == 0 then why[1] = "Something just ended, so it is hiding again" end
+		listLines(lines, "HUD hidden due to:", why)
+		return lines
+	end
+
+	local causes = {}
+	local reasons = currentReasons(idle)
+	for _, k in ipairs(REASON_ORDER) do
+		local v = reasons[k]
+		if v and k == "window" then
+			if not (skipTyping and v == "typing") then causes[#causes + 1] = windowText(v) end
+		elseif v then
+			causes[#causes + 1] = REASON_TEXT[k]
 		end
 	end
-	local mode = state.hudOff and "hidden by you" or "on"
-	if idle then
-		mode = mode .. ", idle"
-	elseif DB.idleSeconds > 0 then
-		mode = mode .. string.format(", idle in %d s", math.max(0, DB.idleSeconds - (t - state.lastInput)))
+	if not state.hudOff and not idle then
+		if DB.idleSeconds <= 0 then
+			causes[#causes + 1] = "Hide when idle is set to Never"
+		else
+			local text = string.format("Not enough time idling: %d/%ds", idleFor, DB.idleSeconds)
+			local keysHeld = {}
+			for k in pairs(held) do keysHeld[#keysHeld + 1] = k end
+			if #keysHeld > 0 then
+				text = text .. " (holding " .. table.concat(keysHeld, " ") .. ")"
+			elseif state.moving and DB.activeAutorun then
+				text = text .. " (auto-running counts as active)"
+			end
+			causes[#causes + 1] = text
+		end
 	end
-	local keysHeld = {}
-	for k in pairs(held) do keysHeld[#keysHeld + 1] = k end
-	if #keysHeld > 0 then mode = mode .. ", keys held: " .. table.concat(keysHeld, " ") end
-	if state.moving then mode = mode .. ", moving" end
-	return mode, list
+	if #causes == 0 then causes[1] = "Something just ended, it hides in a moment" end
+	listLines(lines, "HUD visible due to:", causes)
+	return lines
 end
 
 ---------------------------------------------------------------------------
@@ -586,7 +655,7 @@ local function pollMouse()
 	if IsKeyDown then -- (drop keys whose release never reached us)
 		for k in pairs(held) do
 			local ok, down = pcall(IsKeyDown, k)
-			if ok and down == false then held[k] = nil end
+			if ok and readable(down) == false then held[k] = nil end
 		end
 	end
 	if state.moving then
@@ -598,7 +667,7 @@ local function pollMouse()
 	local want = DB.enabled and DB.hideCursor and state.target < 0.999 and not state.peek and not state.inCombat
 		and not state.moving and not anyButton and (t - (state.lastMouseMove or 0)) >= 2 and not windowOpen()
 		-- (on a flight path or in a vehicle the view turns by itself, which would read as you moving the mouse)
-		and not (UnitOnTaxi and UnitOnTaxi("player")) and not (UnitInVehicle and UnitInVehicle("player"))
+		and not is(UnitOnTaxi, "player") and not is(UnitInVehicle, "player")
 	-- (with a button held, the watcher above decides how to hand the mouse back)
 	if want then hidePointer() elseif ours and not anyButton then releasePointer(true) end
 end
@@ -786,7 +855,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		update()
 	elseif event == "PLAYER_TARGET_CHANGED" then
 		state.suppressed.target = nil
-		if UnitExists("target") and DB.showTarget then input() end
+		if DB.showTarget and is(UnitExists, "target") then input() end
 		update()
 	elseif event == "PLAYER_STARTED_MOVING" then
 		state.moving = true
