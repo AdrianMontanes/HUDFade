@@ -1,0 +1,11 @@
+# Packager output
+.release/
+*.zip
+
+# Lua compiler output
+luac.out
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,14 @@
+# Runs the addon against the small fake WoW API in tests/mock.lua on every push.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y lua5.1
+      - run: lua5.1 tests/mock.lua .
