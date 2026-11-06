@@ -1,3 +1,5 @@
+<img src=".github/icon.png" alt="" width="96" align="right">
+
 # HUD Fade
 
 Fade or hide the whole World of Warcraft interface at once: Blizzard's UI and EllesmereUI together, with no setup per addon.

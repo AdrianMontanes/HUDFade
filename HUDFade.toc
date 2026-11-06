@@ -5,7 +5,7 @@
 ## Version: 0.2.0
 ## X-License: MIT
 ## SavedVariables: HUDFadeDB
-## IconTexture: Interface\Icons\Ability_Stealth
+## IconTexture: Interface\AddOns\HUDFade\media\icon
 ## AddonCompartmentFunc: HUDFade_OnCompartmentClick
 
 Core.lua
