@@ -1,25 +1,25 @@
--- OLED HUD: fades the whole interface as one layer.
+-- HUD Fade: fades the whole interface as one layer.
 --
 -- Why one layer: EllesmereUI (and other UI addons) keep setting the opacity of their own frames for their
 -- mouseover and visibility rules. Fade addons that set the opacity of those same frames end up fighting them.
--- OLED HUD never touches a single frame's opacity. It only changes UIParent's, which multiplies with whatever
+-- HUD Fade never touches a single frame's opacity. It only changes UIParent's, which multiplies with whatever
 -- each addon does underneath, so both keep working. The few things that ignore UIParent's opacity (3D models,
 -- floating unit names, nameplates) are handled on their own below.
 
 local ADDON, ns = ...
 
-local OLEDHUD = {}
-_G.OLEDHUD = OLEDHUD
-ns.core = OLEDHUD
+local HUDFade = {}
+_G.HUDFade = HUDFade
+ns.core = HUDFade
 
-BINDING_HEADER_OLEDHUD = "OLED HUD"
-BINDING_NAME_OLEDHUD_TOGGLE = "Hide / show the HUD"
-BINDING_NAME_OLEDHUD_PEEK = "Show the HUD while held"
-BINDING_NAME_OLEDHUD_SCREENSHOT = "Take a screenshot without the HUD"
-BINDING_NAME_OLEDHUD_ENABLE = "Turn OLED HUD on / off"
+BINDING_HEADER_HUDFADE = "HUD Fade"
+BINDING_NAME_HUDFADE_TOGGLE = "Hide / show the HUD"
+BINDING_NAME_HUDFADE_PEEK = "Show the HUD while held"
+BINDING_NAME_HUDFADE_SCREENSHOT = "Take a screenshot without the HUD"
+BINDING_NAME_HUDFADE_ENABLE = "Turn HUD Fade on / off"
 
 local DEFAULTS = {
-	enabled = true,        -- the whole addon; off = the game behaves as if OLED HUD were not installed
+	enabled = true,        -- the whole addon; off = the game behaves as if HUD Fade were not installed
 	startHidden = false,   -- begin each session with the HUD hidden
 	idleSeconds = 30,      -- hide after this long with no input at all (0 = never)
 	hiddenAlpha = 0,       -- opacity while hidden (0 = true black)
@@ -36,21 +36,21 @@ local DEFAULTS = {
 	activeCamera = false,  -- turning the camera counts as activity for the idle timer
 	activeAutorun = false, -- auto-run, follow and flight paths count as activity for the idle timer
 	hideMinimap = true,    -- the minimap's icons and arrow ignore the UI's opacity, so the map is hidden instead
-	replaceAltZ = true,    -- the game's own "hide UI" key (Alt+Z) does OLED HUD's toggle instead
+	replaceAltZ = true,    -- the game's own "hide UI" key (Alt+Z) does HUD Fade's toggle instead
 	cleanPrintScreen = false, -- the game's screenshot key leaves the HUD out
 	pixelShift = false,    -- burn-in protection: move the whole UI a pixel or two every few minutes
 	shiftPixels = 2,       -- how far, in screen pixels
 	shiftMinutes = 3,      -- how often
 	welcomed = false,
 }
-OLEDHUD.DEFAULTS = DEFAULTS
+HUDFade.DEFAULTS = DEFAULTS
 
 local GRACE = 1 -- seconds
 local held = {} -- movement keys held down right now (holding W to run counts as activity the whole time)
 
 local DB
 local state = {
-	current = 1,        -- the opacity OLED HUD last gave UIParent
+	current = 1,        -- the opacity HUD Fade last gave UIParent
 	target = 1,         -- where the fade is heading
 	hudOff = false,     -- the toggle
 	peek = false,
@@ -63,14 +63,14 @@ local state = {
 	suppressed = {},    -- reasons that were active when you pressed hide; ignored until they end
 	cvarsHidden = false,
 }
-OLEDHUD.state = state
+HUDFade.state = state
 
 local function now() return GetTime() end
 
 local function say(msg)
-	print("|cff7fd4ffOLED HUD|r: " .. msg)
+	print("|cff7fd4ffHUD Fade|r: " .. msg)
 end
-OLEDHUD.Print = say
+HUDFade.Print = say
 
 -- Since 12.0 the game hands addons some values as "secrets" (a target frame's range fade, for one). Comparing a
 -- secret or doing maths on it is an error, so anything read from a frame goes through ask(): it calls the method
@@ -288,8 +288,8 @@ local function scanStep()
 	end
 end
 
--- For /ohud what: the frame under the mouse and how it relates to UIParent.
-function OLEDHUD.DescribeMouseFrame()
+-- For /hudfade what: the frame under the mouse and how it relates to UIParent.
+function HUDFade.DescribeMouseFrame()
 	local f
 	if GetMouseFoci then f = (GetMouseFoci() or {})[1] elseif GetMouseFocus then f = GetMouseFocus() end
 	if not f then return "nothing (the 3D world)" end
@@ -428,7 +428,7 @@ local function shown(name)
 	return ask(f, "IsVisible") == true
 end
 
--- Returns what is open (for /ohud why), or nil.
+-- Returns what is open (for /hudfade why), or nil.
 local function windowOpen()
 	if GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus() then return "typing" end
 	if GetCursorInfo and GetCursorInfo() then return "holding something on the cursor" end
@@ -501,10 +501,10 @@ local function update(instant)
 		if type(a) == "number" and math.abs(a - state.target) > 0.01 then apply(state.target) else applyModels(state.current) end
 	end
 end
-OLEDHUD.Update = update
+HUDFade.Update = update
 
--- Why the HUD is up or hidden right now, for /ohud why. Returns the lines to print, first one without the
--- "OLED HUD:" label.
+-- Why the HUD is up or hidden right now, for /hudfade why. Returns the lines to print, first one without the
+-- "HUD Fade:" label.
 local REASON_ORDER = { "peek", "combat", "dead", "window", "target", "casting" }
 local REASON_TEXT = {
 	peek = "Peek key held", combat = "In combat", dead = "You are dead",
@@ -526,9 +526,9 @@ local function listLines(lines, label, items)
 	end
 end
 
-function OLEDHUD.Explain(skipTyping)
+function HUDFade.Explain(skipTyping)
 	if not DB.enabled then
-		return { "|cffff4040Disabled|r", "The HUD stays up while OLED HUD is off. Turn it on with /ohud on." }
+		return { "|cffff4040Disabled|r", "The HUD stays up while HUD Fade is off. Turn it on with /hudfade on." }
 	end
 	local lines = { "|cff40ff40Enabled|r" }
 	local t = now()
@@ -542,7 +542,7 @@ function OLEDHUD.Explain(skipTyping)
 		if state.shot then why[#why + 1] = "Taking a screenshot" end
 		if #why == 0 then why[1] = "Something just ended, so it is hiding again" end
 		listLines(lines, "HUD hidden due to:", why)
-		local p = OLEDHUD.PointerWhy()
+		local p = HUDFade.PointerWhy()
 		if p then lines[#lines + 1] = (p == "hidden" or p == "about to hide") and ("Pointer: " .. p) or ("Pointer visible due to: " .. p) end
 		return lines
 	end
@@ -636,7 +636,7 @@ end
 -- pointer is hidden by switching mouselook on. Moving the mouse then turns your character a touch, which is how
 -- the move is noticed: mouselook goes off at once and the pointer comes back.
 ---------------------------------------------------------------------------
-local ours = false -- mouselook was started by OLED HUD
+local ours = false -- mouselook was started by HUD Fade
 local facing       -- the character's facing when it started (nil where the game keeps it secret, e.g. instances)
 local startedAt = 0
 -- Starting mouselook turns the character to where the camera points. That turn is not you moving the mouse, so the
@@ -740,7 +740,7 @@ end
 local lastX, lastY = 0, 0
 local leftSince, leftOnWorld, followSince
 
--- Why the pointer has to stay visible right now (nil = it can hide). Also used by /ohud why.
+-- Why the pointer has to stay visible right now (nil = it can hide). Also used by /hudfade why.
 local function pointerBlock(t, anyButton)
 	if not (DB.enabled and DB.hideCursor) then return "pointer hiding is off" end
 	if state.target >= 0.999 then return "the HUD is visible" end
@@ -807,7 +807,7 @@ local function pollMouse()
 	if not pointerBlock(t, anyButton) then hidePointer() elseif ours and not anyButton then releasePointer(true) end
 end
 
-function OLEDHUD.PointerWhy()
+function HUDFade.PointerWhy()
 	if not (DB.enabled and DB.hideCursor) then return nil end
 	if ours then return "hidden" end
 	local anyButton = IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton"))
@@ -826,59 +826,59 @@ local function suppressCurrent()
 	for k in pairs(r) do state.suppressed[k] = true end
 end
 
-function OLEDHUD.IsHidden()
+function HUDFade.IsHidden()
 	return state.target < 0.999
 end
 
-function OLEDHUD.Hide()
+function HUDFade.Hide()
 	state.hudOff = true
 	suppressCurrent()
 	state.lastWanted = -math.huge
 	update()
 end
 
-function OLEDHUD.Show()
+function HUDFade.Show()
 	state.hudOff = false
 	wipe(state.suppressed)
 	input()
 	update()
 end
 
-function OLEDHUD.Toggle()
+function HUDFade.Toggle()
 	if not DB.enabled then
-		say("is turned off. Turn it on in /ohud options, with your on/off key, or with /ohud on.")
+		say("is turned off. Turn it on in /hudfade options, with your on/off key, or with /hudfade on.")
 		return
 	end
-	if OLEDHUD.IsHidden() then OLEDHUD.Show() else OLEDHUD.Hide() end
+	if HUDFade.IsHidden() then HUDFade.Show() else HUDFade.Hide() end
 end
 
 -- The switch for the whole addon. Off: HUD fully back, names and minimap back, your Hide UI key does its normal job.
-function OLEDHUD.SetEnabled(on)
+function HUDFade.SetEnabled(on)
 	DB.enabled = on and true or false
 	releasePointer(true)
 	state.hudOff = false
 	state.peek = false
 	wipe(state.suppressed)
 	input()
-	OLEDHUD.ApplyOverrides(true)
+	HUDFade.ApplyOverrides(true)
 	update(true)
-	OLEDHUD.UpdateShift()
-	if OLEDHUD.RefreshOptions then OLEDHUD.RefreshOptions() end
+	HUDFade.UpdateShift()
+	if HUDFade.RefreshOptions then HUDFade.RefreshOptions() end
 	say(DB.enabled and "on." or "off. The HUD stays up and your Hide UI key works as normal.")
 end
 
-function OLEDHUD.ToggleEnabled()
-	OLEDHUD.SetEnabled(not DB.enabled)
+function HUDFade.ToggleEnabled()
+	HUDFade.SetEnabled(not DB.enabled)
 end
 
-function OLEDHUD.Peek(down)
+function HUDFade.Peek(down)
 	if not DB.enabled then return end
 	state.peek = down and true or false
 	if down then input() else state.lastWanted = -math.huge end
 	update(down)
 end
 
-function OLEDHUD.CleanScreenshot()
+function HUDFade.CleanScreenshot()
 	if not Screenshot then return end
 	state.shot = true
 	update(true)
@@ -892,8 +892,8 @@ function OLEDHUD.CleanScreenshot()
 	end)
 end
 
-function OLEDHUD_OnCompartmentClick()
-	if OLEDHUD.OpenOptions then OLEDHUD.OpenOptions() end
+function HUDFade_OnCompartmentClick()
+	if HUDFade.OpenOptions then HUDFade.OpenOptions() end
 end
 
 ---------------------------------------------------------------------------
@@ -909,10 +909,10 @@ local function applyOverrides(force)
 	local parts = {}
 	local plan = {}
 	if DB.enabled and DB.replaceAltZ then
-		for _, key in ipairs({ GetBindingKey("TOGGLEUI") }) do plan[#plan + 1] = { key, "OLEDHUD_TOGGLE" } end
+		for _, key in ipairs({ GetBindingKey("TOGGLEUI") }) do plan[#plan + 1] = { key, "HUDFADE_TOGGLE" } end
 	end
 	if DB.enabled and DB.cleanPrintScreen then
-		for _, key in ipairs({ GetBindingKey("SCREENSHOT") }) do plan[#plan + 1] = { key, "OLEDHUD_SCREENSHOT" } end
+		for _, key in ipairs({ GetBindingKey("SCREENSHOT") }) do plan[#plan + 1] = { key, "HUDFADE_SCREENSHOT" } end
 	end
 	for _, p in ipairs(plan) do parts[#parts + 1] = p[1] .. "=" .. p[2] end
 	local signature = table.concat(parts, ",")
@@ -922,7 +922,7 @@ local function applyOverrides(force)
 	for _, p in ipairs(plan) do SetOverrideBinding(bindOwner, true, p[1], p[2]) end
 	state.pendingBinds = false
 end
-OLEDHUD.ApplyOverrides = applyOverrides
+HUDFade.ApplyOverrides = applyOverrides
 
 ---------------------------------------------------------------------------
 -- Pixel shift (burn-in protection). Every few minutes the whole interface moves a pixel or two around a small
@@ -1005,7 +1005,7 @@ local function syncShift(force)
 		shift.fights = shift.fights + 1
 		if shift.fights >= 3 and not shift.gaveUp then
 			shift.gaveUp = true
-			say("pixel shift stopped: another addon keeps moving the interface back. /ohud shift on tries again.")
+			say("pixel shift stopped: another addon keeps moving the interface back. /hudfade shift on tries again.")
 		end
 	end
 	local px, py = 0, 0
@@ -1038,20 +1038,20 @@ local function syncShift(force)
 	shift.px, shift.py, shift.unit = px, py, unit
 end
 
-function OLEDHUD.UpdateShift()
+function HUDFade.UpdateShift()
 	if DB and DB.pixelShift and shift.gaveUp then shift.gaveUp, shift.fights = false, 0 end
 	syncShift(true)
 end
 
-function OLEDHUD.ShiftNow()
+function HUDFade.ShiftNow()
 	shift.nextAt = 0
 	syncShift(true)
 end
 
-function OLEDHUD.ShiftStatus()
+function HUDFade.ShiftStatus()
 	if not DB.pixelShift then return "pixel shift is off." end
 	local text = "pixel shift is on: " .. DB.shiftPixels .. " px every " .. DB.shiftMinutes .. " min"
-	if not DB.enabled then return text .. ", but OLED HUD is turned off." end
+	if not DB.enabled then return text .. ", but HUD Fade is turned off." end
 	if shift.gaveUp then return text .. ", stopped because another addon keeps moving the interface back." end
 	text = text .. ". Offset now " .. shift.px .. "," .. shift.py .. " px"
 	if InCombatLockdown() then return text .. ", waiting for combat to end." end
@@ -1088,11 +1088,11 @@ end
 events:SetScript("OnEvent", function(_, event, arg1)
 	if event == "ADDON_LOADED" then
 		if arg1 ~= ADDON then return end
-		OLEDHUDDB = OLEDHUDDB or {}
-		DB = OLEDHUDDB
+		HUDFadeDB = HUDFadeDB or {}
+		DB = HUDFadeDB
 		copyDefaults(DEFAULTS, DB)
 		DB.restore = DB.restore or {}
-		OLEDHUD.db = DB
+		HUDFade.db = DB
 	elseif event == "PLAYER_LOGIN" then
 		-- Logged out or crashed while hidden last time: put the names and nameplates back first.
 		restoreAllCVars()
@@ -1114,7 +1114,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 			DB.welcomed = true
 			local key = GetBindingKey("TOGGLEUI")
 			say("installed. " .. (DB.replaceAltZ and key and ("Press " .. key .. " to hide or show the HUD. ") or "")
-				.. "Type /ohud for settings.")
+				.. "Type /hudfade for settings.")
 		end
 	elseif event == "PLAYER_LOGOUT" then
 		restoreAllCVars()

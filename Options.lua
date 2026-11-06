@@ -1,14 +1,14 @@
--- OLED HUD options: a page in the game's AddOns settings, and the /ohud command.
+-- HUD Fade options: a page in the game's AddOns settings, and the /hudfade command.
 
 local ADDON, ns = ...
-local OLEDHUD = ns.core
-local say = OLEDHUD.Print
+local HUDFade = ns.core
+local say = HUDFade.Print
 
 local panel = CreateFrame("Frame")
-panel.name = "OLED HUD"
+panel.name = "HUD Fade"
 panel:Hide()
 
--- A second page, listed under OLED HUD in the game's settings.
+-- A second page, listed under HUD Fade in the game's settings.
 local shiftPanel = CreateFrame("Frame")
 shiftPanel.name = "Burn-in protection"
 shiftPanel:Hide()
@@ -18,7 +18,7 @@ local canvas = panel -- the page the helpers below draw on
 local widgets = {}  -- every setting below the on/off switch
 local dimmable = {} -- headers, greyed out with them while the addon is off
 
-local function db() return OLEDHUD.db end
+local function db() return HUDFade.db end
 
 local function header(text, y)
 	local fs = canvas:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -48,7 +48,7 @@ local function checkbox(key, label, tip, y, x, onChange, master)
 	cb:SetScript("OnClick", function(self)
 		db()[key] = self:GetChecked() and true or false
 		if onChange then onChange() end
-		OLEDHUD.Update()
+		HUDFade.Update()
 	end)
 	if tip then
 		cb:SetScript("OnEnter", function(self)
@@ -99,7 +99,7 @@ local function slider(key, label, minV, maxV, step, y, x, fmt, scale)
 		v = math.floor(v / step + 0.5) * step
 		db()[key] = v / scale
 		show(v)
-		OLEDHUD.Update()
+		HUDFade.Update()
 	end)
 	s.refresh = function()
 		local v = (db()[key] or 0) * scale
@@ -123,23 +123,23 @@ local function pageTitle(text)
 end
 
 local function shiftChanged()
-	OLEDHUD.UpdateShift()
-	if OLEDHUD.RefreshOptions then OLEDHUD.RefreshOptions() end -- (the switch is on both pages)
+	HUDFade.UpdateShift()
+	if HUDFade.RefreshOptions then HUDFade.RefreshOptions() end -- (the switch is on both pages)
 end
 
 local SHIFT_TIP = "Moves the whole interface a pixel or two every few minutes, so nothing sits on the same pixels for hours. "
-	.. "Everything moves together, so your layout stays as it is. Distance and timing are on the Burn-in protection page under OLED HUD."
+	.. "Everything moves together, so your layout stays as it is. Distance and timing are on the Burn-in protection page under HUD Fade."
 
 local built = false
 local function build()
 	if built then return end
 	built = true
 	canvas = panel
-	pageTitle("OLED HUD")
-	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and take clean screenshots. Bind keys under Key Bindings > AddOns > OLED HUD.", -40)
+	pageTitle("HUD Fade")
+	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
 
-	panel.master = checkbox("enabled", "Enable OLED HUD", "Off: the HUD stays up, names and minimap stay as they are, and your Hide UI key does its normal job. No reload needed. You can also bind a key for this under Key Bindings > AddOns.",
-		-76, 16, function() OLEDHUD.SetEnabled(db().enabled) end, true)
+	panel.master = checkbox("enabled", "Enable HUD Fade", "Off: the HUD stays up, names and minimap stay as they are, and your Hide UI key does its normal job. No reload needed. You can also bind a key for this under Key Bindings > AddOns.",
+		-76, 16, function() HUDFade.SetEnabled(db().enabled) end, true)
 	checkbox("pixelShift", "Pixel shift (burn-in protection)", SHIFT_TIP, -76, 320, shiftChanged)
 
 	header("Hiding", -120)
@@ -147,12 +147,12 @@ local function build()
 			-- (your own key for the game's Hide UI, read each time the page opens)
 			local key = GetBindingKey("TOGGLEUI")
 			local shown = key and (GetBindingText and GetBindingText(key) or key) or "not bound"
-			return "Use the game's Hide UI key (" .. shown .. ") for OLED HUD"
+			return "Use the game's Hide UI key (" .. shown .. ") for HUD Fade"
 		end,
 		"Your Hide UI key fades the HUD out and back in instead of switching it off, and the HUD still comes back when something needs it.",
-		-140, 16, OLEDHUD.ApplyOverrides)
+		-140, 16, HUDFade.ApplyOverrides)
 	checkbox("cleanPrintScreen", "Leave the HUD out of screenshots (Print Screen)",
-		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back.", -166, 16, OLEDHUD.ApplyOverrides)
+		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back.", -166, 16, HUDFade.ApplyOverrides)
 	checkbox("startHidden", "Start each session with the HUD hidden", nil, -192)
 	checkbox("hideNames", "Hide player and NPC names while hidden",
 		"The floating names above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after.", -218)
@@ -191,7 +191,7 @@ local function build()
 	checkbox("pixelShift", "Pixel shift (burn-in protection)", nil, -130, 16, shiftChanged)
 	slider("shiftPixels", "Distance", 1, 4, 1, -170, 16, function(v) return string.format("%d px", v) end)
 	slider("shiftMinutes", "Move every", 1, 10, 1, -170, 320, function(v) return string.format("%d min", v) end)
-	note("Many OLED monitors also shift the whole picture on their own. Using both is fine. Type /ohud shift now to see a move straight away.", -230)
+	note("Many OLED monitors also shift the whole picture on their own. Using both is fine. Type /hudfade shift now to see a move straight away.", -230)
 	canvas = panel
 end
 
@@ -205,7 +205,7 @@ local function refreshAll()
 	end
 	for _, fs in ipairs(dimmable) do fs:SetAlpha(on and 1 or 0.5) end
 end
-OLEDHUD.RefreshOptions = refreshAll
+HUDFade.RefreshOptions = refreshAll
 
 local function onShow()
 	build()
@@ -217,7 +217,7 @@ shiftPanel:SetScript("OnShow", onShow)
 local category
 local function register()
 	if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
-		category = Settings.RegisterCanvasLayoutCategory(panel, "OLED HUD")
+		category = Settings.RegisterCanvasLayoutCategory(panel, "HUD Fade")
 		if Settings.RegisterCanvasLayoutSubcategory then
 			Settings.RegisterCanvasLayoutSubcategory(category, shiftPanel, "Burn-in protection")
 		end
@@ -229,7 +229,7 @@ local function register()
 	end
 end
 
-function OLEDHUD.OpenOptions()
+function HUDFade.OpenOptions()
 	if category and Settings and Settings.OpenToCategory then
 		Settings.OpenToCategory(category:GetID())
 	elseif InterfaceOptionsFrame_OpenToCategory then
@@ -243,39 +243,39 @@ loader:RegisterEvent("PLAYER_LOGIN")
 loader:SetScript("OnEvent", register)
 
 ---------------------------------------------------------------------------
--- /ohud
+-- /hudfade
 ---------------------------------------------------------------------------
 local HELP = {
-	"/ohud - open the settings",
-	"/ohud toggle | show | hide - hide or show the HUD",
-	"/ohud on | off - turn the whole addon on or off",
-	"/ohud shot - screenshot without the HUD",
-	"/ohud shift [on | off | now] - pixel shift status, switch it, or move now to see it",
-	"/ohud why - what is keeping the HUD up right now",
-	"/ohud what - name the UI element under the mouse (for reporting something that stays visible)",
-	"/ohud reset - back to default settings",
+	"/hudfade - open the settings",
+	"/hudfade toggle | show | hide - hide or show the HUD",
+	"/hudfade on | off - turn the whole addon on or off",
+	"/hudfade shot - screenshot without the HUD",
+	"/hudfade shift [on | off | now] - pixel shift status, switch it, or move now to see it",
+	"/hudfade why - what is keeping the HUD up right now",
+	"/hudfade what - name the UI element under the mouse (for reporting something that stays visible)",
+	"/hudfade reset - back to default settings",
 }
 
-SLASH_OLEDHUD1 = "/ohud"
-SLASH_OLEDHUD2 = "/oledhud"
-SlashCmdList.OLEDHUD = function(msg)
+SLASH_HUDFADE1 = "/hudfade"
+SLASH_HUDFADE2 = "/hfade"
+SlashCmdList.HUDFADE = function(msg)
 	local cmd = (msg or ""):lower():match("^%s*(%S*)")
 	if cmd == "" or cmd == "options" or cmd == "config" or cmd == "settings" then
-		OLEDHUD.OpenOptions()
+		HUDFade.OpenOptions()
 	elseif cmd == "toggle" then
-		OLEDHUD.Toggle()
+		HUDFade.Toggle()
 	elseif cmd == "on" or cmd == "off" then
-		OLEDHUD.SetEnabled(cmd == "on")
+		HUDFade.SetEnabled(cmd == "on")
 	elseif cmd == "show" then
-		OLEDHUD.Show()
+		HUDFade.Show()
 	elseif cmd == "hide" then
-		OLEDHUD.Hide()
+		HUDFade.Hide()
 	elseif cmd == "shot" or cmd == "screenshot" then
-		OLEDHUD.CleanScreenshot()
+		HUDFade.CleanScreenshot()
 	elseif cmd == "why" then
 		-- (asked a moment later, once the chat box you typed this in has closed)
 		C_Timer.After(0.5, function()
-			local lines = OLEDHUD.Explain(true)
+			local lines = HUDFade.Explain(true)
 			say(lines[1])
 			for i = 2, #lines do print(lines[i]) end
 		end)
@@ -289,18 +289,18 @@ SlashCmdList.OLEDHUD = function(msg)
 				db().pixelShift = true
 				shiftChanged()
 			end
-			OLEDHUD.ShiftNow()
+			HUDFade.ShiftNow()
 		end
-		say(OLEDHUD.ShiftStatus())
+		say(HUDFade.ShiftStatus())
 	elseif cmd == "what" then
-		say("under the mouse: " .. OLEDHUD.DescribeMouseFrame())
+		say("under the mouse: " .. HUDFade.DescribeMouseFrame())
 	elseif cmd == "reset" then
 		local d = db()
-		for k, v in pairs(OLEDHUD.DEFAULTS) do
+		for k, v in pairs(HUDFade.DEFAULTS) do
 			if k ~= "welcomed" then d[k] = v end
 		end
-		OLEDHUD.ApplyOverrides(true)
-		OLEDHUD.Update()
+		HUDFade.ApplyOverrides(true)
+		HUDFade.Update()
 		say("settings reset.")
 	else
 		for _, line in ipairs(HELP) do say(line) end

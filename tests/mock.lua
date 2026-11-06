@@ -1,5 +1,5 @@
--- Runs OLED HUD against a tiny fake WoW API: lua5.1 tests/mock.lua .
--- Minimal WoW API mock to run OLED HUD's logic outside the game.
+-- Runs HUD Fade against a tiny fake WoW API: lua5.1 tests/mock.lua .
+-- Minimal WoW API mock to run HUD Fade's logic outside the game.
 local T = 0
 function GetTime() return T end
 local cvars = { UnitNameNPC="1", UnitNameOwn="0", nameplateShowEnemies="1", nameplateShowFriends="1", nameplateShowFriendlyPlayers="1" }
@@ -89,7 +89,7 @@ function SetMouselookOverrideBinding(k, b) if lockdown then error("blocked") end
 -- A left press: while mouselooking with the override set, the game runs that binding instead (a CLICK on our button).
 function pressLeft()
   buttons.LeftButton=true
-  if mouselook and mlBinds.BUTTON1 then local b=_G.OLEDHUDWakeButton; b.scripts.OnClick(b, "LeftButton", true) end
+  if mouselook and mlBinds.BUTTON1 then local b=_G.HUDFadeWakeButton; b.scripts.OnClick(b, "LeftButton", true) end
 end
 function MouselookStop() mouselook=false end
 function IsMouselooking() return mouselook end
@@ -108,18 +108,18 @@ local function step(secs) -- advance time, run ticker and fades
     for _,f in ipairs(frames) do if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f,0.1) end end
   end
 end
-local function load(file) local fn=assert(loadfile(file)); fn("OLEDHUD", ns) end
+local function load(file) local fn=assert(loadfile(file)); fn("HUDFade", ns) end
 ns = {}
 load(arg[1].."/Core.lua"); load(arg[1].."/Options.lua")
-fire("ADDON_LOADED","OLEDHUD"); fire("PLAYER_LOGIN")
+fire("ADDON_LOADED","HUDFade"); fire("PLAYER_LOGIN")
 local function check(label, cond) print((cond and "PASS " or "FAIL ")..label) ; if not cond then failed=true end end
 step(1)
 check("starts visible", UIParent.alpha==1)
-check("Alt+Z overridden", binds["ALT-Z"]=="OLEDHUD_TOGGLE")
-OLEDHUD.Toggle(); step(1.5)
+check("Alt+Z overridden", binds["ALT-Z"]=="HUDFADE_TOGGLE")
+HUDFade.Toggle(); step(1.5)
 check("toggle hides", UIParent.alpha==0)
-check("NPC names off", cvars.UnitNameNPC=="0" and OLEDHUDDB.restore.UnitNameNPC=="1")
-check("own name untouched (was 0)", cvars.UnitNameOwn=="0" and OLEDHUDDB.restore.UnitNameOwn==nil)
+check("NPC names off", cvars.UnitNameNPC=="0" and HUDFadeDB.restore.UnitNameNPC=="1")
+check("own name untouched (was 0)", cvars.UnitNameOwn=="0" and HUDFadeDB.restore.UnitNameOwn==nil)
 check("plates off", cvars.nameplateShowEnemies=="0")
 check("model faded", model.malpha==0)
 check("frame that ignores parent opacity faded", lone.alpha==0)
@@ -142,27 +142,27 @@ step(1); lockdown=false; fire("PLAYER_REGEN_ENABLED")
 step(5)
 check("hidden again after combat", UIParent.alpha==0)
 target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
-OLEDHUD.Toggle(); step(1.5)
+HUDFade.Toggle(); step(1.5)
 check("hide with target suppresses target", UIParent.alpha==0)
-OLEDHUD.Toggle(); step(0.5)
+HUDFade.Toggle(); step(0.5)
 check("toggle shows", UIParent.alpha==1)
 target=false; fire("PLAYER_TARGET_CHANGED")
 step(30.3)
-check("idle starts hiding right at 30 s (no extra delay)", OLEDHUD.state.target==0)
+check("idle starts hiding right at 30 s (no extra delay)", HUDFade.state.target==0)
 step(1.2)
 check("idle hides", UIParent.alpha==0)
 cx=50; step(0.5)
 check("mouse wakes", UIParent.alpha==1)
-OLEDHUD.Peek(true); check("peek instant", UIParent.alpha==1)
-OLEDHUD.CleanScreenshot(); check("shot hides instantly", UIParent.alpha==0 and cvars.UnitNameNPC=="0")
+HUDFade.Peek(true); check("peek instant", UIParent.alpha==1)
+HUDFade.CleanScreenshot(); check("shot hides instantly", UIParent.alpha==0 and cvars.UnitNameNPC=="0")
 step(0.3); check("screenshot taken", shots==1)
 fire("SCREENSHOT_SUCCEEDED"); step(0.5)
 check("back after shot", UIParent.alpha==1)
-OLEDHUD.Peek(false)
-OLEDHUDDB.hideCursor = true
-OLEDHUD.Hide(); step(4)
+HUDFade.Peek(false)
+HUDFadeDB.hideCursor = true
+HUDFade.Hide(); step(4)
 check("pointer hidden when still", mouselook==true)
-step(1); check("idle timer not reset by our own mouselook", OLEDHUD.state.lastInput < GetTime() - 0.9)
+step(1); check("idle timer not reset by our own mouselook", HUDFade.state.lastInput < GetTime() - 0.9)
 step(1); facingV=1.0004; step(0.2); check("tiny drift does not count as a move", mouselook==true)
 facingV=1.2; step(0.2)
 check("pointer back when the mouse moves", mouselook==false)
@@ -178,18 +178,18 @@ step(3); check("not hidden while turning with keys", mouselook==false)
 keyFrame.scripts.OnKeyUp(keyFrame, "D"); step(0.2); check("hidden again after turning", mouselook==true)
 flying=true; step(0.2); check("pointer back while flying (the camera sets your pitch)", mouselook==false)
 flying=false; step(0.2); check("hidden again after landing", mouselook==true)
-fire("PLAYER_STOPPED_MOVING");OLEDHUD.Hide(); step(2)
+fire("PLAYER_STOPPED_MOVING");HUDFade.Hide(); step(2)
 check("hidden before turning off", UIParent.alpha==0)
-SlashCmdList.OLEDHUD("off")
+SlashCmdList.HUDFADE("off")
 check("off shows everything at once", UIParent.alpha==1 and cvars.UnitNameNPC=="1" and Minimap.shown==true and mouselook==false)
 check("off gives the Hide UI key back", binds["ALT-Z"]==nil)
-OLEDHUD.Toggle(); step(2); check("toggle does nothing while off", UIParent.alpha==1)
+HUDFade.Toggle(); step(2); check("toggle does nothing while off", UIParent.alpha==1)
 step(70); check("no idle hiding while off", UIParent.alpha==1)
-SlashCmdList.OLEDHUD("on")
-check("on takes the key again", binds["ALT-Z"]=="OLEDHUD_TOGGLE")
-OLEDHUD.Toggle(); step(2); check("toggle works again", UIParent.alpha==0)
+SlashCmdList.HUDFADE("on")
+check("on takes the key again", binds["ALT-Z"]=="HUDFADE_TOGGLE")
+HUDFade.Toggle(); step(2); check("toggle works again", UIParent.alpha==0)
 -- Dragging while the pointer is hidden
-OLEDHUD.Toggle(); step(0.5); OLEDHUDDB.hideCursor = true; OLEDHUD.Hide(); step(4)
+HUDFade.Toggle(); step(0.5); HUDFadeDB.hideCursor = true; HUDFade.Hide(); step(4)
 check("pointer hidden before the drag", mouselook==true)
 pressLeft(); step(0.1)
 check("left drag hands over to the game's camera drag", mouselook==false)
@@ -213,10 +213,10 @@ buttons.RightButton=nil; MouselookStop(); onTaxi=true; step(0.3); MouselookStop(
 check("pointer left alone on a flight path", mouselook==false)
 onTaxi=false
 -- Hiding over an open window takes the pointer too
-cx=cx+40; OLEDHUD.Show(); step(0.5)
+cx=cx+40; HUDFade.Show(); step(0.5)
 local map = CreateFrame("Frame", "WorldMapFrame"); step(0.5)
 check("an open window keeps the HUD up", UIParent.alpha==1 and mouselook==false)
-OLEDHUD.Hide(); step(3)
+HUDFade.Hide(); step(3)
 check("hide over an open window hides the pointer too", UIParent.alpha==0 and mouselook==true)
 facingV=facingV+0.2; step(0.2); check("pointer back on the first move over the window", mouselook==false)
 step(3); check("and hides again when still", mouselook==true)
@@ -226,8 +226,8 @@ MouselookStop(); step(4); check("no retry after the game ends it (safe while alt
 cx=cx+40; step(3); check("retries after a real mouse move", mouselook==true)
 -- A stuck non-movement key must not keep you "active" (Tab used to)
 -- Idle and what counts as activity
-OLEDHUD.Toggle(); step(0.5); check("shown for the idle tests", UIParent.alpha==1)
-OLEDHUDDB.idleSeconds = 5; OLEDHUDDB.hideCursor = false
+HUDFade.Toggle(); step(0.5); check("shown for the idle tests", UIParent.alpha==1)
+HUDFadeDB.idleSeconds = 5; HUDFadeDB.hideCursor = false
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); step(0.2)
 keyFrame.scripts.OnKeyDown(keyFrame, "NUMLOCK"); fire("PLAYER_STARTED_MOVING"); step(7)
 check("auto-run after Tab (key-up never seen) still goes idle", UIParent.alpha==0)
@@ -241,89 +241,89 @@ cx=cx+40; step(0.5); check("pointer move wakes", UIParent.alpha==1)
 buttons.LeftButton=true; step(7)
 check("turning the camera does not keep the HUD up", UIParent.alpha==0)
 buttons.LeftButton=nil
-OLEDHUDDB.activeCamera=true; cx=cx+40; step(0.5); buttons.LeftButton=true; step(7)
+HUDFadeDB.activeCamera=true; cx=cx+40; step(0.5); buttons.LeftButton=true; step(7)
 check("unless that option is on", UIParent.alpha==1)
-buttons.LeftButton=nil; OLEDHUDDB.activeCamera=false
+buttons.LeftButton=nil; HUDFadeDB.activeCamera=false
 step(7); check("idle again", UIParent.alpha==0)
-OLEDHUDDB.showTarget=false; keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
+HUDFadeDB.showTarget=false; keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
 check("Tab while idle-hidden, 'target' off: stays hidden", UIParent.alpha==0)
-target=false; fire("PLAYER_TARGET_CHANGED"); OLEDHUDDB.showTarget=true
+target=false; fire("PLAYER_TARGET_CHANGED"); HUDFadeDB.showTarget=true
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
 check("Tab while idle-hidden, 'target' on: shows", UIParent.alpha==1)
 target=false; fire("PLAYER_TARGET_CHANGED")
--- /ohud why
+-- /hudfade why
 local realPrint, out = print, {}
 local function why()
   out = {}; print = function(s) out[#out+1] = s end
-  SlashCmdList.OLEDHUD("why"); step(0.6); print = realPrint
+  SlashCmdList.HUDFADE("why"); step(0.6); print = realPrint
   return table.concat(out, "\n")
 end
 cx=cx+40; step(2.4); local w = why()
 check("why: enabled, idle progress", w:find("Enabled", 1, true) and w:find("HUD visible due to: Not enough time idling (2/5s)", 1, true))
-OLEDHUDDB.hideCursor=true; buttons.RightButton=true; step(0.1); buttons.RightButton=nil; mouselook=false; step(5); w = why()
+HUDFadeDB.hideCursor=true; buttons.RightButton=true; step(0.1); buttons.RightButton=nil; mouselook=false; step(5); w = why()
 check("why: hidden by idle", w:find("HUD hidden due to: Idle for", 1, true))
 check("why: pointer line", w:find("Pointer: hidden", 1, true))
-OLEDHUDDB.hideCursor=false
-OLEDHUDDB.showTarget=true; target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5); w = why()
+HUDFadeDB.hideCursor=false
+HUDFadeDB.showTarget=true; target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5); w = why()
 check("why: several causes on their own lines", w:find("HUD visible due to:\n   - You have a target\n   - Not enough time idling", 1, true))
 target=false; fire("PLAYER_TARGET_CHANGED")
-OLEDHUDDB.idleSeconds=0; step(0.2); w = why()
+HUDFadeDB.idleSeconds=0; step(0.2); w = why()
 check("why: idle set to Never", w:find("HUD visible due to: Hide when idle is set to Never", 1, true))
-OLEDHUDDB.idleSeconds=5
-OLEDHUD.SetEnabled(false); w = why()
+HUDFadeDB.idleSeconds=5
+HUDFade.SetEnabled(false); w = why()
 check("why: disabled", w:find("Disabled", 1, true) and not w:find("visible due to", 1, true))
-OLEDHUD.SetEnabled(true)
+HUDFade.SetEnabled(true)
 -- Hide without a hitch: names go at the end of the fade, frames are scanned in the background
-OLEDHUD.Show(); step(0.5)
+HUDFade.Show(); step(0.5)
 local late = CreateFrame("PlayerModel", nil, UIParent); late.malpha=1
 function late:SetModelAlpha(a) self.malpha=a end
 function late:GetModelAlpha() return self.malpha end
-OLEDHUD.Hide(); step(0.3)
+HUDFade.Hide(); step(0.3)
 check("names stay on during the fade", cvars.UnitNameNPC=="1")
 step(1.0); check("names off once the fade ends", cvars.UnitNameNPC=="0")
 step(0.2); check("nameplates off a moment after", cvars.nameplateShowEnemies=="0")
 check("hiding does not scan every frame at once (new model not seen yet)", late.malpha==1)
-OLEDHUD.Show(); step(20); OLEDHUD.Hide(); step(1.5)
+HUDFade.Show(); step(20); HUDFade.Hide(); step(1.5)
 check("background scan finds frames made later", late.malpha==0)
 -- A portrait an addon creates only when first needed, while the HUD is hidden (EllesmereUI's target portrait)
-OLEDHUD.Hide(); step(1.5)
+HUDFade.Hide(); step(1.5)
 local lazy = CreateFrame("PlayerModel", nil, UIParent); lazy.malpha=1
 function lazy:SetModelAlpha(a) self.malpha=a end
 function lazy:GetModelAlpha() return self.malpha end
 fire("PLAYER_TARGET_CHANGED"); step(2)
 check("a portrait made while hidden is found and faded within seconds", lazy.malpha==0)
-OLEDHUD.Show(); step(0.5)
+HUDFade.Show(); step(0.5)
 check("and restored when the HUD comes back", lazy.malpha==1)
 -- Pixel shift
 check("pixel shift off by default", select(1, uiOffset())==0 and select(2, uiOffset())==0)
-SlashCmdList.OLEDHUD("shift on"); step(1.1)
+SlashCmdList.HUDFADE("shift on"); step(1.1)
 local visited, nonzero = {}, false
-for i=1,9 do OLEDHUD.ShiftNow(); local x,y = uiOffset(); visited[x..","..y]=true; if x~=0 or y~=0 then nonzero=true end end
+for i=1,9 do HUDFade.ShiftNow(); local x,y = uiOffset(); visited[x..","..y]=true; if x~=0 or y~=0 then nonzero=true end end
 local n=0; for _ in pairs(visited) do n=n+1 end
 check("shift walks the 9 spots of the circle", n==9 and nonzero and visited["2,0"] and visited["-2,-2"])
 check("both anchors move together", UIParent.points[1][4]==UIParent.points[2][4] and #UIParent.points==2)
-repeat OLEDHUD.ShiftNow() until select(1, uiOffset())==2
-lockdown=true; OLEDHUD.ShiftNow(); step(1.1)
+repeat HUDFade.ShiftNow() until select(1, uiOffset())==2
+lockdown=true; HUDFade.ShiftNow(); step(1.1)
 check("no move during combat", select(1, uiOffset())==2)
 lockdown=false; fire("PLAYER_REGEN_ENABLED"); step(0.1)
 check("moves on after combat", select(1, uiOffset())~=2 or select(2, uiOffset())~=0)
-OLEDHUDDB.shiftPixels=1; step(1.1); local x1, y1 = uiOffset()
+HUDFadeDB.shiftPixels=1; step(1.1); local x1, y1 = uiOffset()
 check("distance follows the setting", math.abs(x1)<=1 and math.abs(y1)<=1)
 EditModeManagerFrame = CreateFrame("Frame", "EditModeManagerFrame"); step(1.1)
 check("back in place while Edit Mode is open", select(1, uiOffset())==0 and select(2, uiOffset())==0)
-EditModeManagerFrame:Hide(); OLEDHUD.ShiftNow(); repeat OLEDHUD.ShiftNow() until select(1, uiOffset())~=0
-SlashCmdList.OLEDHUD("off")
+EditModeManagerFrame:Hide(); HUDFade.ShiftNow(); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
+SlashCmdList.HUDFADE("off")
 check("addon off puts the interface back", select(1, uiOffset())==0 and select(2, uiOffset())==0)
-SlashCmdList.OLEDHUD("on"); repeat OLEDHUD.ShiftNow() until select(1, uiOffset())~=0
+SlashCmdList.HUDFADE("on"); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
 -- Another addon keeps putting it back: step aside
-for i=1,3 do UIParent.points = { {"TOPLEFT", nil, "TOPLEFT", 0, 0}, {"BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0} }; OLEDHUD.ShiftNow() end
+for i=1,3 do UIParent.points = { {"TOPLEFT", nil, "TOPLEFT", 0, 0}, {"BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0} }; HUDFade.ShiftNow() end
 UIParent.points = { {"TOPLEFT", nil, "TOPLEFT", 0, 0}, {"BOTTOMRIGHT", nil, "BOTTOMRIGHT", 0, 0} }; step(1.1)
-check("gives up after another addon fights it 3 times", select(1, uiOffset())==0 and OLEDHUD.ShiftStatus():find("stopped", 1, true))
-SlashCmdList.OLEDHUD("shift on"); repeat OLEDHUD.ShiftNow() until select(1, uiOffset())~=0
-check("/ohud shift on tries again", select(1, uiOffset())~=0)
-SlashCmdList.OLEDHUD("shift off")
+check("gives up after another addon fights it 3 times", select(1, uiOffset())==0 and HUDFade.ShiftStatus():find("stopped", 1, true))
+SlashCmdList.HUDFADE("shift on"); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
+check("/hudfade shift on tries again", select(1, uiOffset())~=0)
+SlashCmdList.HUDFADE("shift off")
 check("turning it off puts the interface back exactly", #UIParent.points==2 and UIParent.points[1][4]==0 and UIParent.points[1][5]==0 and UIParent.points[2][4]==0)
 fire("PLAYER_LOGOUT")
-check("logout restores cvars", cvars.UnitNameNPC=="1" and cvars.nameplateShowEnemies=="1" and next(OLEDHUDDB.restore)==nil)
-SlashCmdList.OLEDHUD("reset")
+check("logout restores cvars", cvars.UnitNameNPC=="1" and cvars.nameplateShowEnemies=="1" and next(HUDFadeDB.restore)==nil)
+SlashCmdList.HUDFADE("reset")
 os.exit(failed and 1 or 0)

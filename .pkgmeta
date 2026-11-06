@@ -1,4 +1,4 @@
-package-as: OLEDHUD
+package-as: HUDFade
 ignore:
   - README.md
   - tests

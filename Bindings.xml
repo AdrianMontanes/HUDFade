@@ -1,14 +1,14 @@
 <Bindings>
-	<Binding name="OLEDHUD_TOGGLE" header="OLEDHUD" category="ADDONS">
-		OLEDHUD.Toggle()
+	<Binding name="HUDFADE_TOGGLE" header="HUDFADE" category="ADDONS">
+		HUDFade.Toggle()
 	</Binding>
-	<Binding name="OLEDHUD_PEEK" runOnUp="true" category="ADDONS">
-		OLEDHUD.Peek(keystate == "down")
+	<Binding name="HUDFADE_PEEK" runOnUp="true" category="ADDONS">
+		HUDFade.Peek(keystate == "down")
 	</Binding>
-	<Binding name="OLEDHUD_SCREENSHOT" category="ADDONS">
-		OLEDHUD.CleanScreenshot()
+	<Binding name="HUDFADE_SCREENSHOT" category="ADDONS">
+		HUDFade.CleanScreenshot()
 	</Binding>
-	<Binding name="OLEDHUD_ENABLE" category="ADDONS">
-		OLEDHUD.ToggleEnabled()
+	<Binding name="HUDFADE_ENABLE" category="ADDONS">
+		HUDFade.ToggleEnabled()
 	</Binding>
 </Bindings>
