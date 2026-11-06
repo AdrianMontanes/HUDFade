@@ -24,9 +24,18 @@ HUD Fade never touches a single frame. It fades the layer every UI frame sits on
 
 Type `/hudfade` for settings, `/hudfade toggle` to hide or show the HUD, `/hudfade why` to see what is keeping it up, `/hudfade shift now` to try pixel shift, and `/hudfade what` to name a UI element under the mouse.
 
+## Install
+
+- **CurseForge or Wago app:** search for HUD Fade.
+- **By hand:** download the zip from [Releases](https://github.com/AdrianMontanes/HUDFade/releases) and unzip it into your AddOns folder, for example `World of Warcraft\_forever_\Interface\AddOns` for WoW Forever or `World of Warcraft\_retail_\Interface\AddOns` for Retail. You should end up with an `AddOns\HUDFade` folder.
+
 ## Supported versions
 
 WoW Forever and Retail (12.x). Classic flavors are planned.
+
+## Something stays visible?
+
+Hover it and type `/hudfade what`, then [open an issue](https://github.com/AdrianMontanes/HUDFade/issues) with what it printed and which UI addons you use.
 
 ## Recording in HDR
 
