@@ -161,7 +161,7 @@ local function build()
 	checkbox("hideMinimap", "Hide the minimap while hidden",
 		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, so the minimap is switched off instead.", -270)
 	checkbox("hideCursor", "Hide the mouse pointer when it is still (experimental)",
-		"While the HUD is hidden and you are out of combat, the pointer disappears after 2 seconds without moving the mouse. Moving the mouse brings it back (turning your character a hair), and a left click only brings it back. After you turn the camera with a left-drag it stays until a right-drag or a short run lines camera and character up again, since hiding it would turn your character.", -296)
+		"While the HUD is hidden and you are out of combat, the pointer disappears after 2 seconds without moving the mouse. Moving the mouse brings it back (turning your character a hair). After you turn the camera with a left-drag it stays until a right-drag or a short run lines camera and character up again, since hiding it would turn your character.", -296)
 
 	header("While hidden, bring the HUD back when", -336)
 	checkbox("showCombat", "In combat", nil, -356)

@@ -645,48 +645,22 @@ local function getFacing()
 	return nil
 end
 
--- While the pointer is hidden, a left press would count as both buttons for a moment (the game's "run and steer"),
--- nudging or turning your character before OLED HUD could react. So during our mouselook only, the left button is
--- pointed at this invisible button instead: the first press just brings the pointer back, and nothing moves.
-local wake = CreateFrame("Button", "OLEDHUDWakeButton", UIParent)
-wake:SetSize(1, 1)
-wake:EnableMouse(false)
-if wake.RegisterForClicks then wake:RegisterForClicks("AnyDown", "AnyUp") end
-local WAKE_BIND = "CLICK OLEDHUDWakeButton:LeftButton"
-local leftOverridden = false
-
-local function setLeftOverride(on)
-	if not SetMouselookOverrideBinding or on == leftOverridden then return end
-	if InCombatLockdown() then return end
-	if pcall(SetMouselookOverrideBinding, "BUTTON1", on and WAKE_BIND or nil) then leftOverridden = on end
-end
-
 local function releasePointer(stop, moved)
 	if not ours then return end
 	ours = false
 	if stop and MouselookStop then pcall(MouselookStop) end
-	setLeftOverride(false)
 	if moved then state.lastMouseMove = now() end
 end
 
 local function hidePointer()
 	if ours or not MouselookStart then return end
 	if IsMouselooking and IsMouselooking() then return end -- (you are already steering)
-	setLeftOverride(true)
 	if pcall(MouselookStart) then
 		ours = true
 		facing = getFacing()
 		startedAt = now()
-	else
-		setLeftOverride(false)
 	end
 end
-
-wake:SetScript("OnClick", function()
-	if not ours then return end
-	state.wakeClick = true -- (this press turned nothing: it must not count as a camera drag below)
-	releasePointer(true, true)
-end)
 
 releaseOnKey = function(key)
 	if not ours then return end
@@ -710,13 +684,10 @@ watcher:SetScript("OnUpdate", function()
 		return
 	end
 	if IsMouselooking and not IsMouselooking() then
-		-- Something else ended it (alt-tab, the game, another addon). Try again once the mouse has been still for a
-		-- while, and wait longer each time it keeps happening, so the pointer never flickers on and off.
+		-- Something else ended it (alt-tab, the game, another addon). Wait for a real mouse move before trying again:
+		-- trying while WoW is in the background can move the pointer on your other screens.
 		releasePointer(false)
-		local t = now()
-		state.refusals = (t - (state.lastRefusal or -100) < 30) and ((state.refusals or 0) + 1) or 1
-		state.lastRefusal = t
-		state.retryAt = t + (state.refusals >= 3 and 10 or 2)
+		state.pointerRefused = true
 		return
 	end
 	local f = getFacing()
@@ -780,7 +751,7 @@ local function pointerBlock(t, anyButton)
 	if turnKeyHeld() then return "turning with the keyboard" end
 	if windowKeepsPointer() then return "a window is open, or you are typing" end
 	if state.cameraFree then return "the camera points away from your character (a right-drag or moving lines them up)" end
-	if state.retryAt and t < state.retryAt then return "the game took the mouse back a moment ago (alt-tab?)" end
+	if state.pointerRefused then return "the game took the mouse back, e.g. alt-tab (move the mouse to try again)" end
 	if (t - (state.lastMouseMove or 0)) < 2 then return "the mouse moved less than 2 s ago" end
 	return nil
 end
@@ -795,7 +766,7 @@ local function pollMouse()
 		if math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2 then
 			lastX, lastY = x, y
 			state.lastMouseMove = t
-			state.retryAt, state.refusals = nil, 0
+			state.pointerRefused = false
 			input()
 		elseif anyButton or (IsMouselooking and IsMouselooking()) then
 			-- Running with both buttons is moving yourself; turning the camera only counts if you want it to.
@@ -803,14 +774,12 @@ local function pollMouse()
 		end
 	end
 	-- Camera and character lined up or not (see cameraFollows above).
-	-- (any left press on the 3D world may turn the camera, even a tiny tweak; the press that only brings the
-	-- pointer back does not)
+	-- (any left press on the 3D world may turn the camera, even a tiny tweak)
 	if left and not right then
 		if not leftSince then leftSince, leftOnWorld = t, mouseOverWorld() end
-		if leftOnWorld and not state.wakeClick then state.cameraFree = true end
+		if leftOnWorld then state.cameraFree = true end
 	else
 		leftSince = nil
-		if not left then state.wakeClick = false end
 	end
 	if right then state.cameraFree = false end
 	if state.cameraFree and state.moving and not anyButton and cameraFollows() then
@@ -1144,8 +1113,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "PLAYER_LOGOUT" then
 		restoreAllCVars()
 	elseif event == "PLAYER_REGEN_DISABLED" then
-		-- Runs just before combat lockdown starts: the last moment nameplates can be turned back on, and the left
-		-- button's pointer override can be undone.
+		-- Runs just before combat lockdown starts: the last moment nameplates can be turned back on.
 		state.inCombat = true
 		releasePointer(true)
 		cvarsBack(PLATE_CVARS)
