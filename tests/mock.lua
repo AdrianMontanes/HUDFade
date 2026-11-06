@@ -285,7 +285,15 @@ step(0.2); check("nameplates off a moment after", cvars.nameplateShowEnemies=="0
 check("hiding does not scan every frame at once (new model not seen yet)", late.malpha==1)
 OLEDHUD.Show(); step(20); OLEDHUD.Hide(); step(1.5)
 check("background scan finds frames made later", late.malpha==0)
+-- A portrait an addon creates only when first needed, while the HUD is hidden (EllesmereUI's target portrait)
+OLEDHUD.Hide(); step(1.5)
+local lazy = CreateFrame("PlayerModel", nil, UIParent); lazy.malpha=1
+function lazy:SetModelAlpha(a) self.malpha=a end
+function lazy:GetModelAlpha() return self.malpha end
+fire("PLAYER_TARGET_CHANGED"); step(2)
+check("a portrait made while hidden is found and faded within seconds", lazy.malpha==0)
 OLEDHUD.Show(); step(0.5)
+check("and restored when the HUD comes back", lazy.malpha==1)
 -- Pixel shift
 check("pixel shift off by default", select(1, uiOffset())==0 and select(2, uiOffset())==0)
 SlashCmdList.OLEDHUD("shift on"); step(1.1)

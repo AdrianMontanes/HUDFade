@@ -2,7 +2,7 @@
 ## Title: OLED HUD
 ## Notes: Fade or hide the whole UI at once (Blizzard UI and EllesmereUI together) to protect OLED screens and take HUD-free screenshots.
 ## Author: Adrian
-## Version: 0.1.14
+## Version: 0.1.15
 ## X-License: MIT
 ## SavedVariables: OLEDHUDDB
 ## IconTexture: Interface\Icons\Ability_Stealth
