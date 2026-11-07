@@ -33,6 +33,7 @@ local DEFAULTS = {
 	showDead = true,
 	hideNames = true,      -- floating player/NPC names and chat bubbles
 	hideNameplates = true,
+	hideOutline = true,    -- the circle under your target and the glow around it (and around what is under the mouse)
 	hideCursor = false,    -- hide the mouse pointer while the HUD is hidden and the mouse is still (experimental)
 	hideCursorSteer = false, -- ...also while flying, swimming or in a vehicle, where the mouse then steers you
 	mouseWakes = true,     -- moving the mouse brings the HUD back after it hid for being idle (it always keeps it up)
@@ -117,9 +118,11 @@ local NAME_CVARS = {
 	"UnitNameFriendlyPetName", "UnitNameEnemyPetName", "UnitNameFriendlyGuardianName", "UnitNameEnemyGuardianName",
 	"UnitNameFriendlyTotemName", "UnitNameEnemyTotemName", "UnitNameFriendlyMinionName", "UnitNameEnemyMinionName",
 	"chatBubbles", "chatBubblesParty", -- (chat bubbles float in the game world too, like the names)
-	"ObjectSelectionCircle", -- (the circle under your target; an old setting that may be gone, skipped if so)
 }
 -- (Your target's own name is not among these: the game shows it whatever the settings say.)
+-- The circle under your target, the glow around it and around what is under the mouse (Outline Mode), and the
+-- highlight some people put around their own character. A setting the game no longer has is skipped.
+local OUTLINE_CVARS = { "ObjectSelectionCircle", "Outline", "findYourselfAnywhere", "findYourselfInBG", "findYourselfInRaid" }
 -- nameplateShowFriendlyPlayers drives EllesmereUI's name-only plates over other players.
 local PLATE_CVARS = { "nameplateShowEnemies", "nameplateShowFriends", "nameplateShowFriendlyPlayers", "nameplateShowFriendlyNPCs" }
 
@@ -188,6 +191,7 @@ end
 local function hideGameText()
 	state.cvarsHidden = true
 	if DB.hideNames then cvarsOff(NAME_CVARS) end
+	if DB.hideOutline then cvarsOff(OUTLINE_CVARS) end
 	hideMinimap()
 	-- Nameplates a moment later: dropping every plate is the heaviest part, so it gets a frame of its own.
 	if DB.hideNameplates then
@@ -199,6 +203,7 @@ end
 
 local function showGameText()
 	cvarsBack(NAME_CVARS)
+	cvarsBack(OUTLINE_CVARS)
 	cvarsBack(PLATE_CVARS)
 	showMinimap()
 	state.cvarsHidden = false

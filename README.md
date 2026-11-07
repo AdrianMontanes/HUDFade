@@ -10,14 +10,14 @@ Made for OLED screens (no static HUD burning in while you're away) and for HUD-f
 
 Most fade addons change the opacity of each UI frame one by one. EllesmereUI does the same for its own mouseover and visibility rules, so the two keep overriding each other and you get flicker, bars that come back, or art showing through.
 
-HUD Fade never touches a single frame. It fades the layer every UI frame sits on, so EllesmereUI (or any other UI addon) keeps doing its thing underneath and nothing fights. The few things that don't live on that layer are handled too: 3D portraits, the floating player and NPC names, chat bubbles, and nameplates.
+HUD Fade never touches a single frame. It fades the layer every UI frame sits on, so EllesmereUI (or any other UI addon) keeps doing its thing underneath and nothing fights. The few things that don't live on that layer are handled too: 3D portraits, the floating player and NPC names, chat bubbles, nameplates, and the circle and glow around your target.
 
 ## Features
 
 - **One key hides everything.** Uses your Hide UI key (Alt+Z by default), but fades smoothly and is safe in combat.
 - **Comes back when it matters:** combat, a target, a window or popup, typing in chat, dying. Each one can be switched off.
 - **Hide when idle:** after 30 seconds with no input (adjustable) the HUD fades out, and comes back the moment you move the mouse or press a key. Looking around with the camera and auto-running don't count as input unless you want them to, so you can take in the view with no HUD. A window or chat box left open keeps the HUD only until you have been away for 10 minutes (adjustable).
-- **Clean screenshots:** a key that takes a screenshot with no HUD, names or chat bubbles, then puts everything back.
+- **Clean screenshots:** a key that takes a screenshot with no HUD, names, chat bubbles or target glow, then puts everything back.
 - **Hold to peek:** a key that shows the HUD only while held.
 - **Hide the mouse pointer** when it's still (optional, experimental).
 - **Pixel shift (burn-in protection):** every few minutes the whole interface moves a pixel or two, Blizzard UI and EllesmereUI together, so nothing sits on the same pixels for hours. Never during combat, and your layout is never changed. Optional.

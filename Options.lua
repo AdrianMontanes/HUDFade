@@ -194,11 +194,13 @@ local function build()
 
 	header("While HUD is hidden, also hide", -206)
 	checkbox("hideNames", "Names and chat bubbles",
-		"The floating names, chat bubbles and the circle under your target are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after. Your target's own name is the exception: the game always shows it.", -226)
+		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after. Your target's own name is the exception: the game always shows it.", -226)
 	checkbox("hideNameplates", "Nameplates",
 		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.", -226, 320)
 	checkbox("hideMinimap", "Minimap",
 		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, so the minimap is switched off instead.", -252)
+	checkbox("hideOutline", "Target circle and glow",
+		"The circle under your target and the glow around it and around whatever is under the mouse (the game's Outline Mode) are switched off while the HUD is hidden and back on after. So is the highlight around your own character, if you use one.", -252, 320)
 	checkbox("hideCursor", "Mouse pointer when still",
 		"Experimental. Out of combat, the pointer disappears after 2 seconds without moving the mouse, and moving the mouse brings it back. While it is hidden, mouse look speed is turned down to a tenth, so that first move barely turns the camera (your setting comes back with the pointer). Once HUD Fade has seen that the game reports mouse moves, it turns it down to almost nothing, so the camera stays still, also sitting down and on flight paths. A click or any key on a flight path brings the pointer back too, and dragging looks around as usual. After a left-drag it stays until a right-drag or a short run lines camera and character up again, since hiding it turns your character to the camera; if neither happens it hides anyway once the mouse has been still for your idle time. Flying, swimming and in vehicles it stays, unless Also when flying or swimming is on.", -278)
 	checkbox("hideCursorSteer", "Also when flying or swimming",

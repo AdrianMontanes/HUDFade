@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.18
+
+- New "Target circle and glow" option under "While HUD is hidden, also hide", on by default: the circle under your target, the glow around it and around whatever is under the mouse (the game's Outline Mode), and your own character's highlight if you use one, are switched off while the HUD is hidden. The target circle moved here from "Names and chat bubbles".
+
 ## 0.2.17
 
 - Hidden pointer: after you stopped moving with the pointer hidden, the next left-drag only brought the pointer back instead of turning the camera. Fixed: the game now picks up the change to the left button as you stop.
