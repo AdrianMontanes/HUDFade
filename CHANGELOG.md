@@ -1,5 +1,12 @@
 # HUD Fade
 
+## 0.3.1
+
+- Settings page tidied into General, While HUD is hidden also hide, Idle, While HUD is hidden bring it back on, and Fade.
+- Idle now holds everything about idle hiding: both timers plus what also counts as input (Mouse moving, Camera turning, Auto-run or follow). Mouse moving moved here from "bring it back on", and the old "Keep HUD visible during" section is gone.
+- The screenshot option shows your own screenshot key, like the Hide UI one.
+- Tooltips for Combat, Target, Casting, both idle timers and Hidden opacity. The note under the timers moved into the away timer's tooltip.
+
 ## 0.3.0
 
 - New preset menu above "While HUD is hidden, also hide": **Everything** (the default: names, nameplates, the target circle and glow go with the HUD) or **Like the game's Hide UI** (names, chat bubbles, the target circle and glow stay, as with Alt+Z; nameplates go). Change a box yourself and it shows as Custom.

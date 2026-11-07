@@ -73,7 +73,7 @@ end
 
 -- scale: the setting is the slider's value divided by this. Or a list of the values the slider stops at, in order
 -- (then minV, maxV and step are ignored).
-local function slider(key, label, minV, maxV, step, y, x, fmt, scale)
+local function slider(key, label, minV, maxV, step, y, x, fmt, scale, tip)
 	local stops = type(scale) == "table" and scale or nil
 	if stops then minV, maxV, step, scale = 1, #stops, 1, 1 end
 	scale = scale or 1
@@ -118,6 +118,15 @@ local function slider(key, label, minV, maxV, step, y, x, fmt, scale)
 			s:SetValue(v)
 		end
 		show(v)
+	end
+	if tip then
+		s:SetScript("OnEnter", function(self)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetText(label, 1, 1, 1)
+			GameTooltip:AddLine(tip, nil, nil, nil, true)
+			GameTooltip:Show()
+		end)
+		s:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	end
 	s.setActive = function(on)
 		if s.SetEnabled then s:SetEnabled(on) end
@@ -231,7 +240,7 @@ local built = false
 local function build()
 	if built then return end
 	built = true
-	canvas = scrollPage(panel, 700)
+	canvas = scrollPage(panel, 720)
 	pageTitle("HUD Fade")
 	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
 
@@ -239,18 +248,19 @@ local function build()
 		-76, 16, function() HUDFade.SetEnabled(db().enabled) end, true)
 	checkbox("pixelShift", "Pixel shift (burn-in protection)", SHIFT_TIP, -76, 320, shiftChanged)
 
-	header("Hiding", -120)
-	checkbox("replaceAltZ", function()
-			-- (your own key for the game's Hide UI, read each time the page opens)
-			local key = GetBindingKey("TOGGLEUI")
-			local shown = key and (GetBindingText and GetBindingText(key) or key) or "not bound"
-			return "Use Hide UI key (" .. shown .. ")"
-		end,
+	-- (your own keys for the game's Hide UI and screenshots, read each time the page opens)
+	local function keyName(action)
+		local key = GetBindingKey(action)
+		return key and (GetBindingText and GetBindingText(key) or key) or "not bound"
+	end
+
+	header("General", -120)
+	checkbox("replaceAltZ", function() return "Use Hide UI key (" .. keyName("TOGGLEUI") .. ")" end,
 		"Your Hide UI key fades the HUD out and back in instead of switching it off, and the HUD still comes back when something needs it.",
 		-140, 16, HUDFade.ApplyOverrides)
 	checkbox("startHidden", "Start hidden", "Each session starts with the HUD hidden.", -140, 320)
-	checkbox("cleanPrintScreen", "HUD-free screenshots (Print Screen)",
-		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back.", -166, 16, HUDFade.ApplyOverrides)
+	checkbox("cleanPrintScreen", function() return "HUD-free screenshots (" .. keyName("SCREENSHOT") .. ")" end,
+		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back. There is also a separate key for this under Key Bindings > AddOns.", -166, 16, HUDFade.ApplyOverrides)
 
 	header("While HUD is hidden, also hide", -206)
 	presetMenu(-226)
@@ -263,30 +273,38 @@ local function build()
 	checkbox("hideOutline", "Target circle and glow",
 		"The circle under your target and the glow around it and around whatever is under the mouse (the game's Outline Mode) are switched off while the HUD is hidden and back on after. So is the highlight around your own character, if you use one.", -284, 320, presetChanged)
 
-	header("While HUD is hidden, bring it back on", -318)
+	header("Idle", -324)
+	slider("idleSeconds", "Hide when idle", 0, 120, 5, -344, 16,
+		function(v) return v == 0 and "Never" or string.format("after %d s", v) end, nil,
+		"After this long with no input, the HUD fades out. Moving, typing and using the mouse count as input, and so do the boxes below if ticked.")
+	slider("awayMinutes", "Hide anyway when away", nil, nil, nil, -344, 320,
+		function(v) return v >= 60 and "after 1 hour" or string.format("after %d min", v) end, { 2, 5, 10, 15, 20, 30, 45, 60 },
+		"After this long with no input, the HUD hides even over an open window or chat box, and even with Hide when idle set to Never. Combat still brings it back.")
+	note("Also counts as input:", -394)
 	checkbox("mouseWakes", "Mouse moving",
-		"After the HUD hides for being idle, moving the mouse brings it back. Off: only keys bring it back (moving, targeting, opening a window and so on), so a bumped mouse or coming back from alt-tab leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.", -338)
-	checkbox("showCombat", "Combat", nil, -338, 320)
-	checkbox("showTarget", "Target", nil, -364)
-	checkbox("showCasting", "Casting", nil, -364, 320)
+		"After the HUD hides for being idle, moving the mouse brings it back. Off: only keys bring it back (moving, targeting, opening a window and so on), so a bumped mouse or coming back from alt-tab leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.", -410)
+	checkbox("activeCamera", "Camera turning",
+		"On: looking around with the mouse keeps the HUD visible and brings it back. Off: you can look around and the HUD stays hidden.", -410, 320)
+	checkbox("activeAutorun", "Auto-run or follow",
+		"On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides while your character keeps moving. Holding a movement key always counts as input.", -436)
+
+	header("While HUD is hidden, bring it back on", -476)
+	checkbox("showCombat", "Combat",
+		"Combat brings the HUD back at once, even while you are idle. If you hide it during a fight, it stays hidden until that fight ends.", -496)
+	checkbox("showTarget", "Target",
+		"Picking a target brings the HUD back while you are playing. Once you have been idle for your idle time, it hides even with a target.", -496, 320)
+	checkbox("showCasting", "Casting",
+		"Casting or channeling brings the HUD back while you are playing.", -522)
 	checkbox("showDead", "Death",
-		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. As a ghost everything works as usual.", -390)
+		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. As a ghost everything works as usual.", -522, 320)
 	checkbox("showWindows", "Windows, popups, bags or typing",
-		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, EllesmereUI unlock mode). Typing also counts as activity, so after you send a message the HUD stays for your idle time. A window or chat box left open keeps the HUD only until Hide anyway when away.", -390, 320)
+		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, EllesmereUI unlock mode). Typing also counts as input, so after you send a message the HUD stays for your idle time. A window or chat box left open keeps the HUD only until Hide anyway when away.", -548)
 
-	header("Timing", -430)
-	slider("idleSeconds", "Hide when idle", 0, 120, 5, -450, 16,
-		function(v) return v == 0 and "Never" or string.format("after %d s", v) end)
-	slider("awayMinutes", "Hide anyway when away", nil, nil, nil, -450, 320,
-		function(v) return v >= 60 and "after 1 hour" or string.format("after %d min", v) end, { 2, 5, 10, 15, 20, 30, 45, 60 })
-	slider("fadeOut", "Fade out", 0, 3, 0.1, -500, 16, "%.1f s")
-	slider("fadeIn", "Fade in", 0, 1, 0.05, -500, 320, "%.2f s")
-	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -550, 16, "%d%%", 100)
-	note("Hide anyway when away: after this long with no input, the HUD hides even over an open window or chat box, and even with Hide when idle set to Never. Combat still brings it back.", -594)
-
-	header("Keep HUD visible during", -640)
-	checkbox("activeCamera", "Camera turning", "On: looking around with the mouse keeps the HUD visible and brings it back. Off: you can look around and the HUD stays hidden.", -660)
-	checkbox("activeAutorun", "Auto-run or follow", "On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides while your character keeps moving. Holding a movement key always counts as activity.", -660, 320)
+	header("Fade", -588)
+	slider("fadeOut", "Fade out", 0, 3, 0.1, -608, 16, "%.1f s")
+	slider("fadeIn", "Fade in", 0, 1, 0.05, -608, 320, "%.2f s")
+	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -658, 16, "%d%%", 100,
+		"How much of the HUD stays visible while hidden: 0% is fully gone (true black on OLED), higher leaves it faintly visible.")
 
 	-- Burn-in protection page
 	canvas = shiftPanel
