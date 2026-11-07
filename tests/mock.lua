@@ -768,6 +768,7 @@ for _, f in ipairs(frames) do rawset(f, "CreateFontString", stubObject) end
 local realCreate = CreateFrame
 local templates = {}
 local presetMenu
+local copyBoxes = {}
 CreateFrame = function(kind, name, parent, template)
 	if template then templates[#templates + 1] = template end
 	if template == "ScrollFrameTemplate" then error("no such template") end -- the fallback must cope
@@ -776,6 +777,10 @@ CreateFrame = function(kind, name, parent, template)
 	if template == "WowStyle1DropdownTemplate" then
 		presetMenu = f
 		rawset(f, "SetupMenu", function(self, gen) self.gen = gen end)
+	end
+	if template == "InputBoxTemplate" then
+		copyBoxes[#copyBoxes + 1] = f
+		rawset(f, "SetText", function(self, text) self.text = text end)
 	end
 	return f
 end
@@ -804,6 +809,14 @@ if #radios == 2 then radios[2].setSel() end
 check("choosing one in the menu applies it",
 	HUDFade.CurrentPreset() == 2 and HUDFadeDB.hideNames == false and radios[2].isSel() == true)
 SlashCmdList.HUDFADE("reset")
+
+-- Help and feedback addresses
+local pageBox = copyBoxes[1]
+check("the settings show the addon page and issues addresses",
+	#copyBoxes == 2 and pageBox.text:find("curseforge") ~= nil and copyBoxes[2].text:find("/issues") ~= nil)
+pageBox:SetText("typed over")
+pageBox.scripts.OnTextChanged(pageBox, true)
+check("typing in an address box puts the address back", pageBox.text:find("curseforge") ~= nil)
 CreateFrame = realCreate
 
 -- The away slider stops at 2, 5, 10, 15, 20, 30, 45 and 60 minutes

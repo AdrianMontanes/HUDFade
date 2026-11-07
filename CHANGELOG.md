@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.3.2
+
+- New "Help and feedback" section at the bottom of the settings: the addon page and the place to report a problem, ready to copy.
+
 ## 0.3.1
 
 - Settings page tidied into General, While HUD is hidden also hide, Idle, While HUD is hidden bring it back on, and Fade.

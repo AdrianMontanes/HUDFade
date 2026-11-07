@@ -20,11 +20,11 @@ local dimmable = {} -- headers, greyed out with them while the addon is off
 
 local function db() return HUDFade.db end
 
-local function header(text, y)
+local function header(text, y, alwaysOn)
 	local fs = canvas:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 	fs:SetPoint("TOPLEFT", 16, y)
 	fs:SetText(text)
-	dimmable[#dimmable + 1] = fs
+	if not alwaysOn then dimmable[#dimmable + 1] = fs end
 	return fs
 end
 
@@ -35,6 +35,34 @@ local function note(text, y, x)
 	fs:SetJustifyH("LEFT")
 	fs:SetText(text)
 	return fs
+end
+
+-- Addons can't open web pages, so an address goes in a read-only box that selects itself for Ctrl+C.
+local function copyBox(label, url, y)
+	local fs = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	fs:SetPoint("TOPLEFT", 20, y - 3)
+	fs:SetText(label)
+	local box = CreateFrame("EditBox", nil, canvas, "InputBoxTemplate")
+	box:SetPoint("TOPLEFT", 150, y)
+	box:SetSize(360, 20)
+	box:SetAutoFocus(false)
+	local function reset(self)
+		self:SetText(url)
+		self:SetCursorPosition(0)
+	end
+	reset(box)
+	box:SetScript("OnTextChanged", function(self, typed)
+		if typed then
+			reset(self)
+			self:HighlightText()
+		end
+	end)
+	box:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
+	box:SetScript("OnMouseUp", function(self) self:HighlightText() end)
+	box:SetScript("OnEditFocusLost", function(self) self:HighlightText(0, 0) end)
+	box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+	return box
 end
 
 local function checkbox(key, label, tip, y, x, onChange, master)
@@ -242,7 +270,7 @@ local built = false
 local function build()
 	if built then return end
 	built = true
-	canvas = scrollPage(panel, 720)
+	canvas = scrollPage(panel, 820)
 	pageTitle("HUD Fade")
 	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and "
 		.. "take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
@@ -342,6 +370,11 @@ local function build()
 	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -658, 16, "%d%%", 100,
 		"How much of the HUD stays visible while hidden: 0% is fully gone (true black on OLED), "
 		.. "higher leaves it faintly visible.")
+
+	header("Help and feedback", -712, true)
+	note("Click an address and press Ctrl+C to copy it.", -732)
+	copyBox("Addon page", "https://www.curseforge.com/wow/addons/hud-fade", -754)
+	copyBox("Report a problem", "https://github.com/AdrianMontanes/HUDFade/issues", -782)
 
 	-- Burn-in protection page
 	canvas = shiftPanel
