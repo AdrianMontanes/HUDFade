@@ -1,5 +1,10 @@
 # HUD Fade
 
+## 0.3.0
+
+- New preset menu above "While HUD is hidden, also hide": **Everything** (the default: names, nameplates, the target circle and glow go with the HUD) or **Like the game's Hide UI** (names, chat bubbles, the target circle and glow stay, as with Alt+Z; nameplates go). Change a box yourself and it shows as Custom.
+- Removed the "Mouse pointer when still" option and everything it needed (mouselook, slowed look speed, the left-button workarounds, `/hudfade log`). The game gives addons no reliable way to hide the pointer, the workarounds kept causing camera trouble, and screenshots never include the pointer anyway. If it was on, your mouse look speed is put back at login.
+
 ## 0.2.20
 
 - Hidden pointer: fixed the camera getting stuck tilting only up and down, with the pointer not coming back until a click or key (seen after alt-tab and while sitting). 0.2.17 slowed sideways looking to almost nothing once the game seemed to report mouse moves, but that report is unreliable while the pointer is hidden, so the sideways move that brings the pointer back no longer registered. Sideways speed now stays at a tenth everywhere except flight paths.

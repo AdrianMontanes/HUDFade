@@ -167,6 +167,66 @@ local function scrollPage(page, height)
 	return content
 end
 
+-- The preset menu above the "also hide" checkboxes. Changing one of the checkboxes yourself shows as Custom.
+local presetWidget
+local function presetName()
+	local i = HUDFade.CurrentPreset()
+	return i and HUDFade.PRESETS[i].name or "Custom"
+end
+local function presetChanged()
+	if presetWidget then presetWidget.refresh() end
+end
+local refreshAll -- (below)
+local function choosePreset(i)
+	HUDFade.ApplyPreset(i)
+	refreshAll()
+end
+
+local PRESET_TIP = "Everything: names, nameplates, the target circle and glow all go with the HUD. "
+	.. "Like the game's Hide UI: what Alt+Z leaves stays (names, chat bubbles, the target circle and glow); nameplates go. "
+	.. "Either way you keep the fade, idle hiding and the rest. Change a box below and it shows as Custom."
+
+local function presetMenu(y)
+	local title = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	title:SetPoint("TOPLEFT", 20, y - 6)
+	title:SetText("Preset")
+	local w
+	local ok, dd = pcall(CreateFrame, "DropdownButton", nil, canvas, "WowStyle1DropdownTemplate")
+	if ok and dd and dd.SetupMenu then
+		dd:SetPoint("TOPLEFT", 80, y)
+		dd:SetWidth(240)
+		if dd.SetDefaultText then dd:SetDefaultText("Custom") end -- (shown when the boxes match no preset)
+		dd:SetupMenu(function(_, root)
+			for i, p in ipairs(HUDFade.PRESETS) do
+				root:CreateRadio(p.name, function() return HUDFade.CurrentPreset() == i end, function() choosePreset(i) end)
+			end
+		end)
+		w = dd
+		w.refresh = function() if dd.GenerateMenu then dd:GenerateMenu() end end
+	else
+		-- (no dropdown in this client: a button that steps through the presets)
+		w = CreateFrame("Button", nil, canvas, "UIPanelButtonTemplate")
+		w:SetPoint("TOPLEFT", 80, y)
+		w:SetSize(240, 22)
+		w:SetScript("OnClick", function() choosePreset((HUDFade.CurrentPreset() or 0) % #HUDFade.PRESETS + 1) end)
+		w.refresh = function() w:SetText(presetName()) end
+	end
+	local hook = w.HookScript or w.SetScript
+	hook(w, "OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText("Preset: " .. presetName(), 1, 1, 1)
+		GameTooltip:AddLine(PRESET_TIP, nil, nil, nil, true)
+		GameTooltip:Show()
+	end)
+	hook(w, "OnLeave", function() GameTooltip:Hide() end)
+	w.setActive = function(on)
+		if w.SetEnabled then w:SetEnabled(on) end
+		title:SetAlpha(on and 1 or 0.5)
+	end
+	presetWidget = w
+	widgets[#widgets + 1] = w
+end
+
 local built = false
 local function build()
 	if built then return end
@@ -193,18 +253,15 @@ local function build()
 		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back.", -166, 16, HUDFade.ApplyOverrides)
 
 	header("While HUD is hidden, also hide", -206)
+	presetMenu(-226)
 	checkbox("hideNames", "Names and chat bubbles",
-		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after. Your target's own name is the exception: the game always shows it.", -226)
+		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after. Your target's own name is the exception: the game always shows it.", -258, 16, presetChanged)
 	checkbox("hideNameplates", "Nameplates",
-		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.", -226, 320)
+		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.", -258, 320, presetChanged)
 	checkbox("hideMinimap", "Minimap",
-		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, so the minimap is switched off instead.", -252)
+		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, so the minimap is switched off instead.", -284, 16, presetChanged)
 	checkbox("hideOutline", "Target circle and glow",
-		"The circle under your target and the glow around it and around whatever is under the mouse (the game's Outline Mode) are switched off while the HUD is hidden and back on after. So is the highlight around your own character, if you use one.", -252, 320)
-	checkbox("hideCursor", "Mouse pointer when still",
-		"Experimental. Out of combat, the pointer disappears after 2 seconds without moving the mouse, and moving the mouse brings it back. While it is hidden, mouse look speed is turned down to a tenth, so that first move barely turns the camera, and up and down to almost nothing, so the camera stays level (your settings come back with the pointer). On flight paths the camera stays still altogether. A click or any key on a flight path brings the pointer back too, and dragging looks around as usual. After a left-drag it stays until a right-drag or a short run lines camera and character up again, since hiding it turns your character to the camera; if neither happens it hides anyway once the mouse has been still for your idle time. Flying, swimming and in vehicles it stays, unless Also when flying or swimming is on.", -278)
-	checkbox("hideCursorSteer", "Also when flying or swimming",
-		"Also hide the pointer while flying, swimming or in a vehicle. There the mouse steers you, as when you hold the right button, and a click or any key brings the pointer back. When the pointer hides, your character turns to where the camera points, up or down too, so if you are moving you may climb or dive a little. Needs Mouse pointer when still.", -278, 320)
+		"The circle under your target and the glow around it and around whatever is under the mouse (the game's Outline Mode) are switched off while the HUD is hidden and back on after. So is the highlight around your own character, if you use one.", -284, 320, presetChanged)
 
 	header("While HUD is hidden, bring it back on", -318)
 	checkbox("mouseWakes", "Mouse moving",
@@ -247,7 +304,7 @@ local function build()
 	canvas = panel
 end
 
-local function refreshAll()
+function refreshAll()
 	if not built then return end
 	if panel.master then panel.master.refresh() end
 	local on = db().enabled and true or false
@@ -305,7 +362,6 @@ local HELP = {
 	"/hudfade shift [on | off | now] - pixel shift status, switch it, or move now to see it",
 	"/hudfade why - what is keeping the HUD visible right now",
 	"/hudfade what - name the UI element under the mouse (for reporting something that stays visible)",
-	"/hudfade log - what the HUD and the mouse pointer did lately (for reporting a bug)",
 	"/hudfade reset - back to default settings",
 }
 
@@ -347,10 +403,6 @@ SlashCmdList.HUDFADE = function(msg)
 		say(HUDFade.ShiftStatus())
 	elseif cmd == "what" then
 		say("under the mouse: " .. HUDFade.DescribeMouseFrame())
-	elseif cmd == "log" then
-		local log = HUDFade.Log()
-		say(#log > 0 and "the last things the HUD and the pointer did (oldest first):" or "nothing logged yet.")
-		for i = math.max(1, #log - 19), #log do print(log[i]) end
 	elseif cmd == "reset" then
 		local d = db()
 		for k, v in pairs(HUDFade.DEFAULTS) do

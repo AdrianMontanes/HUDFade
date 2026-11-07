@@ -65,14 +65,6 @@ function secretLoner:GetAlpha() return SECRET end
 local brokenFrame = newFrame(); brokenFrame.parent = UIParent
 function brokenFrame:GetObjectType() error("forbidden") end
 function brokenFrame:IsIgnoringParentAlpha() error("forbidden") end
-flying=false
-function IsFlying() return flying end
-onTaxi=false
-function UnitOnTaxi() return onTaxi end
-cursorDeltaV=0
-function GetCursorDelta() return cursorDeltaV, 0 end
-swimming=false
-function IsSwimming() return swimming end
 function EnumerateFrames(f) if not f then return frames[1] end for i,x in ipairs(frames) do if x==f then return frames[i+1] end end end
 C_Timer = { After=function(d,fn) table.insert(timers,{T+d,fn}) end, NewTicker=function(d,fn) ticker=fn end }
 timers = {}
@@ -92,20 +84,12 @@ local target=false
 function UnitExists(u) return target end
 dead=false
 function UnitIsDead() return dead end
-mouselook=false; facingV=1.0
--- The game reads the mouselook overrides when mouselook starts (in-game finding), so a change made while it is on
--- only counts from the next start.
-mlBinds, mlActive = {}, {}
-function MouselookStart() mouselook=true; mlActive={}; for k,v in pairs(mlBinds) do mlActive[k]=v end end
-function SetMouselookOverrideBinding(k, b) if lockdown then error("blocked") end mlBinds[k]=b end
--- A left press: while mouselooking with the override set, the game runs that binding instead (a CLICK on our button).
-function pressLeft()
-  buttons.LeftButton=true
-  if mouselook and mlActive.BUTTON1 then local b=_G.HUDFadeWakeButton; b.scripts.OnClick(b, "LeftButton", true) end
-end
-function MouselookStop() mouselook=false; mlActive={} end
+mouselook=false
 function IsMouselooking() return mouselook end
-function GetPlayerFacing() return facingV end
+-- (HUD Fade no longer hides the pointer: these must stay untouched)
+mlBinds = {}
+function MouselookStart() mouselookStarted=true end
+function SetMouselookOverrideBinding(k, b) mlBinds[k]=b end
 function Screenshot() shots=(shots or 0)+1 end
 UISpecialFrames = {}
 function wipe(t) for k in pairs(t) do t[k]=nil end return t end
@@ -123,8 +107,13 @@ end
 local function load(file) local fn=assert(loadfile(file)); fn("HUDFade", ns) end
 ns = {}
 load(arg[1].."/Core.lua"); load(arg[1].."/Options.lua")
+-- Saved by 0.2.x with the pointer hidden at logout: the option is gone, and the look speed must come back.
+HUDFadeDB = { hideCursor=true, hideCursorSteer=true, mouseReported=true, log={"x"}, restore={ cameraYawMoveSpeed="180" } }
+cvars.cameraYawMoveSpeed="18"
 fire("ADDON_LOADED","HUDFade"); fire("PLAYER_LOGIN")
 local function check(label, cond) print((cond and "PASS " or "FAIL ")..label) ; if not cond then failed=true end end
+check("the old pointer option's settings are dropped", HUDFadeDB.hideCursor==nil and HUDFadeDB.hideCursorSteer==nil and HUDFadeDB.mouseReported==nil and HUDFadeDB.log==nil)
+check("and the mouse look speed it had lowered comes back", cvars.cameraYawMoveSpeed=="180" and next(HUDFadeDB.restore)==nil)
 step(1)
 check("starts visible", UIParent.alpha==1)
 check("Alt+Z overridden", binds["ALT-Z"]=="HUDFADE_TOGGLE")
@@ -177,142 +166,22 @@ step(0.3); check("screenshot taken", shots==1)
 fire("SCREENSHOT_SUCCEEDED"); step(0.5)
 check("back after shot", UIParent.alpha==1)
 HUDFade.Peek(false)
-HUDFadeDB.hideCursor = true
-HUDFade.Hide(); step(4)
-check("pointer hidden when still", mouselook==true)
-check("mouse look slowed to a tenth while hidden, up and down to almost nothing", tonumber(cvars.cameraYawMoveSpeed)==18 and tonumber(cvars.cameraPitchMoveSpeed)==0.09 and HUDFadeDB.restore.cameraYawMoveSpeed=="180" and HUDFadeDB.restore.cameraPitchMoveSpeed=="90")
-step(1); check("idle timer not reset by our own mouselook", HUDFade.state.lastInput < GetTime() - 0.9)
-step(1); facingV=1.0004; step(0.2); check("tiny drift does not count as a move", mouselook==true)
-facingV=1.2; step(0.2)
-check("pointer back when the mouse moves", mouselook==false)
-check("mouse look speed back to normal", cvars.cameraYawMoveSpeed=="180" and cvars.cameraPitchMoveSpeed=="90" and HUDFadeDB.restore.cameraYawMoveSpeed==nil)
-step(3); check("hidden again after 2 s still", mouselook==true)
-fire("PLAYER_REGEN_DISABLED"); step(0.2)
-check("pointer back in combat", mouselook==false)
-fire("PLAYER_REGEN_ENABLED")
-step(5); check("hidden again out of combat", mouselook==true)
 local keyFrame; for _,f in ipairs(frames) do if f.scripts.OnKeyDown then keyFrame=f end end
-fire("PLAYER_STARTED_MOVING"); step(3); check("auto-run keeps the pointer hidden", mouselook==true)
-keyFrame.scripts.OnKeyDown(keyFrame, "D"); check("a turn key gives the pointer back before the game sees it", mouselook==false)
-step(3); check("not hidden while turning with keys", mouselook==false)
-keyFrame.scripts.OnKeyUp(keyFrame, "D"); step(0.2); check("hidden again after turning", mouselook==true)
-flying=true; step(0.2); check("pointer back while flying (the camera sets your pitch)", mouselook==false)
-flying=false; step(0.2); check("hidden again after landing", mouselook==true)
-fire("PLAYER_STOPPED_MOVING");HUDFade.Hide(); step(2)
+HUDFade.Hide(); step(4)
+check("the mouse pointer is left alone (that option is gone)", mouselookStarted==nil and next(mlBinds)==nil)
 check("hidden before turning off", UIParent.alpha==0)
 SlashCmdList.HUDFADE("off")
-check("off shows everything at once", UIParent.alpha==1 and cvars.UnitNameNPC=="1" and Minimap.shown==true and mouselook==false)
+check("off shows everything at once", UIParent.alpha==1 and cvars.UnitNameNPC=="1" and Minimap.shown==true)
 check("off gives the Hide UI key back", binds["ALT-Z"]==nil)
 HUDFade.Toggle(); step(2); check("toggle does nothing while off", UIParent.alpha==1)
 step(70); check("no idle hiding while off", UIParent.alpha==1)
 SlashCmdList.HUDFADE("on")
 check("on takes the key again", binds["ALT-Z"]=="HUDFADE_TOGGLE")
 HUDFade.Toggle(); step(2); check("toggle works again", UIParent.alpha==0)
--- Dragging while the pointer is hidden
-HUDFade.Toggle(); step(0.5); HUDFadeDB.hideCursor = true; HUDFade.Hide(); step(4)
-check("pointer hidden before the drag", mouselook==true)
-pressLeft(); step(0.1)
-check("left drag hands over to the game's camera drag", mouselook==false)
-step(1); check("no re-hide while a button is held", mouselook==false)
-buttons.LeftButton=nil; step(3)
-check("after a left-drag the pointer stays (hiding would turn you to the camera)", mouselook==false)
-buttons.RightButton=true; step(0.1); buttons.RightButton=nil; step(0.2)
-check("a right-drag lines camera and character up: pointer hides again", mouselook==true)
-buttons.RightButton=true; step(0.1)
-check("right drag keeps the game's steering", mouselook==true)
-buttons.RightButton=nil; mouselook=false; step(0.2)
-check("pointer hides again right after a right drag", mouselook==true)
-pressLeft(); step(0.3); buttons.LeftButton=nil; step(0.2)
-fire("PLAYER_STARTED_MOVING"); step(1); check("after a drag, still visible at the start of a run", mouselook==false)
-step(1.5); check("moving with the camera following lines them up: hidden", mouselook==true)
-fire("PLAYER_STOPPED_MOVING")
-fire("PLAYER_REGEN_DISABLED"); check("pointer back as combat starts", mouselook==false)
-fire("PLAYER_REGEN_ENABLED"); step(0.3)
--- Flight paths: the route turns you, so only a click or a key brings the pointer back
-buttons.RightButton=nil; MouselookStop(); cx=cx+40; step(0.2); onTaxi=true; flying=true; step(2.5)
-check("pointer hides on a flight path (even though it counts as flying)", mouselook==true)
-check("camera kept still on a flight path while the pointer is hidden", tonumber(cvars.cameraYawMoveSpeed)==0.18 and tonumber(cvars.cameraPitchMoveSpeed)==0.09 and HUDFadeDB.restore.cameraYawMoveSpeed=="180")
-for i=1,20 do facingV=facingV+0.05; step(0.1) end
-check("the route turning you does not bring it back", mouselook==true)
-keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); check("any key brings it back on a flight path", mouselook==false)
-step(2.5); check("hidden again when still", mouselook==true)
-pressLeft(); step(0.1); check("a click brings it back", mouselook==false and cvars.cameraYawMoveSpeed=="180")
-buttons.LeftButton=nil; buttons.RightButton=true; step(0.1)
-check("a drag on a flight path turns the camera at your normal speed", cvars.cameraYawMoveSpeed=="180")
-buttons.RightButton=nil; step(2.5)
-check("hidden again before landing", mouselook==true)
-cursorDeltaV=1; step(0.3); check("a tiny mouse nudge on a flight path leaves it hidden", mouselook==true)
-cursorDeltaV=0; step(0.5); cursorDeltaV=4; step(0.3); cursorDeltaV=0
-check("moving the mouse on a flight path brings it back (where the game reports mouse movement)", mouselook==false)
-step(2.5); check("hidden again", mouselook==true)
-onTaxi=false; flying=false; step(0.1)
-check("landing hands the mouse back", mouselook==false)
-step(3); check("and waits for camera and character to line up", mouselook==false)
-buttons.RightButton=true; step(0.1); buttons.RightButton=nil; mouselook=false; step(0.2)
-check("lined up by a right-drag: hides again", mouselook==true)
--- Flying, swimming and vehicles: only if asked, and then the mouse steers
-flying=true; step(0.2); check("not hidden while flying unless asked", mouselook==false)
-check("why names the setting", HUDFade.PointerWhy():find("Also when flying") ~= nil)
-HUDFadeDB.hideCursorSteer=true; step(0.2); check("even when flying: hidden", mouselook==true)
-check("normal mouse look speed while steering", cvars.cameraYawMoveSpeed=="180")
-for i=1,20 do facingV=facingV+0.05; cursorDeltaV=5; step(0.1) end
-cursorDeltaV=0
-check("steering with the mouse keeps it hidden, and the HUD too", mouselook==true and UIParent.alpha==0)
-keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); check("any key brings it back while flying", mouselook==false)
-step(2.5); check("hidden again when still", mouselook==true)
-flying=false; step(0.2); check("still hidden after landing", mouselook==true and tonumber(cvars.cameraYawMoveSpeed)==18)
-step(0.5); facingV=facingV+0.2; step(0.2); check("on the ground a mouse move brings it back again", mouselook==false)
-swimming=true; step(2.5); check("hidden while swimming too", mouselook==true)
-facingV=facingV+0.2; step(0.2); check("steering while swimming keeps it hidden", mouselook==true)
-HUDFadeDB.activeCamera=true; facingV=facingV+0.2; step(0.2)
-check("steering counts as activity when turning the camera does", HUDFade.state.lastInput >= GetTime() - 0.25)
-HUDFadeDB.activeCamera=false; swimming=false; HUDFadeDB.hideCursorSteer=false; step(0.2)
--- Where the game reports the mouse's own movement, that brings the pointer back even with no turn
-step(0.5); check("hidden before the reported move", mouselook==true)
-cursorDeltaV=5; step(0.3); cursorDeltaV=0
-check("a reported mouse move brings it back with no turn at all", mouselook==false)
-step(2.5); check("hidden again, sideways speed still a tenth (never frozen off a flight path)", mouselook==true and tonumber(cvars.cameraYawMoveSpeed)==18 and HUDFadeDB.mouseReported==nil)
--- After a left-drag the pointer still goes once the mouse has been still for the idle time
-step(0.5); check("hidden before the left-drag", mouselook==true)
-pressLeft(); step(0.3); buttons.LeftButton=nil; step(3)
-check("left-drag: the pointer stays for now", mouselook==false)
-step(28); check("and hides after the idle time without moving the mouse", mouselook==true)
--- A right-drag hands it straight back, even if the game parked the pointer somewhere else meanwhile
-buttons.RightButton=true; step(0.2); cx=cx+300; step(0.5)
-buttons.RightButton=nil; mouselook=false; cx=cx-300
-for _,f in ipairs(frames) do if f.shown and f.scripts.OnUpdate then f.scripts.OnUpdate(f, 0.01) end end
-check("right-drag release: hidden again the same frame", mouselook==true)
-step(0.5); check("and the HUD stays hidden", mouselook==true and UIParent.alpha==0)
--- Auto-running with the pointer hidden: a left press only brings the pointer back (it would end auto-run)
-check("standing still, the left button is left alone", mlBinds.BUTTON1 == nil)
-fire("PLAYER_STARTED_MOVING"); step(0.2)
-check("auto-running: the left button points at the wake button", mlBinds.BUTTON1 == "CLICK HUDFadeWakeButton:LeftButton")
-check("why says a left click only brings it back", HUDFade.PointerWhy():find("left click only") ~= nil and mouselook==true)
-pressLeft(); step(0.1); check("a left press brings the pointer back", mouselook==false and mlBinds.BUTTON1 == nil)
-buttons.LeftButton=nil; step(2.5); check("that press turned no camera: hidden again soon", mouselook==true)
-fire("PLAYER_REGEN_DISABLED"); check("combat undoes it before lockdown", mlBinds.BUTTON1 == nil and mouselook==false)
-fire("PLAYER_REGEN_ENABLED"); step(2.5); check("back after combat", mlBinds.BUTTON1 ~= nil and mouselook==true)
-fire("PLAYER_STOPPED_MOVING"); step(0.2); check("stopped: the left button is left alone again", mlBinds.BUTTON1 == nil and mouselook==true)
-pressLeft(); step(0.1)
-check("after stopping, the next left-drag turns the camera (the game read the change)", mouselook==false and not HUDFade.state.wakeClick)
-buttons.LeftButton=nil; step(0.1); buttons.RightButton=true; step(0.1); buttons.RightButton=nil; mouselook=false; step(2.5)
-check("(lined up again by a right-drag)", mouselook==true)
--- Hiding over an open window takes the pointer too
-cx=cx+40; HUDFade.Show(); step(0.5)
-local map = CreateFrame("Frame", "WorldMapFrame"); step(0.5)
-check("an open window keeps the HUD up", UIParent.alpha==1 and mouselook==false)
-HUDFade.Hide(); step(3)
-check("hide over an open window hides the pointer too", UIParent.alpha==0 and mouselook==true)
-facingV=facingV+0.2; step(0.2); check("pointer back on the first move over the window", mouselook==false)
-step(3); check("and hides again when still", mouselook==true)
-map:Hide(); step(0.5)
--- Something else ends our mouselook (alt-tab): no retry until the mouse really moves
-MouselookStop(); step(4); check("no retry after the game ends it (safe while alt-tabbed)", mouselook==false)
-cx=cx+40; step(3); check("retries after a real mouse move", mouselook==true)
 -- A stuck non-movement key must not keep you "active" (Tab used to)
 -- Idle and what counts as activity
 HUDFade.Toggle(); step(0.5); check("shown for the idle tests", UIParent.alpha==1)
-HUDFadeDB.idleSeconds = 5; HUDFadeDB.hideCursor = false
+HUDFadeDB.idleSeconds = 5
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); step(0.2)
 keyFrame.scripts.OnKeyDown(keyFrame, "NUMLOCK"); fire("PLAYER_STARTED_MOVING"); step(7)
 check("auto-run after Tab (key-up never seen) still goes idle", UIParent.alpha==0)
@@ -386,15 +255,8 @@ local function why()
 end
 cx=cx+40; step(2.4); local w = why()
 check("why: enabled, idle progress", w:find("Enabled", 1, true) and w:find("HUD visible due to: Not enough time idling (2/5s)", 1, true))
-HUDFadeDB.hideCursor=true; buttons.RightButton=true; step(0.1); buttons.RightButton=nil; mouselook=false; step(5); w = why()
-check("why: hidden by idle", w:find("HUD hidden due to: Idle for", 1, true))
-check("why: pointer line", w:find("Pointer: hidden", 1, true))
-local log = table.concat(HUDFade.Log(), "\n")
-check("the log keeps what the pointer did", log:find("%d hidden") and log:find("shown: ") and log:find("HUD hiding", 1, true))
-check("the log stays short", #HUDFade.Log() <= 60)
-out = {}; print = function(s) out[#out+1] = s end; SlashCmdList.HUDFADE("log"); print = realPrint
-check("/hudfade log prints it", #out >= 2 and #out <= 21)
-HUDFadeDB.hideCursor=false
+step(5); w = why()
+check("why: hidden by idle", w:find("HUD hidden due to: Idle for", 1, true) and not w:find("Pointer", 1, true))
 HUDFadeDB.showTarget=true; target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5); w = why()
 check("why: several causes on their own lines", w:find("HUD visible due to:\n   - Target\n   - Not enough time idling", 1, true))
 target=false; fire("PLAYER_TARGET_CHANGED")
@@ -501,11 +363,8 @@ step(30); check("and keeps it visible while you arrange frames", UIParent.alpha=
 check("/hudfade why names unlock mode", table.concat(HUDFade.Explain(), " "):find("EllesmereUI unlock mode", 1, true) ~= nil)
 HUDFadeDB.awayMinutes=2; step(91); check("until the away time", UIParent.alpha==0)
 EllesmereUI._unlockModeSessionActive = false; HUDFadeDB.awayMinutes=10
-HUDFade.Hide(); HUDFadeDB.hideCursor=true; cx=cx+40; step(3)
-local slowedAtLogout = tonumber(cvars.cameraYawMoveSpeed)==18
+HUDFade.Hide(); cx=cx+40; step(3)
 fire("PLAYER_LOGOUT")
-check("logout puts mouse look speed back", slowedAtLogout and cvars.cameraYawMoveSpeed=="180")
-HUDFadeDB.hideCursor=false
 check("logout puts the interface back exactly", #UIParent.points==2 and UIParent.points[1][4]==0 and UIParent.points[1][5]==0 and UIParent.points[2][4]==0 and UIParent.points[2][5]==0)
 step(1.1); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
 SlashCmdList.HUDFADE("shift off")
@@ -513,21 +372,43 @@ check("turning it off puts the interface back exactly", #UIParent.points==2 and 
 fire("PLAYER_LOGOUT")
 check("logout restores cvars", cvars.UnitNameNPC=="1" and cvars.nameplateShowEnemies=="1" and next(HUDFadeDB.restore)==nil)
 SlashCmdList.HUDFADE("reset")
+-- Presets
+check("defaults are the Everything preset", HUDFade.CurrentPreset()==1 and HUDFade.PRESETS[1].name=="Everything")
+HUDFade.ApplyPreset(2)
+check("Like the game's Hide UI: names and glow stay, nameplates and minimap go", HUDFadeDB.hideNames==false and HUDFadeDB.hideOutline==false and HUDFadeDB.hideNameplates==true and HUDFadeDB.hideMinimap==true and HUDFade.CurrentPreset()==2)
+HUDFade.Show(); step(0.5); HUDFade.Hide(); step(2)
+check("with it, hiding leaves names and the glow but takes nameplates", UIParent.alpha==0 and cvars.UnitNameNPC=="1" and cvars.Outline=="2" and cvars.nameplateShowEnemies=="0")
+HUDFade.Show(); step(0.5)
+HUDFadeDB.hideNameplates=false
+check("changing a box by hand makes it Custom", HUDFade.CurrentPreset()==nil)
+SlashCmdList.HUDFADE("reset")
+check("reset is the Everything preset again", HUDFade.CurrentPreset()==1)
 -- The settings pages build (font strings and templates are stubs here)
 local function stub() return setmetatable({}, {__index=function() return function() end end}) end
 for _,f in ipairs(frames) do rawset(f, "CreateFontString", stub) end
 local realCreate = CreateFrame
 local templates = {}
+local presetMenu
 CreateFrame = function(kind, name, parent, template)
   if template then templates[#templates+1] = template end
   if template == "ScrollFrameTemplate" then error("no such template") end -- (the fallback must cope)
-  local f = realCreate(kind, name, parent); rawset(f, "CreateFontString", stub); return f
+  local f = realCreate(kind, name, parent); rawset(f, "CreateFontString", stub)
+  if template == "WowStyle1DropdownTemplate" then presetMenu = f; rawset(f, "SetupMenu", function(self, gen) self.gen = gen end) end
+  return f
 end
 local pages = {}
 for _,f in ipairs(frames) do if f.scripts.OnShow then pages[#pages+1]=f end end
 local ok, err = pcall(function() for _,f in ipairs(pages) do f.scripts.OnShow(f) end end)
 check("settings pages build without errors ("..tostring(err)..")", ok and #pages==2)
 check("the main page scrolls (falls back to the older scroll template)", table.concat(templates, " "):find("UIPanelScrollFrameTemplate") ~= nil)
+local radios = {}
+if presetMenu and presetMenu.gen then
+  presetMenu.gen(presetMenu, { CreateRadio=function(_, text, isSel, setSel) radios[#radios+1]={ text=text, isSel=isSel, setSel=setSel } end })
+end
+check("the preset menu lists both presets", #radios==2 and radios[1].text=="Everything" and radios[1].isSel()==true)
+if #radios==2 then radios[2].setSel() end
+check("choosing one in the menu applies it", HUDFade.CurrentPreset()==2 and HUDFadeDB.hideNames==false and radios[2].isSel()==true)
+SlashCmdList.HUDFADE("reset")
 CreateFrame = realCreate
 -- The away slider stops at 2, 5, 10, 15, 20, 30, 45 and 60 minutes
 local sliders = {}

@@ -19,12 +19,12 @@ HUD Fade never touches a single frame. It fades the layer every UI frame sits on
 - **Hide when idle:** after 30 seconds with no input (adjustable) the HUD fades out, and comes back the moment you move the mouse or press a key. Looking around with the camera and auto-running don't count as input unless you want them to, so you can take in the view with no HUD. A window or chat box left open keeps the HUD only until you have been away for 10 minutes (adjustable).
 - **Clean screenshots:** a key that takes a screenshot with no HUD, names, chat bubbles or target glow, then puts everything back.
 - **Hold to peek:** a key that shows the HUD only while held.
-- **Hide the mouse pointer** when it's still (optional, experimental).
+- **Two presets:** Everything (the default) also hides names, nameplates and the target circle and glow; Like the game's Hide UI leaves the world as Alt+Z does. Or tick your own.
 - **Pixel shift (burn-in protection):** every few minutes the whole interface moves a pixel or two, Blizzard UI and EllesmereUI together, so nothing sits on the same pixels for hours. Never during combat, and your layout is never changed. Optional.
 - **One switch for everything:** turn HUD Fade off and on from its settings, a key, or `/hudfade off` / `/hudfade on`, with no reload.
 - **Dim instead of hide:** set the hidden opacity anywhere from 0% (true black) to 50%.
 
-Type `/hudfade` for settings, `/hudfade toggle` to hide or show the HUD, `/hudfade why` to see what is keeping it visible, `/hudfade shift now` to try pixel shift, `/hudfade what` to name a UI element under the mouse, and `/hudfade log` to see what the HUD and the pointer did lately.
+Type `/hudfade` for settings, `/hudfade toggle` to hide or show the HUD, `/hudfade why` to see what is keeping it visible, `/hudfade shift now` to try pixel shift, and `/hudfade what` to name a UI element under the mouse.
 
 ## Install
 
