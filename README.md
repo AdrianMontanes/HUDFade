@@ -13,8 +13,8 @@ Made for immersion, OLED burn-in care and HUD-free screenshots and other content
 [![CurseForge](https://img.shields.io/badge/CurseForge-HUD%20Fade-F16436?logo=curseforge&logoColor=white)](https://www.curseforge.com/wow/addons/hud-fade)
 [![Latest release](https://img.shields.io/github/v/release/AdrianMontanes/HUDFade?label=release&color=F7752A)](https://github.com/AdrianMontanes/HUDFade/releases/latest)
 [![WoW Forever and Retail](https://img.shields.io/badge/WoW-Forever%20%7C%20Retail-148EFF)](#install)
-[![MIT license](https://img.shields.io/github/license/AdrianMontanes/HUDFade?color=blue)](LICENSE)
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/44dri44n)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-29ABE0?logo=kofi&logoColor=FF5E5B)](https://ko-fi.com/44dri44n)
 
 <img src=".github/media/hudfade-fade.webp" alt="The whole UI, EllesmereUI included, fading out with one key">
 
