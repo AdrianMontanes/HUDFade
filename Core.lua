@@ -663,9 +663,9 @@ function HUDFade.Explain(skipTyping)
 	end
 
 	local causes = {}
-	local reasons = currentReasons(idle)
+	local active = currentReasons(idle)
 	for _, k in ipairs(REASON_ORDER) do
-		local v = reasons[k]
+		local v = active[k]
 		if v and k == "window" then
 			if not (skipTyping and v == "typing") then causes[#causes + 1] = windowText(v) end
 		elseif v then
