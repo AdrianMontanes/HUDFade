@@ -5,9 +5,12 @@ local HUDFade = ns.core
 
 local ICON = "Interface\\AddOns\\HUDFade\\media\\icon"
 
-local function click(button)
+local function click(button, frame)
 	if button == "RightButton" then
 		HUDFade.ToggleEnabled()
+		-- Rebuild the tooltip under the mouse so it shows the new state.
+		local onEnter = frame and frame.GetScript and frame:GetScript("OnEnter")
+		if onEnter and frame:IsMouseOver() then onEnter(frame) end
 	elseif IsShiftKeyDown() then
 		HUDFade.CleanScreenshot()
 	else
@@ -15,13 +18,12 @@ local function click(button)
 	end
 end
 
-local function fillTooltip(tt, onMinimap)
+local function fillTooltip(tt)
 	local on = HUDFade.db.enabled
 	tt:AddDoubleLine("HUD Fade", on and "On" or "Off", 1, 1, 1, on and 0.3 or 0.6, on and 1 or 0.6, on and 0.3 or 0.6)
 	tt:AddDoubleLine("Left-click", "Settings", 1, 0.82, 0, 1, 1, 1)
 	tt:AddDoubleLine("Right-click", on and "Turn off" or "Turn on", 1, 0.82, 0, 1, 1, 1)
 	tt:AddDoubleLine("Shift-click", "Screenshot without the HUD", 1, 0.82, 0, 1, 1, 1)
-	if onMinimap then tt:AddDoubleLine("Drag", "Move this button", 1, 0.82, 0, 1, 1, 1) end
 end
 
 -- The compartment passes the mouse button as a string in older clients and inside a table in newer ones.
@@ -60,8 +62,8 @@ loader:SetScript("OnEvent", function()
 		type = "launcher",
 		label = "HUD Fade",
 		icon = ICON,
-		OnClick = function(_, button) click(button) end,
-		OnTooltipShow = function(tt) fillTooltip(tt, true) end,
+		OnClick = function(frame, button) click(button, frame) end,
+		OnTooltipShow = fillTooltip,
 	})
 	DBIcon:Register("HUDFade", launcher, db.minimap)
 end)

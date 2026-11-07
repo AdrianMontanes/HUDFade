@@ -884,8 +884,13 @@ local realOpen = HUDFade.OpenOptions
 HUDFade.OpenOptions = function() opened = opened + 1 end
 icon.obj.OnClick(nil, "LeftButton")
 check("left-click opens the settings", opened == 1)
-icon.obj.OnClick(nil, "RightButton")
+tipLines = {}
+local minimapButton = newFrame()
+function minimapButton:IsMouseOver() return true end
+function minimapButton:GetScript() return function() icon.obj.OnTooltipShow(fakeTip) end end
+icon.obj.OnClick(minimapButton, "RightButton")
 check("right-click turns HUD Fade off", HUDFadeDB.enabled == false)
+check("and the tooltip under the mouse shows it", table.concat(tipLines, ", "):find("HUD Fade: Off", 1, true) ~= nil)
 HUDFade_OnCompartmentClick("HUDFade", { buttonName = "RightButton" })
 check("right-click in the addon compartment turns it back on", HUDFadeDB.enabled == true)
 HUDFade_OnCompartmentClick("HUDFade", "LeftButton")

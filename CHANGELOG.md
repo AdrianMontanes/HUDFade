@@ -1,8 +1,12 @@
 # HUD Fade
 
+## 0.3.9
+
+- The minimap button's tooltip now switches between On and Off as soon as you right-click it, and no longer has a Drag line.
+
 ## 0.3.8
 
-- New **minimap button**: left-click opens the settings, right-click turns HUD Fade on or off, shift-click takes a screenshot without the HUD, and drag moves it. Hover it to see these. EllesmereUI's minimap picks it up like other addon buttons.
+- New **minimap button**: left-click opens the settings, right-click turns HUD Fade on or off, shift-click takes a screenshot without the HUD, and drag moves it. Hover it to see the clicks. EllesmereUI's minimap picks it up like other addon buttons.
 - The entry in the minimap's addon menu now does the same clicks and shows the same tooltip.
 - New **Minimap button** box under General and `/hudfade minimap` to show or hide it.
 
