@@ -41,12 +41,8 @@ Hover it and type `/hudfade what`, then [open an issue](https://github.com/Adria
 
 ## Recording in HDR
 
-If you capture your HDR gameplay, try [REPLAYD](https://replayd.download/with/hudfade), a game recorder for Windows.
+If you capture your HDR gameplay, try [REPLAYD](https://replayd.download/with/hudfade), my native game recorder for Windows, built for scratch with HDR and OLED monitors in mind.
 
 ## License
 
 MIT
-
-## Credits
-
-Made by Adrian, with much of the code written with the help of Claude, Anthropic's AI assistant.
