@@ -75,6 +75,16 @@ local function say(msg)
 end
 HUDFade.Print = say
 
+-- A short record of what the pointer and the HUD did, kept in the saved variables (/hudfade log), for bugs that
+-- are hard to catch in the act.
+local function note(msg)
+	if not DB then return end
+	local log = DB.log
+	if type(log) ~= "table" then log = {} DB.log = log end
+	log[#log + 1] = string.format("%s %.1f %s", date and date("%H:%M:%S") or "", now(), msg)
+	while #log > 60 do table.remove(log, 1) end
+end
+
 -- Since 12.0 the game hands addons some values as "secrets" (a target frame's range fade, for one). Comparing a
 -- secret or doing maths on it is an error, so anything read from a frame goes through ask(): it calls the method
 -- safely and gives back nil for an error or a secret, which the code below treats as "could not tell".
@@ -432,6 +442,7 @@ local function setTarget(a, instant)
 		state.textPending = false
 		if state.cvarsHidden then showGameText() end
 	end
+	if (a < 0.999) ~= (state.target < 0.999) then note(a < 0.999 and "HUD hiding" or "HUD showing") end
 	state.target = a
 	if instant then
 		apply(a)
@@ -628,7 +639,7 @@ function HUDFade.Explain(skipTyping)
 		if #why == 0 then why[1] = "Something just ended, so it is hiding again" end
 		listLines(lines, "HUD hidden due to:", why)
 		local p = HUDFade.PointerWhy()
-		if p then lines[#lines + 1] = (p == "hidden" or p == "about to hide") and ("Pointer: " .. p) or ("Pointer visible due to: " .. p) end
+		if p then lines[#lines + 1] = (p:find("^hidden") or p == "about to hide") and ("Pointer: " .. p) or ("Pointer visible due to: " .. p) end
 		return lines
 	end
 
@@ -729,13 +740,15 @@ local startedAt = 0
 local SETTLE, TURN = 0.4, 0.006
 
 -- That turn is also why the camera moved a little before the pointer came back. So while the pointer is hidden,
--- mouse look speed is turned down to a tenth: the turn is too small to see but still enough to notice (the turn is
--- the one sure way to see the mouse move while the pointer is hidden). On a flight path the route turns you anyway,
--- so the turn is not watched there and the speed goes down to almost nothing: the camera stays still until you
--- click or drag. The real speeds wait in the saved variables like the names above, so even a crash gets them back at
--- the next login. Right-drags and steering while flying keep the normal speed.
+-- mouse look speed is turned down to a tenth: the turn is too small to see but still enough to notice. Where the game
+-- also reports the mouse's own movement (GetCursorDelta), that is used too, and once it has been seen to work the
+-- speed goes down to almost nothing: the camera stays still until the pointer is back. That also covers sitting down
+-- (your character does not turn there, so only the camera moved) and flight paths (the route turns you). The real
+-- speeds wait in the saved variables like the names above, so even a crash gets them back at the next login.
+-- Right-drags and steering while flying keep the normal speed.
 local LOOK_CVARS = { "cameraYawMoveSpeed", "cameraPitchMoveSpeed" }
-local LOOK_SLOW, TURN_SLOW, LOOK_TAXI = 0.1, 0.0008, 0.001
+local LOOK_SLOW, TURN_SLOW, LOOK_STILL = 0.1, 0.0008, 0.001
+local MOVE_PX = 8 -- (mouse movement, in pixels the game reports, that brings the pointer back)
 local mouseSlowed = false -- (the share of your mouse look speed in use while hidden, or false for all of it)
 
 local function slowMouse(share)
@@ -762,7 +775,7 @@ end
 
 local function lookShare()
 	if state.steering then return false end
-	return state.onTaxi and LOOK_TAXI or LOOK_SLOW
+	return (state.onTaxi or DB.mouseReported) and LOOK_STILL or LOOK_SLOW
 end
 
 -- How far the mouse moved since the last frame, where the game can tell (nil where it cannot).
@@ -773,7 +786,8 @@ local function cursorDelta()
 	if not ok or type(dx) ~= "number" or type(dy) ~= "number" then return nil end
 	return math.abs(dx) + math.abs(dy)
 end
-local taxiMoved, taxiStill = 0, 0
+local moved, movedAt = 0, 0 -- (reported mouse movement since the pointer hid; a stop of 0.3 s forgets small nudges)
+
 
 local function getFacing()
 	if not GetPlayerFacing then return nil end
@@ -797,22 +811,26 @@ local function syncLeftOverride()
 	local want = (ours and state.moving) and true or false
 	if want == leftOverridden or not SetMouselookOverrideBinding then return end
 	if InCombatLockdown and InCombatLockdown() then return end
-	if pcall(SetMouselookOverrideBinding, "BUTTON1", want and WAKE_BIND or nil) then leftOverridden = want end
+	if pcall(SetMouselookOverrideBinding, "BUTTON1", want and WAKE_BIND or nil) then
+		leftOverridden = want
+		note(want and "left button: wake only" or "left button: normal")
+	end
 end
 
-local function releasePointer(stop, moved)
+local function releasePointer(stop, byMouse, why)
 	if not ours then return end
 	ours = false
 	slowMouse(false)
 	if stop and MouselookStop then pcall(MouselookStop) end
 	syncLeftOverride()
-	if moved then state.lastMouseMove = now() end
+	if byMouse then state.lastMouseMove = now() end
+	note("shown: " .. (why or "?"))
 end
 
 wake:SetScript("OnClick", function()
 	if not ours then return end
 	state.wakeClick = true -- (this press turned nothing, so it is no camera drag: see cameraFree below)
-	releasePointer(true, true)
+	releasePointer(true, true, "left click while moving")
 end)
 
 local function hidePointer()
@@ -827,10 +845,11 @@ local function hidePointer()
 		return
 	end
 	slowMouse(lookShare())
-	taxiMoved = 0
+	moved = 0
 	facing = getFacing()
 	startedAt = now()
 	state.cameraFree = false -- (hiding turned your character to the camera)
+	note("hidden" .. (state.moving and " (moving)" or ""))
 end
 
 -- After a right-drag the game shows the pointer again as you let go. This checks every frame for a moment after a
@@ -843,7 +862,9 @@ releaseOnKey = function(key)
 	-- With the pointer hidden, the turn keys would strafe instead of turn: give it back first (this runs before the
 	-- game acts on the key). Where a mouse move does not bring it back (secret facing, a flight path, steering with
 	-- the mouse), any key does.
-	if isTurnKey(key) or not facing or state.onTaxi or state.steering then releasePointer(true, true) end
+	if isTurnKey(key) or not facing or state.onTaxi or state.steering then
+		releasePointer(true, true, "key " .. tostring(key))
+	end
 end
 
 local watcher = CreateFrame("Frame")
@@ -852,53 +873,60 @@ watcher:SetScript("OnUpdate", function()
 	local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
 	local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
 	if right then
-		releasePointer(false) -- (right drag steers anyway: the game's own drag carries on from here)
+		releasePointer(false, false, "right button") -- (right drag steers anyway: the game's own drag carries on)
 		dragEnd:Show()
 		return
 	elseif left then
 		-- Left drag only turns the camera, but with our mouselook still on it would steer your character too.
 		-- Switch ours off so the game's own camera drag takes over.
-		releasePointer(true)
+		releasePointer(true, false, "left button")
 		return
 	end
 	if IsMouselooking and not IsMouselooking() then
 		-- Something else ended it (alt-tab, the game, another addon). Wait for a real mouse move before trying again:
 		-- trying while WoW is in the background can move the pointer on your other screens.
-		releasePointer(false)
+		releasePointer(false, false, "the game ended it (alt-tab?)")
 		state.pointerRefused = true
 		return
 	end
-	-- On a flight path the route turns you, so the facing says nothing about the mouse, and the camera stays still
-	-- (see LOOK_TAXI). A click or a key brings the pointer back, and so does moving the mouse where the game reports
-	-- the mouse's own movement.
-	if state.onTaxi then
-		local d = cursorDelta()
-		if not d then return end
-		local t = now()
+	local t = now()
+	-- The mouse's own movement, where the game reports it. While the mouse steers you (flying with "even when flying")
+	-- it is meant to move, so it only counts elsewhere.
+	local d = t - startedAt >= SETTLE and cursorDelta() or nil
+	if d then
 		if d > 0 then
-			taxiMoved, taxiStill = taxiMoved + d, t
-		elseif t - taxiStill > 0.3 then
-			taxiMoved = 0
+			moved, movedAt = moved + d, t
+		elseif t - movedAt > 0.3 then
+			moved = 0
 		end
-		if taxiMoved > 8 and t - startedAt >= SETTLE then releasePointer(true, true) end
-		return
+		if moved > MOVE_PX and not state.steering then
+			DB.mouseReported = true -- (from now on the camera can stay still while hidden: see LOOK_STILL)
+			releasePointer(true, true, "mouse moved")
+			return
+		end
 	end
+	-- On a flight path the route turns you, so the facing says nothing about the mouse: a click or a key brings the
+	-- pointer back (and the mouse, where the game reports it, as above).
+	if state.onTaxi then return end
 	local f = getFacing()
 	if not f then return end
-	if not facing or now() - startedAt < SETTLE then
+	if not facing or t - startedAt < SETTLE then
 		facing = f
 		return
 	end
-	local d = math.abs(f - facing)
-	if d > math.pi then d = 2 * math.pi - d end -- (the facing wraps around at a full turn)
-	if d <= (mouseSlowed and TURN_SLOW or TURN) then return end
+	local turn = math.abs(f - facing)
+	if turn > math.pi then turn = 2 * math.pi - turn end -- (the facing wraps around at a full turn)
+	if turn <= (mouseSlowed and TURN_SLOW or TURN) then return end
 	if state.steering then
 		-- Flying, swimming or in a vehicle with "even when flying" on: the mouse steers you and the pointer stays
 		-- hidden. Steering counts like turning the camera with the right button, so only if you want it to.
 		facing = f
 		if DB.activeCamera then input() end
 	else
-		releasePointer(true, true)
+		-- The facing noticed the move. If the game reported some of it too, it can be trusted from now on; if it
+		-- reported nothing, it does not see the mouse while the pointer is hidden.
+		if moved >= 2 then DB.mouseReported = true elseif d and moved == 0 then state.mouseUnreported = true end
+		releasePointer(true, true, "mouse moved (turned you)")
 	end
 end)
 
@@ -983,12 +1011,12 @@ local function pollMouse()
 	if state.onTaxi and not taxi then
 		-- Landed. The mouse was turning the camera, not you: hand it back, and since the camera may now point anywhere,
 		-- wait for it to line up with your character before hiding again (see cameraFollows above).
-		releasePointer(true)
+		releasePointer(true, false, "landed")
 		state.cameraFree, state.cameraFreeSince = true, t
 	elseif state.steering and not steer and ours then
 		-- Landed, or out of the water or the vehicle. Camera and character are lined up (the mouse was steering), so
 		-- the pointer can stay hidden: from here a mouse move brings it back again.
-		facing, startedAt = getFacing(), t
+		facing, startedAt, moved = getFacing(), t, 0
 	end
 	state.onTaxi, state.steering = taxi, steer
 	if ours then slowMouse(lookShare()) end
@@ -1008,6 +1036,7 @@ local function pollMouse()
 		elseif math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2 then
 			lastX, lastY = x, y
 			state.lastMouseMove = t
+			if state.pointerRefused then note("mouse moved after the game took it") end
 			state.pointerRefused = false
 			-- While the HUD is up, using the mouse keeps it up. Once it has hidden for being idle, the mouse only brings it
 			-- back if you want it to (otherwise keys do, e.g. coming back from alt-tab).
@@ -1024,13 +1053,15 @@ local function pollMouse()
 		if not left then state.wakeClick = false end
 	end
 	-- You started or stopped moving with the pointer hidden. Starting to move points the left button at the wake
-	-- button, and mouselook is restarted around it so the game picks the change up (within one frame: the pointer
-	-- does not show).
-	if ours and (state.moving and true or false) ~= leftOverridden then
-		local was = leftOverridden
-		if not was and MouselookStop then pcall(MouselookStop) end
+	-- button, stopping points it back. The game only reads the change when mouselook starts, so mouselook is
+	-- restarted around it (within one frame: the pointer does not show). Without that, after you stopped, your next
+	-- left-drag only brought the pointer back instead of turning the camera.
+	if ours and (state.moving and true or false) ~= leftOverridden and not (InCombatLockdown and InCombatLockdown()) then
+		if MouselookStop then pcall(MouselookStop) end
 		syncLeftOverride()
-		if not was and MouselookStart then pcall(MouselookStart) end
+		if MouselookStart then pcall(MouselookStart) end
+		-- (camera and character were lined up already; still, let the facing settle again)
+		facing, startedAt, moved = getFacing(), t, 0
 	end
 	if right then state.cameraFree = false end
 	if state.cameraFree and state.moving and not anyButton and cameraFollows() then
@@ -1051,7 +1082,8 @@ local function pollMouse()
 	end
 	-- (with a button held, the watcher above decides how to hand the mouse back)
 	if anyButton and DB.hideCursor then dragEnd:Show() end
-	if not pointerBlock(t, anyButton) then hidePointer() elseif ours and not anyButton then releasePointer(true) end
+	local block = pointerBlock(t, anyButton)
+	if not block then hidePointer() elseif ours and not anyButton then releasePointer(true, false, block) end
 end
 
 local dragGone
@@ -1072,9 +1104,20 @@ dragEnd:SetScript("OnUpdate", function(self)
 	if not pointerBlock(t, false) then hidePointer() end
 end)
 
+function HUDFade.Log()
+	return type(DB.log) == "table" and DB.log or {}
+end
+
 function HUDFade.PointerWhy()
 	if not (DB.enabled and DB.hideCursor) then return nil end
-	if ours then return leftOverridden and "hidden (moving: a left click only brings it back)" or "hidden" end
+	if ours then
+		if leftOverridden then return "hidden (moving: a left click only brings it back)" end
+		if DB.mouseReported then return "hidden (the game reports mouse moves, so the camera stays still)" end
+		if state.mouseUnreported then
+			return "hidden (the game does not report mouse moves while hidden: a move turns the camera a little)"
+		end
+		return "hidden"
+	end
 	local anyButton = IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton"))
 	return pointerBlock(now(), anyButton) or "about to hide"
 end
@@ -1120,7 +1163,7 @@ end
 -- The switch for the whole addon. Off: HUD fully back, names and minimap back, your Hide UI key does its normal job.
 function HUDFade.SetEnabled(on)
 	DB.enabled = on and true or false
-	releasePointer(true)
+	releasePointer(true, false, on and "switched on" or "switched off")
 	state.hudOff = false
 	state.peek = false
 	wipe(state.suppressed)
@@ -1476,7 +1519,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "PLAYER_REGEN_DISABLED" then
 		-- Runs just before combat lockdown starts: the last moment nameplates can be turned back on.
 		state.inCombat = true
-		releasePointer(true)
+		releasePointer(true, false, "combat")
 		cvarsBack(PLATE_CVARS)
 		update(DB.showCombat)
 	elseif event == "PLAYER_REGEN_ENABLED" then

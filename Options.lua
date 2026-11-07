@@ -200,7 +200,7 @@ local function build()
 	checkbox("hideMinimap", "Minimap",
 		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, so the minimap is switched off instead.", -252)
 	checkbox("hideCursor", "Mouse pointer when still",
-		"Experimental. Out of combat, the pointer disappears after 2 seconds without moving the mouse, and moving the mouse brings it back. While it is hidden, mouse look speed is turned down to a tenth, so that first move barely turns the camera (your setting comes back with the pointer). On a flight path the camera stays still while the pointer is hidden: a click or any key brings the pointer back, and dragging looks around as usual. After a left-drag it stays until a right-drag or a short run lines camera and character up again, since hiding it turns your character to the camera; if neither happens it hides anyway once the mouse has been still for your idle time. Flying, swimming and in vehicles it stays, unless Also when flying or swimming is on.", -278)
+		"Experimental. Out of combat, the pointer disappears after 2 seconds without moving the mouse, and moving the mouse brings it back. While it is hidden, mouse look speed is turned down to a tenth, so that first move barely turns the camera (your setting comes back with the pointer). Once HUD Fade has seen that the game reports mouse moves, it turns it down to almost nothing, so the camera stays still, also sitting down and on flight paths. A click or any key on a flight path brings the pointer back too, and dragging looks around as usual. After a left-drag it stays until a right-drag or a short run lines camera and character up again, since hiding it turns your character to the camera; if neither happens it hides anyway once the mouse has been still for your idle time. Flying, swimming and in vehicles it stays, unless Also when flying or swimming is on.", -278)
 	checkbox("hideCursorSteer", "Also when flying or swimming",
 		"Also hide the pointer while flying, swimming or in a vehicle. There the mouse steers you, as when you hold the right button, and a click or any key brings the pointer back. When the pointer hides, your character turns to where the camera points, up or down too, so if you are moving you may climb or dive a little. Needs Mouse pointer when still.", -278, 320)
 
@@ -303,6 +303,7 @@ local HELP = {
 	"/hudfade shift [on | off | now] - pixel shift status, switch it, or move now to see it",
 	"/hudfade why - what is keeping the HUD visible right now",
 	"/hudfade what - name the UI element under the mouse (for reporting something that stays visible)",
+	"/hudfade log - what the HUD and the mouse pointer did lately (for reporting a bug)",
 	"/hudfade reset - back to default settings",
 }
 
@@ -344,6 +345,10 @@ SlashCmdList.HUDFADE = function(msg)
 		say(HUDFade.ShiftStatus())
 	elseif cmd == "what" then
 		say("under the mouse: " .. HUDFade.DescribeMouseFrame())
+	elseif cmd == "log" then
+		local log = HUDFade.Log()
+		say(#log > 0 and "the last things the HUD and the pointer did (oldest first):" or "nothing logged yet.")
+		for i = math.max(1, #log - 19), #log do print(log[i]) end
 	elseif cmd == "reset" then
 		local d = db()
 		for k, v in pairs(HUDFade.DEFAULTS) do

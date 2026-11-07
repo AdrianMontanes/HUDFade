@@ -1,5 +1,11 @@
 # HUD Fade
 
+## 0.2.17
+
+- Hidden pointer: after you stopped moving with the pointer hidden, the next left-drag only brought the pointer back instead of turning the camera. Fixed: the game now picks up the change to the left button as you stop.
+- Hidden pointer: moving the mouse while sitting down turned the camera slowly and left the pointer hidden (your character doesn't turn while sitting, which is how a move was noticed). Where the game reports the mouse's own movement, that now brings the pointer back too, and once that has been seen to work the camera stays still while the pointer is hidden.
+- New `/hudfade log`: the last things the HUD and the pointer did, also kept in the saved variables, for reporting bugs that are hard to catch.
+
 ## 0.2.16
 
 - "Names and chat bubbles" also switches off the circle under your target while the HUD is hidden, where the game still has that setting. Your target's own name always shows: the game has no setting for it.
