@@ -22,6 +22,7 @@ local DEFAULTS = {
 	enabled = true,        -- the whole addon; off = the game behaves as if HUD Fade were not installed
 	startHidden = false,   -- begin each session with the HUD hidden
 	idleSeconds = 30,      -- hide after this long with no input at all (0 = never)
+	awayMinutes = 10,      -- after this long with no input, hide even over an open window or chat box
 	hiddenAlpha = 0,       -- opacity while hidden (0 = true black)
 	fadeOut = 1.0,         -- seconds to fade out
 	fadeIn = 0.2,          -- seconds to fade back in
@@ -447,11 +448,19 @@ local function windowOpen()
 	return nil
 end
 
--- Reasons that always bring the HUD back, even when you are away.
+-- Away: the safety net over the idle time. After this long with no input at all the HUD hides even over an open
+-- window or chat box, and even with Hide when idle set to Never, so a window left open while you are away from the
+-- keyboard never keeps it on screen for hours. Combat still brings it back.
+local function isAway(t)
+	local minutes = tonumber(DB.awayMinutes) or 10
+	return minutes > 0 and (t - state.lastInput) >= minutes * 60
+end
+
+-- Reasons that bring the HUD back even while you are idle.
 local function urgentReasons(out)
 	if state.peek then out.peek = true end
 	if DB.showCombat and state.inCombat then out.combat = true end
-	if DB.showWindows then
+	if DB.showWindows and not isAway(now()) then
 		local w = windowOpen()
 		if w then out.window = w end
 	end
@@ -480,7 +489,20 @@ local function currentReasons(idle)
 end
 
 local function isIdle(t)
-	return DB.idleSeconds > 0 and (t - state.lastInput) >= DB.idleSeconds
+	return (DB.idleSeconds > 0 and (t - state.lastInput) >= DB.idleSeconds) or isAway(t)
+end
+
+-- Typing (chat and the like) is activity: once you send, the idle timer starts from there. A chat box left open
+-- without typing is not.
+local function typing(t)
+	local box = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
+	if not box then
+		state.typingIn, state.typed = nil, nil
+		return
+	end
+	local text = ask(box, "GetText")
+	if box ~= state.typingIn or text ~= state.typed then state.lastInput = t end
+	state.typingIn, state.typed = box, text
 end
 
 local function update(instant)
@@ -494,9 +516,7 @@ local function update(instant)
 		if state.target < 0.999 or state.current < 0.999 or state.cvarsHidden then setTarget(1, true) end
 		return
 	end
-	-- Typing (chat and the like) is activity: once you send, the idle timer starts from there, not from when you
-	-- opened the chat box.
-	if DB.showWindows and GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus() then state.lastInput = t end
+	if DB.showWindows then typing(t) end
 	local idle = isIdle(t)
 	local base = not state.hudOff and not idle
 	local reason = next(currentReasons(idle)) ~= nil
@@ -548,7 +568,11 @@ function HUDFade.Explain(skipTyping)
 	if state.target < 0.999 then
 		local why = {}
 		if state.hudOff then why[#why + 1] = "You hid it" end
-		if idle then why[#why + 1] = string.format("Idle for %ds", idleFor) end
+		if isAway(t) then
+			why[#why + 1] = string.format("Away for %d min (open windows no longer keep it visible)", math.floor(idleFor / 60))
+		elseif idle then
+			why[#why + 1] = string.format("Idle for %ds", idleFor)
+		end
 		if state.shot then why[#why + 1] = "Taking a screenshot" end
 		if #why == 0 then why[1] = "Something just ended, so it is hiding again" end
 		listLines(lines, "HUD hidden due to:", why)
@@ -794,12 +818,14 @@ watcher:SetScript("OnUpdate", function()
 end)
 
 -- An open window keeps the pointer only while it is also what keeps the HUD up. Once you hide the HUD over a
--- window (or windows are set not to bring the HUD back), the pointer can go as well. Typing and an item held on
--- the pointer always keep it.
+-- window (or windows are set not to bring the HUD back), the pointer can go as well. An item held on the pointer
+-- always keeps it; typing keeps it until you have been away (see isAway).
 local function windowKeepsPointer()
 	local w = windowOpen()
 	if not w then return false end
-	if w == "typing" or w == "holding something on the cursor" then return true end
+	if w == "holding something on the cursor" then return true end
+	if isAway(now()) then return false end -- (a window or chat box left open while you are away)
+	if w == "typing" then return true end
 	return DB.showWindows and not state.suppressed.window
 end
 
@@ -1093,6 +1119,7 @@ local shift = {
 	sig = nil,      -- what its anchors looked like right after our last move
 	px = 0, py = 0, -- current offset, in pixels
 	inset = 0,      -- how far in from every screen edge the interface is kept, in pixels
+	ex = 0, ey = 0, -- how far that took the interface's bottom-left corner, in its own units
 	fights = 0, since = 0, gaveUp = false,
 	lastSync = -100,
 }
@@ -1131,6 +1158,17 @@ local function placeUI(t, dx, dy, inset)
 	end
 end
 
+-- How far a move takes the interface's bottom-left corner (EllesmereUI counts from there, see below).
+local function cornerMove(t, dx, dy, inset)
+	local x, y
+	for _, a in ipairs(t) do
+		local point = a[1]
+		if point:find("LEFT") then x = dx + inset elseif not x and point:find("RIGHT") then x = dx - inset end
+		if point:find("BOTTOM") then y = dy + inset elseif not y and point:find("TOP") then y = dy - inset end
+	end
+	return x or dx, y or dy
+end
+
 -- One screen pixel in UIParent's own units.
 local function pixelUnit()
 	local factor
@@ -1160,17 +1198,20 @@ local function layoutModeOpen()
 	return false
 end
 
+local hookEUI
+
 local function syncShift(force)
 	local t = now()
 	if not force and t - shift.lastSync < 1 then return end
 	shift.lastSync = t
+	hookEUI()
 	if not DB or InCombatLockdown() then return end
 	local cur = readAnchors(UIParent)
 	if not cur then return end
 	-- Something else moved the interface since our last move (an ultrawide addon, the game): that is the new normal.
 	-- If it keeps happening, step aside instead of fighting over it.
 	if shift.base and anchorSig(cur) ~= shift.sig then
-		shift.base, shift.px, shift.py, shift.inset = nil, 0, 0, 0
+		shift.base, shift.px, shift.py, shift.inset, shift.ex, shift.ey = nil, 0, 0, 0, 0, 0
 		if t - shift.since > 10 then shift.since, shift.fights = t, 0 end
 		shift.fights = shift.fights + 1
 		if shift.fights >= 3 and not shift.gaveUp then
@@ -1196,23 +1237,78 @@ local function syncShift(force)
 	if not pcall(placeUI, base, px * unit, py * unit, inset * unit) then
 		-- Never leave the interface without a position.
 		pcall(placeUI, base, 0, 0, 0)
-		shift.base, shift.px, shift.py, shift.inset, shift.gaveUp = nil, 0, 0, 0, true
+		shift.base, shift.px, shift.py, shift.inset, shift.ex, shift.ey, shift.gaveUp = nil, 0, 0, 0, 0, 0, true
 		say("pixel shift stopped: the game refused to move the interface.")
 		return
 	end
 	if inset == 0 then -- (back in its own place: nothing of ours to keep)
-		shift.base, shift.sig = nil, nil
+		shift.base, shift.sig, shift.ex, shift.ey = nil, nil, 0, 0
 	else
 		shift.base, shift.sig = base, anchorSig(readAnchors(UIParent))
+		shift.ex, shift.ey = cornerMove(base, px * unit, py * unit, inset * unit)
 	end
 	shift.px, shift.py, shift.inset, shift.unit = px, py, inset, unit
+end
+
+-- EllesmereUI places an element you anchored to another one (its cast bar under the player frame, a bar on top of
+-- another) from where that one is on screen, counting from the screen's corner as if the interface started there.
+-- With the interface moved, that puts the element off by the move a second time. It shows on anything placed again
+-- while shifted, like a cast bar appearing for a cast. Those placements go through EllesmereUI.SetFramePoint, so for
+-- anchored elements we take our move back out of what it asks for. Its unlock mode gets the interface back in place
+-- the moment it opens, before any mover reads a position.
+local euiHook, euiListening
+
+local function euiAnchored(eui, frame)
+	local db = _G.EllesmereUIDB
+	local anchors = type(db) == "table" and db.unlockAnchors
+	local elements = eui._unlockRegisteredElements
+	if type(anchors) ~= "table" or type(elements) ~= "table" then return false end
+	for key, info in pairs(anchors) do
+		local element = type(info) == "table" and info.target and elements[key]
+		if type(element) == "table" and type(element.getFrame) == "function" then
+			local ok, f = pcall(element.getFrame, key)
+			if ok and f == frame then return true end
+		end
+	end
+	return false
+end
+
+local function euiPlace(eui, frame, rel, relPoint, x, y)
+	if rel ~= UIParent or relPoint ~= "CENTER" then return x, y end
+	if type(readable(x)) ~= "number" or type(readable(y)) ~= "number" then return x, y end
+	if not euiAnchored(eui, frame) then return x, y end
+	local fs, us = ask(frame, "GetEffectiveScale"), ask(UIParent, "GetEffectiveScale")
+	if type(fs) ~= "number" or type(us) ~= "number" or fs <= 0 or us <= 0 then return x, y end
+	return x - shift.ex * us / fs, y - shift.ey * us / fs
+end
+
+hookEUI = function()
+	local eui = _G.EllesmereUI
+	if type(eui) ~= "table" then return end
+	local set = eui.SetFramePoint
+	if not euiHook and type(set) == "function" then -- (once: every addon has loaded by now)
+		euiHook = function(frame, point, rel, relPoint, x, y, ...)
+			if shift.ex ~= 0 or shift.ey ~= 0 then
+				local ok, px, py = pcall(euiPlace, eui, frame, rel, relPoint, x, y)
+				if ok then x, y = px, py end
+			end
+			return set(frame, point, rel, relPoint, x, y, ...)
+		end
+		eui.SetFramePoint = euiHook
+	end
+	if not euiListening and type(eui.RegisterUnlockModeListener) == "function" then
+		euiListening = true
+		pcall(eui.RegisterUnlockModeListener, eui, "HUDFade", function(active)
+			if active then syncShift(true) end
+		end)
+	end
 end
 
 -- Nothing of the shift is saved: put the interface back in its own place before logging out or reloading, in case
 -- another addon saves frame positions from where they are on screen.
 local function restoreShift()
 	if shift.base and not InCombatLockdown() then pcall(placeUI, shift.base, 0, 0, 0) end
-	shift.base, shift.sig, shift.px, shift.py, shift.inset = nil, nil, 0, 0, 0
+	shift.base, shift.sig, shift.px, shift.py, shift.inset, shift.ex, shift.ey = nil, nil, 0, 0, 0, 0, 0
 end
 
 function HUDFade.UpdateShift()

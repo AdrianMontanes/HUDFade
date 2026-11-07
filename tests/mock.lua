@@ -310,9 +310,21 @@ check("Tab while idle-hidden, 'target' on: shows", UIParent.alpha==1)
 target=false; fire("PLAYER_TARGET_CHANGED")
 -- Typing in chat counts as activity: after sending, the idle time starts over
 step(7); check("idle-hidden before chatting", UIParent.alpha==0 and cvars.chatBubbles=="0")
-typingIn={}; step(0.5); check("typing brings the HUD and chat bubbles back", UIParent.alpha==1 and cvars.chatBubbles=="1")
-step(10); typingIn=nil; step(1.5); check("after sending, it stays up for the idle time", UIParent.alpha==1)
+local chatBox = { text = "" }; function chatBox:GetText() return self.text end
+typingIn=chatBox; step(0.5); check("typing brings the HUD and chat bubbles back", UIParent.alpha==1 and cvars.chatBubbles=="1")
+step(9.5); chatBox.text="hi"; step(0.5); typingIn=nil; step(1.5); check("after sending, it stays up for the idle time", UIParent.alpha==1)
 step(5); check("then hides again", UIParent.alpha==0)
+-- A chat box or window left open keeps the HUD only until you have been away for a while
+chatBox.text=""; typingIn=chatBox; step(0.5); check("opening the chat box brings it back", UIParent.alpha==1)
+step(30); check("left open without typing, it stays like any open window", UIParent.alpha==1)
+HUDFadeDB.awayMinutes=2; step(91); check("but hides once you have been away 2 min", UIParent.alpha==0)
+check("/hudfade why says you are away", table.concat(HUDFade.Explain(), " "):find("Away for 2 min", 1, true) ~= nil)
+typingIn=nil; HUDFadeDB.idleSeconds=0
+keyFrame.scripts.OnKeyDown(keyFrame, "W"); keyFrame.scripts.OnKeyUp(keyFrame, "W"); step(0.5)
+check("a key brings it back", UIParent.alpha==1)
+step(119); check("with Hide when idle at Never, it stays until the away time", UIParent.alpha==1)
+step(2); check("and hides once you have been away", UIParent.alpha==0)
+HUDFadeDB.idleSeconds=5; HUDFadeDB.awayMinutes=10
 -- "You move the mouse" off: the mouse keeps the HUD up, but only keys bring it back once idle
 HUDFadeDB.mouseWakes=false; step(7); check("idle-hidden", UIParent.alpha==0)
 cx=cx+40; step(0.5); check("mouse wake off: moving the mouse leaves it hidden", UIParent.alpha==0)
@@ -406,6 +418,27 @@ EllesmereUI = { _unlockModeSessionActive = true }
 function EllesmereUI:IsUnlockModeActive() return self._unlockModeSessionActive == true end
 step(1.1); check("back in place while EllesmereUI's unlock mode is open", select(1, uiOffset())==0 and select(1, uiInset())==0)
 EllesmereUI._unlockModeSessionActive = false; repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
+-- EllesmereUI places an anchored element (its cast bar under the player frame) counting from the screen corner
+local placed, listeners = {}, {}
+EllesmereUI.SetFramePoint = function(f, p, rel, rp, x, y) placed[f] = { p, rel, rp, x, y } end
+function EllesmereUI:RegisterUnlockModeListener(owner, fn) listeners[owner] = fn end
+local castbar, freeBar, playerFrame = CreateFrame("Frame"), CreateFrame("Frame"), CreateFrame("Frame")
+function castbar:GetEffectiveScale() return 0.5 end
+EllesmereUI._unlockRegisteredElements = { playerCastbar = { getFrame = function() return castbar end },
+  freeBar = { getFrame = function() return freeBar end } }
+EllesmereUIDB = { unlockAnchors = { playerCastbar = { target = "player", side = "BOTTOM" } } }
+repeat HUDFade.ShiftNow() until select(1, uiOffset())==1 and select(2, uiOffset())==1
+EllesmereUI.SetFramePoint(castbar, "CENTER", UIParent, "CENTER", 100, -50)
+EllesmereUI.SetFramePoint(freeBar, "CENTER", UIParent, "CENTER", 100, -50)
+check("an anchored EllesmereUI element doesn't get the shift twice", placed[castbar][4]==96 and placed[castbar][5]==-54)
+check("other EllesmereUI placements are left as asked", placed[freeBar][4]==100 and placed[freeBar][5]==-50)
+EllesmereUI.SetFramePoint(castbar, "TOP", playerFrame, "BOTTOM", 3, 4)
+check("an element hung off another frame is left as asked", placed[castbar][4]==3 and placed[castbar][5]==4)
+EllesmereUI._unlockModeSessionActive = true; if listeners.HUDFade then listeners.HUDFade(true) end
+check("EllesmereUI's unlock mode gets the interface back the moment it opens", select(1, uiOffset())==0 and select(1, uiInset())==0)
+EllesmereUI.SetFramePoint(castbar, "CENTER", UIParent, "CENTER", 100, -50)
+check("nothing taken out while the interface is in its place", placed[castbar][4]==100 and placed[castbar][5]==-50)
+EllesmereUI._unlockModeSessionActive = false; repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
 SlashCmdList.HUDFADE("off")
 check("addon off puts the interface back", select(1, uiOffset())==0 and select(2, uiOffset())==0)
 SlashCmdList.HUDFADE("on"); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
@@ -443,4 +476,11 @@ local ok, err = pcall(function() for _,f in ipairs(pages) do f.scripts.OnShow(f)
 check("settings pages build without errors ("..tostring(err)..")", ok and #pages==2)
 check("the main page scrolls (falls back to the older scroll template)", table.concat(templates, " "):find("UIPanelScrollFrameTemplate") ~= nil)
 CreateFrame = realCreate
+-- The away slider stops at 2, 5, 10, 15, 20, 30, 45 and 60 minutes
+local sliders = {}
+for _,f in ipairs(frames) do if f.scripts.OnValueChanged then sliders[#sliders+1]=f end end
+for _,f in ipairs(sliders) do f.scripts.OnValueChanged(f, 8) end
+local top = HUDFadeDB.awayMinutes
+for _,f in ipairs(sliders) do f.scripts.OnValueChanged(f, 3) end
+check("the away slider goes up to an hour in bigger steps", top==60 and HUDFadeDB.awayMinutes==10)
 os.exit(failed and 1 or 0)

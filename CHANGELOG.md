@@ -1,5 +1,12 @@
 # HUD Fade
 
+## 0.2.12
+
+- Pixel shift: EllesmereUI elements anchored to another one (like the cast bar under the player frame) no longer appear offset when they show up while the interface is shifted. EllesmereUI places them counting from the screen corner, so HUD Fade now takes its own move back out of those placements.
+- Pixel shift now steps aside the moment EllesmereUI's unlock mode opens, instead of up to a second later.
+- New setting "Hide anyway when away" (2 minutes to 1 hour, 10 minutes by default): after that long with no input, the HUD hides even over an open window or chat box, and even with Hide when idle set to Never. Combat still brings it back.
+- A chat box left open no longer counts as typing. Only actually typing counts as activity.
+
 ## 0.2.11
 
 - Shorter, clearer settings: "While HUD is hidden, also hide" (names and chat bubbles, nameplates, minimap, mouse pointer), "While HUD is hidden, bring it back on" (mouse moving, combat, target, casting, death, windows) and "Keep HUD visible during" (camera turning, auto-run or follow).

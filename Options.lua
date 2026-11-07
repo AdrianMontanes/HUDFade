@@ -71,7 +71,11 @@ local function checkbox(key, label, tip, y, x, onChange, master)
 	return cb
 end
 
+-- scale: the setting is the slider's value divided by this. Or a list of the values the slider stops at, in order
+-- (then minV, maxV and step are ignored).
 local function slider(key, label, minV, maxV, step, y, x, fmt, scale)
+	local stops = type(scale) == "table" and scale or nil
+	if stops then minV, maxV, step, scale = 1, #stops, 1, 1 end
 	scale = scale or 1
 	local s = CreateFrame("Slider", nil, canvas, BackdropTemplateMixin and "BackdropTemplate" or nil)
 	s:SetPoint("TOPLEFT", (x or 16) + 4, y - 18)
@@ -97,13 +101,22 @@ local function slider(key, label, minV, maxV, step, y, x, fmt, scale)
 	end
 	s:SetScript("OnValueChanged", function(self, v)
 		v = math.floor(v / step + 0.5) * step
+		if stops then v = stops[math.max(1, math.min(#stops, v))] end
 		db()[key] = v / scale
 		show(v)
 		HUDFade.Update()
 	end)
 	s.refresh = function()
 		local v = (db()[key] or 0) * scale
-		s:SetValue(v)
+		if stops then
+			local best = 1
+			for i, stop in ipairs(stops) do
+				if math.abs(stop - v) < math.abs(stops[best] - v) then best = i end
+			end
+			s:SetValue(best)
+		else
+			s:SetValue(v)
+		end
 		show(v)
 	end
 	s.setActive = function(on)
@@ -158,7 +171,7 @@ local built = false
 local function build()
 	if built then return end
 	built = true
-	canvas = scrollPage(panel, 610)
+	canvas = scrollPage(panel, 700)
 	pageTitle("HUD Fade")
 	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
 
@@ -200,18 +213,21 @@ local function build()
 	checkbox("showDead", "Death",
 		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. As a ghost everything works as usual.", -390)
 	checkbox("showWindows", "Windows, popups, bags or typing",
-		"Any window you open, a popup, your bags, or typing in chat. Typing also counts as activity, so after you send a message the HUD stays for your idle time.", -390, 320)
+		"Any window you open, a popup, your bags, or typing in chat. Typing also counts as activity, so after you send a message the HUD stays for your idle time. A window or chat box left open keeps the HUD only until Hide anyway when away.", -390, 320)
 
 	header("Timing", -430)
 	slider("idleSeconds", "Hide when idle", 0, 120, 5, -450, 16,
 		function(v) return v == 0 and "Never" or string.format("after %d s", v) end)
-	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -450, 320, "%d%%", 100)
+	slider("awayMinutes", "Hide anyway when away", nil, nil, nil, -450, 320,
+		function(v) return v >= 60 and "after 1 hour" or string.format("after %d min", v) end, { 2, 5, 10, 15, 20, 30, 45, 60 })
 	slider("fadeOut", "Fade out", 0, 3, 0.1, -500, 16, "%.1f s")
 	slider("fadeIn", "Fade in", 0, 1, 0.05, -500, 320, "%.2f s")
+	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -550, 16, "%d%%", 100)
+	note("Hide anyway when away: after this long with no input, the HUD hides even over an open window or chat box, and even with Hide when idle set to Never. Combat still brings it back.", -594)
 
-	header("Keep HUD visible during", -548)
-	checkbox("activeCamera", "Camera turning", "On: looking around with the mouse keeps the HUD visible and brings it back. Off: you can look around and the HUD stays hidden.", -568)
-	checkbox("activeAutorun", "Auto-run or follow", "On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides while your character keeps moving. Holding a movement key always counts as activity.", -568, 320)
+	header("Keep HUD visible during", -640)
+	checkbox("activeCamera", "Camera turning", "On: looking around with the mouse keeps the HUD visible and brings it back. Off: you can look around and the HUD stays hidden.", -660)
+	checkbox("activeAutorun", "Auto-run or follow", "On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides while your character keeps moving. Holding a movement key always counts as activity.", -660, 320)
 
 	-- Burn-in protection page
 	canvas = shiftPanel
