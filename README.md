@@ -16,6 +16,8 @@ Made for immersion, OLED burn-in care and HUD-free screenshots and other content
 [![MIT license](https://img.shields.io/github/license/AdrianMontanes/HUDFade?color=blue)](LICENSE)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/44dri44n)
 
+<img src=".github/media/hudfade-fade.webp" alt="The whole UI, EllesmereUI included, fading out with one key">
+
 </div>
 
 ## Why HUD Fade
