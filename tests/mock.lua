@@ -244,8 +244,6 @@ check("hidden again before landing", mouselook==true)
 cursorDeltaV=1; step(0.3); check("a tiny mouse nudge on a flight path leaves it hidden", mouselook==true)
 cursorDeltaV=0; step(0.5); cursorDeltaV=4; step(0.3); cursorDeltaV=0
 check("moving the mouse on a flight path brings it back (where the game reports mouse movement)", mouselook==false)
-check("the game reporting mouse moves is remembered", HUDFadeDB.mouseReported==true)
-HUDFadeDB.mouseReported=nil -- (the tests below start from a game that has not shown it yet)
 step(2.5); check("hidden again", mouselook==true)
 onTaxi=false; flying=false; step(0.1)
 check("landing hands the mouse back", mouselook==false)
@@ -269,14 +267,11 @@ facingV=facingV+0.2; step(0.2); check("steering while swimming keeps it hidden",
 HUDFadeDB.activeCamera=true; facingV=facingV+0.2; step(0.2)
 check("steering counts as activity when turning the camera does", HUDFade.state.lastInput >= GetTime() - 0.25)
 HUDFadeDB.activeCamera=false; swimming=false; HUDFadeDB.hideCursorSteer=false; step(0.2)
--- Sitting down your character does not turn, only the camera: where the game reports the mouse, that brings it back
-step(0.5); check("hidden before sitting", mouselook==true and HUDFadeDB.mouseReported==nil)
+-- Where the game reports the mouse's own movement, that brings the pointer back even with no turn
+step(0.5); check("hidden before the reported move", mouselook==true)
 cursorDeltaV=5; step(0.3); cursorDeltaV=0
-check("sitting: a mouse move brings it back with no turn at all", mouselook==false and HUDFadeDB.mouseReported==true)
-step(2.5); check("hidden again, and now the camera stays still", mouselook==true and tonumber(cvars.cameraYawMoveSpeed)==0.18)
-check("why says the camera stays still", HUDFade.PointerWhy():find("camera stays still") ~= nil)
-HUDFadeDB.mouseReported=nil; step(0.2)
-check("(back to the tenth for the tests below)", tonumber(cvars.cameraYawMoveSpeed)==18)
+check("a reported mouse move brings it back with no turn at all", mouselook==false)
+step(2.5); check("hidden again, sideways speed still a tenth (never frozen off a flight path)", mouselook==true and tonumber(cvars.cameraYawMoveSpeed)==18 and HUDFadeDB.mouseReported==nil)
 -- After a left-drag the pointer still goes once the mouse has been still for the idle time
 step(0.5); check("hidden before the left-drag", mouselook==true)
 pressLeft(); step(0.3); buttons.LeftButton=nil; step(3)

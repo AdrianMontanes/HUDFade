@@ -747,9 +747,11 @@ local SETTLE, TURN = 0.4, 0.006
 -- That turn is also why the camera moved a little before the pointer came back. So while the pointer is hidden,
 -- mouse look speed is turned down to a tenth: the turn is too small to see but still enough to notice. Up and down
 -- the mouse only tilts the camera, which turns nothing that can be noticed, so that speed goes down to almost
--- nothing: the camera stays level and the next sideways move brings the pointer back. Where the game also reports the
--- mouse's own movement (GetCursorDelta), that is used too, and once it has been seen to work the sideways speed goes
--- down to almost nothing as well. On flight paths it always does (the route turns you, so the turn says nothing).
+-- nothing: the camera stays level and the next sideways move brings the pointer back. On flight paths the sideways
+-- speed goes down to almost nothing as well (the route turns you, so the turn says nothing there). Sideways is never
+-- frozen anywhere else: the turn is the one sure sign of the mouse moving. (0.2.17 froze it once the game seemed to
+-- report mouse moves, but that report turned out unreliable while the pointer is hidden: the camera then only
+-- tilted and the pointer never came back.)
 -- The real speeds wait in the saved variables like the names above, so even a crash gets them back at the next
 -- login. Right-drags and steering while flying keep the normal speed.
 local LOOK_CVARS = { "cameraYawMoveSpeed", "cameraPitchMoveSpeed" }
@@ -782,7 +784,7 @@ end
 
 local function lookShare()
 	if state.steering then return false end
-	return (state.onTaxi or DB.mouseReported) and LOOK_STILL or LOOK_SLOW
+	return state.onTaxi and LOOK_STILL or LOOK_SLOW
 end
 
 -- How far the mouse moved since the last frame, where the game can tell (nil where it cannot).
@@ -907,7 +909,6 @@ watcher:SetScript("OnUpdate", function()
 			moved = 0
 		end
 		if moved > MOVE_PX and not state.steering then
-			DB.mouseReported = true -- (from now on the camera can stay still while hidden: see LOOK_STILL)
 			releasePointer(true, true, "mouse moved")
 			return
 		end
@@ -930,9 +931,6 @@ watcher:SetScript("OnUpdate", function()
 		facing = f
 		if DB.activeCamera then input() end
 	else
-		-- The facing noticed the move. If the game reported some of it too, it can be trusted from now on; if it
-		-- reported nothing, it does not see the mouse while the pointer is hidden.
-		if moved >= 2 then DB.mouseReported = true elseif d and moved == 0 then state.mouseUnreported = true end
 		releasePointer(true, true, "mouse moved (turned you)")
 	end
 end)
@@ -1118,12 +1116,7 @@ end
 function HUDFade.PointerWhy()
 	if not (DB.enabled and DB.hideCursor) then return nil end
 	if ours then
-		if leftOverridden then return "hidden (moving: a left click only brings it back)" end
-		if DB.mouseReported then return "hidden (the game reports mouse moves, so the camera stays still)" end
-		if state.mouseUnreported then
-			return "hidden (the game does not report mouse moves while hidden: a move turns the camera a little)"
-		end
-		return "hidden"
+		return leftOverridden and "hidden (moving: a left click only brings it back)" or "hidden"
 	end
 	local anyButton = IsMouseButtonDown and (IsMouseButtonDown("LeftButton") or IsMouseButtonDown("RightButton"))
 	return pointerBlock(now(), anyButton) or "about to hide"
@@ -1495,6 +1488,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		DB = HUDFadeDB
 		copyDefaults(DEFAULTS, DB)
 		DB.restore = DB.restore or {}
+		DB.mouseReported = nil -- (left by 0.2.17-0.2.19, see LOOK_STILL)
 		HUDFade.db = DB
 	elseif event == "PLAYER_LOGIN" then
 		-- Logged out or crashed while hidden last time: put the names and nameplates back first.

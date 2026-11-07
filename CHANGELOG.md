@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.20
+
+- Hidden pointer: fixed the camera getting stuck tilting only up and down, with the pointer not coming back until a click or key (seen after alt-tab and while sitting). 0.2.17 slowed sideways looking to almost nothing once the game seemed to report mouse moves, but that report is unreliable while the pointer is hidden, so the sideways move that brings the pointer back no longer registered. Sideways speed now stays at a tenth everywhere except flight paths.
+
 ## 0.2.19
 
 - Hidden pointer: moving the mouse up or down tilted the camera without bringing the pointer back (a tilt turns nothing HUD Fade can notice). While the pointer is hidden, the up-and-down look speed now drops to almost nothing, so the camera stays level, and the next sideways move brings the pointer back as before.
