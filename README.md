@@ -24,6 +24,8 @@ Made for immersion, OLED burn-in care and HUD-free screenshots and other content
 
 Most fade addons set each frame's opacity one by one, and UI addons like EllesmereUI do the same for their own mouseover rules, so the two fight: flicker, bars popping back, art showing through. HUD Fade fades the one layer every frame sits on instead, so your UI addons keep working underneath. It also handles what lives outside that layer: 3D portraits, names, chat bubbles, nameplates and the target circle.
 
+![Your UI on the left, the same view with HUD Fade on the right](.github/media/hudfade-before-after.jpg)
+
 ## Features
 
 - **One key hides everything.** Your Hide UI key (Alt+Z) now fades smoothly and is safe in combat.
