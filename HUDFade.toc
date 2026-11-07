@@ -4,6 +4,7 @@
 ## Author: Adrian
 ## Version: 0.2.20
 ## X-License: MIT
+## X-Curse-Project-ID: 1788415
 ## SavedVariables: HUDFadeDB
 ## IconTexture: Interface\AddOns\HUDFade\media\icon
 ## AddonCompartmentFunc: HUDFade_OnCompartmentClick
