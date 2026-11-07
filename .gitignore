@@ -1,3 +1,6 @@
+# Libraries, fetched by the packager (see .pkgmeta)
+Libs/
+
 # Packager output
 .release/
 *.zip

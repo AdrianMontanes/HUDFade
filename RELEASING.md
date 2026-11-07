@@ -26,6 +26,13 @@ CurseForge app only offers to people who opted in.
 - Repo secrets (Settings > Secrets and variables > Actions): `CF_API_KEY`, `WAGO_API_TOKEN`, `WOWI_API_TOKEN`.
 - Project IDs in `HUDFade.toc`: `## X-Curse-Project-ID`, `## X-Wago-ID`, `## X-WoWI-ID`.
 
+## Libraries
+
+The minimap button uses LibStub, CallbackHandler-1.0, LibDataBroker-1.1 and LibDBIcon-1.0. They are not in the
+repo: the packager downloads them into `Libs/` (listed under `externals` in `.pkgmeta`). To run the addon straight
+from a clone, copy those four folders into `Libs/` from any addon that ships them. Without them everything else
+works, just with no minimap button.
+
 ## Game versions
 
 The `## Interface:` line lists the Retail 12.x builds and `16001` for WoW Forever. The packager reads it and

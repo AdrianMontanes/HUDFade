@@ -1,7 +1,7 @@
 -- luacheck config: https://luacheck.readthedocs.io
 std = "lua51"
 max_line_length = 120
-exclude_files = { ".release/" }
+exclude_files = { ".release/", "Libs/" }
 
 ignore = {
 	"212/self", -- unused self in methods
@@ -12,6 +12,8 @@ globals = {
 	"HUDFade",
 	"HUDFadeDB",
 	"HUDFade_OnCompartmentClick",
+	"HUDFade_OnCompartmentEnter",
+	"HUDFade_OnCompartmentLeave",
 	"SLASH_HUDFADE1",
 	"SLASH_HUDFADE2",
 	"BINDING_HEADER_HUDFADE",
@@ -51,6 +53,8 @@ read_globals = {
 	"IsMouseButtonDown",
 	"IsMouselooking",
 	"issecretvalue",
+	"IsShiftKeyDown",
+	"LibStub",
 	"Minimap",
 	"PixelUtil",
 	"Screenshot",

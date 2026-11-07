@@ -29,6 +29,7 @@ Most fade addons set each frame's opacity one by one, and UI addons like Ellesme
 - **Hides when idle** after 30 seconds (adjustable). Turning the camera doesn't wake it, so you can take in the view.
 - **Clean screenshots:** a key that takes one with no HUD, names or chat bubbles, then puts everything back.
 - **Hold to peek** at the HUD while it's hidden.
+- **Minimap button:** left-click for settings, right-click to turn HUD Fade on or off, shift-click for a clean screenshot.
 - **Pixel shift:** moves the whole UI a pixel or two every few minutes to spread OLED wear. Optional, never in combat.
 - **Dim instead of hide:** hidden opacity from 0% (true black) up to 50%.
 - **Your call on the world:** hide names and nameplates too, or leave them like the game's own Hide UI does.
@@ -43,6 +44,7 @@ No setup per addon and no reload. Keys for hide/show, peek, screenshot and on/of
 | `/hudfade toggle` | Hide or show the HUD (also `show` and `hide`) |
 | `/hudfade on` / `off` | Turn HUD Fade on or off |
 | `/hudfade shot` | Take a screenshot without the HUD |
+| `/hudfade minimap` | Show or hide the minimap button |
 | `/hudfade shift` | Pixel shift status (also `on`, `off`, and `now` to see a move) |
 | `/hudfade why` | Say what is keeping the HUD visible |
 | `/hudfade what` | Name the UI element under the mouse |

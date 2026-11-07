@@ -39,6 +39,7 @@ local DEFAULTS = {
 	hideMinimap = true,    -- minimap icons ignore UIParent's alpha, so the map is hidden instead
 	replaceAltZ = true,    -- the game's Hide UI key (Alt+Z) runs our toggle instead
 	cleanPrintScreen = false, -- the game's screenshot key leaves the HUD out
+	minimapButton = true,
 	pixelShift = false,    -- burn-in protection, see Pixel shift below
 	shiftPixels = 2,       -- screen pixels
 	shiftMinutes = 3,      -- minutes between moves
@@ -862,10 +863,6 @@ function HUDFade.CleanScreenshot()
 			if state.shot then state.shot = false; update() end
 		end)
 	end)
-end
-
-function HUDFade_OnCompartmentClick()
-	if HUDFade.OpenOptions then HUDFade.OpenOptions() end
 end
 
 ---------------------------------------------------------------------------

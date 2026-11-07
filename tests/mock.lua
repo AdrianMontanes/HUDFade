@@ -17,6 +17,7 @@ local dead = false
 local mouselook = false
 local mlBinds, mouselookStarted = {}, nil
 local shots = 0
+local shiftDown = false
 local failed = false
 
 function GetTime() return T end
@@ -174,6 +175,7 @@ function GetCursorInfo() return nil end
 function GetCursorPosition() return cx, 0 end
 function IsMouseButtonDown(b) return buttons[b] or false end
 function IsMouselooking() return mouselook end
+function IsShiftKeyDown() return shiftDown end
 function UnitExists() return target end
 function UnitIsDead() return dead end
 
@@ -232,10 +234,24 @@ local function check(label, cond)
 	if not cond then failed = true end
 end
 
+-- Just enough of LibStub, LibDataBroker and LibDBIcon for the minimap button
+local icon = {}
+function icon:Register(name, obj, db)
+	self.name, self.obj, self.db, self.shown = name, obj, db, not db.hide
+end
+function icon:Show() self.shown = true end
+function icon:Hide() self.shown = false end
+local broker = {}
+function broker:NewDataObject(_, obj) return obj end
+LibStub = setmetatable({}, {
+	__call = function(_, lib) return lib == "LibDBIcon-1.0" and icon or broker end,
+})
+
 local ns = {}
 local function load(file) assert(loadfile(arg[1] .. "/" .. file))("HUDFade", ns) end
 load("Core.lua")
 load("Options.lua")
+load("MinimapButton.lua")
 
 ---------------------------------------------------------------------------
 -- Scenario
@@ -854,5 +870,38 @@ for _, f in ipairs(sliders) do f.scripts.OnValueChanged(f, 8) end
 local top = HUDFadeDB.awayMinutes
 for _, f in ipairs(sliders) do f.scripts.OnValueChanged(f, 3) end
 check("the away slider goes up to an hour in bigger steps", top == 60 and HUDFadeDB.awayMinutes == 10)
+
+-- Minimap button and addon compartment
+check("the minimap button is registered and shown",
+	icon.name == "HUDFade" and icon.shown and icon.db == HUDFadeDB.minimap)
+local tipLines = {}
+local fakeTip = {}
+function fakeTip:AddDoubleLine(left, right) tipLines[#tipLines + 1] = left .. ": " .. right end
+icon.obj.OnTooltipShow(fakeTip)
+check("its tooltip lists the clicks", table.concat(tipLines, ", "):find("Right-click: Turn off", 1, true) ~= nil)
+local opened = 0
+local realOpen = HUDFade.OpenOptions
+HUDFade.OpenOptions = function() opened = opened + 1 end
+icon.obj.OnClick(nil, "LeftButton")
+check("left-click opens the settings", opened == 1)
+icon.obj.OnClick(nil, "RightButton")
+check("right-click turns HUD Fade off", HUDFadeDB.enabled == false)
+HUDFade_OnCompartmentClick("HUDFade", { buttonName = "RightButton" })
+check("right-click in the addon compartment turns it back on", HUDFadeDB.enabled == true)
+HUDFade_OnCompartmentClick("HUDFade", "LeftButton")
+check("the addon compartment opens the settings too", opened == 2)
+HUDFade.OpenOptions = realOpen
+local shotsBefore = shots
+shiftDown = true
+icon.obj.OnClick(nil, "LeftButton")
+shiftDown = false
+step(0.3)
+check("shift-click takes a screenshot without the HUD", shots == shotsBefore + 1)
+fire("SCREENSHOT_SUCCEEDED")
+step(0.5)
+SlashCmdList.HUDFADE("minimap")
+check("/hudfade minimap hides the button", not icon.shown and HUDFadeDB.minimap.hide == true)
+SlashCmdList.HUDFADE("reset")
+check("reset shows it again", icon.shown and HUDFadeDB.minimap.hide == false)
 
 os.exit(failed and 1 or 0)

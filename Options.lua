@@ -299,6 +299,10 @@ local function build()
 		.. "There is also a separate key for this under Key Bindings > AddOns.\n\nScreenshots taken by other "
 		.. "apps, like NVIDIA's Alt+F1, can't hide the HUD: hide it first with your Hide UI key.",
 		-166, 16, HUDFade.ApplyOverrides)
+	checkbox("minimapButton", "Minimap button",
+		"Left-click it for these settings, right-click to turn HUD Fade on or off, and shift-click for a "
+		.. "screenshot without the HUD. Drag it to move it around the minimap.",
+		-166, 320, function() HUDFade.UpdateMinimapButton() end)
 
 	header("While HUD is hidden, also hide", -206)
 	presetMenu(-226)
@@ -456,6 +460,7 @@ local HELP = {
 	"/hudfade toggle | show | hide - hide or show the HUD",
 	"/hudfade on | off - turn the whole addon on or off",
 	"/hudfade shot - screenshot without the HUD",
+	"/hudfade minimap - show or hide the minimap button",
 	"/hudfade shift [on | off | now] - pixel shift status, switch it, or move now to see it",
 	"/hudfade why - what is keeping the HUD visible right now",
 	"/hudfade what - name the UI element under the mouse (for reporting something that stays visible)",
@@ -478,6 +483,11 @@ SlashCmdList.HUDFADE = function(msg)
 		HUDFade.Hide()
 	elseif cmd == "shot" or cmd == "screenshot" then
 		HUDFade.CleanScreenshot()
+	elseif cmd == "minimap" then
+		db().minimapButton = not db().minimapButton
+		HUDFade.UpdateMinimapButton()
+		refreshAll()
+		say(db().minimapButton and "minimap button shown." or "minimap button hidden. /hudfade minimap brings it back.")
 	elseif cmd == "why" then
 		-- Wait for the chat box this was typed in to close, so it doesn't count as typing.
 		C_Timer.After(0.5, function()
@@ -506,6 +516,7 @@ SlashCmdList.HUDFADE = function(msg)
 			if k ~= "welcomed" then d[k] = v end
 		end
 		HUDFade.ApplyOverrides(true)
+		HUDFade.UpdateMinimapButton()
 		HUDFade.Update()
 		say("settings reset.")
 	else
