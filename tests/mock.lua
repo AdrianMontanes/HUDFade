@@ -920,38 +920,60 @@ check("/hudfade minimap hides the button", not icon.shown and HUDFadeDB.minimap.
 SlashCmdList.HUDFADE("reset")
 check("reset shows it again", icon.shown and HUDFadeDB.minimap.hide == false)
 
--- Nameplates (EllesmereUI's names among them) follow the fade, then the nameplate CVars take them away
+-- Nameplates (EllesmereUI's names among them) follow the fade, then the nameplate CVars take them away.
+-- The game owns each nameplate's own opacity (distance fade), so the frames inside it are faded.
 HUDFade.Show()
 step(1)
 local plate = newFrame()
+plate.alpha = 0.6 -- set by the game for distance
+local name, dimmed = newFrame(), newFrame() -- e.g. Blizzard's name-only frame, an addon plate at 50%
+dimmed.alpha = 0.5
+plate.kids = { name, dimmed }
+function plate:GetChildren() return unpack(self.kids) end
 namePlates.nameplate1 = plate
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
-check("a nameplate starts at full opacity", plate.alpha == 1)
+check("a nameplate starts at full opacity", name.alpha == 1 and dimmed.alpha == 0.5)
 HUDFade.Hide()
 step(0.5)
-check("halfway through the fade it is half faded", plate.alpha > 0.2 and plate.alpha < 0.8)
+check("halfway through the fade its frames are half faded", name.alpha > 0.2 and name.alpha < 0.8
+	and math.abs(dimmed.alpha - name.alpha * 0.5) < 0.001)
+check("the nameplate's own opacity is left to the game", plate.alpha == 0.6)
+local late = newFrame() -- an addon builds its plate after we first saw the unit
+plate.kids[3] = late
+step(0.05)
+check("a frame added mid-fade fades too", late.alpha > 0 and late.alpha < 0.8)
 step(1)
-check("it fades out with the HUD before the CVars take it away", plate.alpha == 0 and cvars.nameplateShowEnemies == "0")
+check("it fades out with the HUD before the CVars take it away",
+	name.alpha == 0 and dimmed.alpha == 0 and late.alpha == 0 and cvars.nameplateShowEnemies == "0")
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
-check("the game reuses it at full opacity", plate.alpha == 1)
+check("the game reuses it at its own opacity", name.alpha == 1 and dimmed.alpha == 0.5 and late.alpha == 1)
+plate.kids[3] = nil
 HUDFadeDB.showCombat = false
 fire("PLAYER_REGEN_DISABLED")
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
 check("in combat nameplates come back at full opacity, even with the HUD hidden",
-	plate.alpha == 1 and cvars.nameplateShowEnemies == "1")
+	name.alpha == 1 and cvars.nameplateShowEnemies == "1")
 fire("PLAYER_REGEN_ENABLED")
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 HUDFadeDB.showCombat = true
 HUDFade.Show()
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
 step(0.1)
-check("a nameplate coming back fades in with the HUD", plate.alpha > 0 and plate.alpha < 1)
+check("a nameplate coming back fades in with the HUD", name.alpha > 0 and name.alpha < 1)
 step(0.5)
-check("and ends at full opacity", plate.alpha == 1)
+check("and ends at full opacity", name.alpha == 1 and dimmed.alpha == 0.5)
+local forbidden = newFrame()
+function forbidden:IsForbidden() return true end
+plate.kids[3] = forbidden
 HUDFadeDB.hideNameplates = false
 HUDFade.Hide()
 step(0.5)
-check("with nameplates not hidden, they don't fade", plate.alpha == 1)
+check("with nameplates not hidden, they don't fade", name.alpha == 1)
 HUDFadeDB.hideNameplates = true
+HUDFade.Show()
+step(1)
+HUDFade.Hide()
+step(0.5)
+check("a frame the game forbids is left alone", forbidden.alpha == 1 and name.alpha < 1)
 
 os.exit(failed and 1 or 0)

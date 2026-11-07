@@ -272,8 +272,8 @@ local function build()
 	built = true
 	canvas = scrollPage(panel, 820)
 	pageTitle("HUD Fade")
-	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and "
-		.. "take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
+	note("Fade your entire World of Warcraft UI, including addon UIs, all at once. Made for immersion, OLED burn-in "
+		.. "care and HUD-free screenshots and recordings. Bind keys under Key Bindings > AddOns > HUD Fade.", -38)
 
 	panel.master = checkbox("enabled", "Enable HUD Fade",
 		"Off: the HUD stays visible, names and minimap stay as they are, and your Hide UI key does its normal job. "

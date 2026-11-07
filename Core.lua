@@ -393,9 +393,10 @@ end
 ---------------------------------------------------------------------------
 -- Nameplates (EllesmereUI's names too) sit outside UIParent, so its fade misses them. They follow the fade
 -- until the nameplate CVars switch them off at its end. In combat, or with the option off, they stay.
+-- The game sets each nameplate's own opacity every frame (distance fade), so the frames inside it are faded.
 ---------------------------------------------------------------------------
 local plates = {} -- unit -> nameplate
-local platesFaded = setmetatable({}, { __mode = "k" })
+local platesFaded = setmetatable({}, { __mode = "k" }) -- nameplate -> { frame inside it -> its own opacity }
 
 -- 1 with the HUD fully shown, 0 at the hidden opacity, so they are gone right when the fade ends.
 local function plateAlpha(a)
@@ -405,15 +406,39 @@ local function plateAlpha(a)
 	return math.max(0, math.min(1, (a - low) / (1 - low)))
 end
 
+-- Nameplates and their frames are pooled: whatever we faded goes back to its own opacity before reuse.
+local function unfadePlate(p)
+	local kids = platesFaded[p]
+	if not kids then return end
+	platesFaded[p] = nil
+	for kid, own in pairs(kids) do pcall(kid.SetAlpha, kid, own) end
+end
+
+local function fadeKids(p, a, ok, ...)
+	if not ok then return end
+	local kids = platesFaded[p]
+	for i = 1, select("#", ...) do
+		local kid = select(i, ...)
+		local own = kids and kids[kid]
+		if own == nil and type(kid) == "table" and not ask(kid, "IsForbidden") then
+			own = ask(kid, "GetAlpha")
+			if type(own) ~= "number" then own = 1 end
+			if not kids then
+				kids = {}
+				platesFaded[p] = kids
+			end
+			kids[kid] = own
+		end
+		if own ~= nil then pcall(kid.SetAlpha, kid, own * a) end
+	end
+end
+
 local function fadePlate(p, a)
 	if a >= 0.999 then
-		-- Nameplates are pooled: one we faded must be back at full opacity before its next unit.
-		if platesFaded[p] then
-			pcall(p.SetAlpha, p, 1)
-			platesFaded[p] = nil
-		end
-	elseif not ask(p, "IsForbidden") and pcall(p.SetAlpha, p, a) then
-		platesFaded[p] = true
+		unfadePlate(p)
+	elseif not ask(p, "IsForbidden") then
+		-- New frames (an addon's plate built after ours saw the unit) are picked up on the next step.
+		fadeKids(p, a, pcall(p.GetChildren, p))
 	end
 end
 
