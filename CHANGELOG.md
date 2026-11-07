@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.14
+
+- Hidden pointer on flight paths: moving the mouse no longer turns the camera. Mouse look speed goes down to almost nothing while the pointer is hidden there, so the camera only moves when you click and drag, at your normal speed. A click or any key brings the pointer back, and moving the mouse does too where the game reports mouse movement.
+
 ## 0.2.13
 
 - Edit Mode and EllesmereUI's unlock mode count as an open window: the HUD stays visible while you arrange your frames, and only "Hide anyway when away" hides it.

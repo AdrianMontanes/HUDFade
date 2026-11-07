@@ -67,6 +67,8 @@ flying=false
 function IsFlying() return flying end
 onTaxi=false
 function UnitOnTaxi() return onTaxi end
+cursorDeltaV=0
+function GetCursorDelta() return cursorDeltaV, 0 end
 swimming=false
 function IsSwimming() return swimming end
 function EnumerateFrames(f) if not f then return frames[1] end for i,x in ipairs(frames) do if x==f then return frames[i+1] end end end
@@ -219,14 +221,20 @@ fire("PLAYER_REGEN_ENABLED"); step(0.3)
 -- Flight paths: the route turns you, so only a click or a key brings the pointer back
 buttons.RightButton=nil; MouselookStop(); cx=cx+40; step(0.2); onTaxi=true; flying=true; step(2.5)
 check("pointer hides on a flight path (even though it counts as flying)", mouselook==true)
-check("normal mouse look speed on a flight path (the mouse turns the camera there)", cvars.cameraYawMoveSpeed=="180")
+check("camera kept still on a flight path while the pointer is hidden", tonumber(cvars.cameraYawMoveSpeed)==0.18 and tonumber(cvars.cameraPitchMoveSpeed)==0.09 and HUDFadeDB.restore.cameraYawMoveSpeed=="180")
 for i=1,20 do facingV=facingV+0.05; step(0.1) end
 check("the route turning you does not bring it back", mouselook==true)
 keyFrame.scripts.OnKeyDown(keyFrame, "TAB"); check("any key brings it back on a flight path", mouselook==false)
 step(2.5); check("hidden again when still", mouselook==true)
-pressLeft(); step(0.1); check("a click brings it back", mouselook==false)
-buttons.LeftButton=nil; buttons.RightButton=true; step(0.1); buttons.RightButton=nil; step(2.5)
+pressLeft(); step(0.1); check("a click brings it back", mouselook==false and cvars.cameraYawMoveSpeed=="180")
+buttons.LeftButton=nil; buttons.RightButton=true; step(0.1)
+check("a drag on a flight path turns the camera at your normal speed", cvars.cameraYawMoveSpeed=="180")
+buttons.RightButton=nil; step(2.5)
 check("hidden again before landing", mouselook==true)
+cursorDeltaV=1; step(0.3); check("a tiny mouse nudge on a flight path leaves it hidden", mouselook==true)
+cursorDeltaV=0; step(0.5); cursorDeltaV=4; step(0.3); cursorDeltaV=0
+check("moving the mouse on a flight path brings it back (where the game reports mouse movement)", mouselook==false)
+step(2.5); check("hidden again", mouselook==true)
 onTaxi=false; flying=false; step(0.1)
 check("landing hands the mouse back", mouselook==false)
 step(3); check("and waits for camera and character to line up", mouselook==false)

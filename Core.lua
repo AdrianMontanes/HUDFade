@@ -693,30 +693,51 @@ local startedAt = 0
 local SETTLE, TURN = 0.4, 0.006
 
 -- That turn is also why the camera moved a little before the pointer came back. So while the pointer is hidden,
--- mouse look speed is turned down to a tenth: the turn is too small to see but still enough to notice (an addon
--- cannot read the mouse any other way while the pointer is hidden). The real speeds wait in the saved variables like
--- the names above, so even a crash gets them back at the next login. Right-drags, flight paths and steering while
--- flying keep the normal speed.
+-- mouse look speed is turned down to a tenth: the turn is too small to see but still enough to notice (the turn is
+-- the one sure way to see the mouse move while the pointer is hidden). On a flight path the route turns you anyway,
+-- so the turn is not watched there and the speed goes down to almost nothing: the camera stays still until you
+-- click or drag. The real speeds wait in the saved variables like the names above, so even a crash gets them back at
+-- the next login. Right-drags and steering while flying keep the normal speed.
 local LOOK_CVARS = { "cameraYawMoveSpeed", "cameraPitchMoveSpeed" }
-local LOOK_SLOW, TURN_SLOW = 0.1, 0.0008
-local mouseSlowed = false
+local LOOK_SLOW, TURN_SLOW, LOOK_TAXI = 0.1, 0.0008, 0.001
+local mouseSlowed = false -- (the share of your mouse look speed in use while hidden, or false for all of it)
 
-local function slowMouse(on)
-	on = on and true or false
-	if on == mouseSlowed or not DB then return end
-	if on then
+local function slowMouse(share)
+	share = share or false
+	if share == mouseSlowed or not DB then return end
+	if share then
 		for _, name in ipairs(LOOK_CVARS) do
-			local ok, value = pcall(getCVar, name)
-			local n = ok and tonumber(readable(value))
-			if n and n > 0 and DB.restore[name] == nil and pcall(setCVar, name, tostring(n * LOOK_SLOW)) then
+			local saved = DB.restore[name]
+			local value = saved
+			if value == nil then
+				local ok, v = pcall(getCVar, name)
+				value = ok and readable(v) or nil
+			end
+			local n = tonumber(value)
+			if n and n > 0 and pcall(setCVar, name, tostring(n * share)) and saved == nil then
 				DB.restore[name] = value
 			end
 		end
 	else
 		cvarsBack(LOOK_CVARS)
 	end
-	mouseSlowed = on
+	mouseSlowed = share
 end
+
+local function lookShare()
+	if state.steering then return false end
+	return state.onTaxi and LOOK_TAXI or LOOK_SLOW
+end
+
+-- How far the mouse moved since the last frame, where the game can tell (nil where it cannot).
+local function cursorDelta()
+	if not GetCursorDelta then return nil end
+	local ok, dx, dy = pcall(GetCursorDelta)
+	dx, dy = readable(dx), readable(dy)
+	if not ok or type(dx) ~= "number" or type(dy) ~= "number" then return nil end
+	return math.abs(dx) + math.abs(dy)
+end
+local taxiMoved, taxiStill = 0, 0
 
 local function getFacing()
 	if not GetPlayerFacing then return nil end
@@ -769,7 +790,8 @@ local function hidePointer()
 		syncLeftOverride()
 		return
 	end
-	slowMouse(not (state.onTaxi or state.steering))
+	slowMouse(lookShare())
+	taxiMoved = 0
 	facing = getFacing()
 	startedAt = now()
 	state.cameraFree = false -- (hiding turned your character to the camera)
@@ -810,9 +832,21 @@ watcher:SetScript("OnUpdate", function()
 		state.pointerRefused = true
 		return
 	end
-	-- On a flight path moving the mouse only turns the camera (you cannot steer), so the pointer stays hidden until
-	-- a click or a key.
-	if state.onTaxi then return end
+	-- On a flight path the route turns you, so the facing says nothing about the mouse, and the camera stays still
+	-- (see LOOK_TAXI). A click or a key brings the pointer back, and so does moving the mouse where the game reports
+	-- the mouse's own movement.
+	if state.onTaxi then
+		local d = cursorDelta()
+		if not d then return end
+		local t = now()
+		if d > 0 then
+			taxiMoved, taxiStill = taxiMoved + d, t
+		elseif t - taxiStill > 0.3 then
+			taxiMoved = 0
+		end
+		if taxiMoved > 8 and t - startedAt >= SETTLE then releasePointer(true, true) end
+		return
+	end
 	local f = getFacing()
 	if not f then return end
 	if not facing or now() - startedAt < SETTLE then
@@ -921,7 +955,7 @@ local function pollMouse()
 		facing, startedAt = getFacing(), t
 	end
 	state.onTaxi, state.steering = taxi, steer
-	if ours then slowMouse(not (taxi or steer)) end
+	if ours then slowMouse(lookShare()) end
 	local left = IsMouseButtonDown and IsMouseButtonDown("LeftButton")
 	local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
 	local anyButton = left or right
