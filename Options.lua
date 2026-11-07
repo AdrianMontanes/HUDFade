@@ -219,9 +219,9 @@ local function choosePreset(i)
 	refreshAll()
 end
 
-local PRESET_TIP = "Everything: names, nameplates and the target circle all go with the HUD. "
-	.. "Blizzard: as with the game's own Hide UI (Alt+Z), names, chat bubbles and the target circle stay; "
-	.. "nameplates go. Either way you keep the fade, idle hiding and the rest. "
+local PRESET_TIP = "Everything: names, nameplates, the target circle and damage numbers all go with the HUD. "
+	.. "Blizzard: as with the game's own Hide UI (Alt+Z), names, chat bubbles, the target circle and damage "
+	.. "numbers stay; nameplates go. Either way you keep the fade, idle hiding and the rest. "
 	.. "Change a box below and it shows as Custom."
 
 local function presetMenu(y)
@@ -270,7 +270,7 @@ local built = false
 local function build()
 	if built then return end
 	built = true
-	canvas = scrollPage(panel, 820)
+	canvas = scrollPage(panel, 846)
 	pageTitle("HUD Fade")
 	note("Fade your entire World of Warcraft UI, including addon UIs, all at once. Made for immersion, OLED burn-in "
 		.. "care and HUD-free screenshots and recordings. Bind keys under Key Bindings > AddOns > HUD Fade.", -38)
@@ -314,7 +314,8 @@ local function build()
 		.. "the game always shows it.",
 		-258, 16, presetChanged)
 	checkbox("hideNameplates", "Nameplates",
-		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.",
+		"Includes EllesmereUI's name-only plates over other players. They fade out and back in with the HUD, "
+		.. "in combat too.",
 		-258, 320, presetChanged)
 	checkbox("hideMinimap", "Minimap",
 		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, "
@@ -324,70 +325,75 @@ local function build()
 		"The circle under your target is switched off while the HUD is hidden and back on after. "
 		.. "So is the highlight around your own character, if you use one.",
 		-284, 320, presetChanged)
+	checkbox("hideDamage", "Damage numbers",
+		"The damage and healing numbers over your targets are part of the game world, not the UI, so they are "
+		.. "switched off while the HUD is hidden and back on after. Your own scrolling combat text is part of "
+		.. "the UI and fades with it.",
+		-310, 16, presetChanged)
 
-	header("Idle", -324)
-	slider("idleSeconds", "Hide when idle", 0, 120, 5, -344, 16,
+	header("Idle", -350)
+	slider("idleSeconds", "Hide when idle", 0, 120, 5, -370, 16,
 		function(v) return v == 0 and "Never" or string.format("after %d s", v) end, nil,
 		"After this long with no input, the HUD fades out. Moving, typing and using the mouse count as input, "
 		.. "and so do the boxes below if ticked.")
-	slider("awayMinutes", "Hide anyway when away", nil, nil, nil, -344, 320,
+	slider("awayMinutes", "Hide anyway when away", nil, nil, nil, -370, 320,
 		function(v) return v >= 60 and "after 1 hour" or string.format("after %d min", v) end,
 		{ 2, 5, 10, 15, 20, 30, 45, 60 },
 		"After this long with no input, the HUD hides even over an open window or chat box, and even with "
 		.. "Hide when idle set to Never. Combat still brings it back.")
-	note("Also counts as input:", -394)
+	note("Also counts as input:", -420)
 	checkbox("mouseWakes", "Mouse moving",
 		"After the HUD hides for being idle, moving the mouse brings it back. Off: a bumped mouse or coming back "
 		.. "from alt-tab leaves it hidden, and keys (and clicks, if ticked) bring it back. While the HUD is "
 		.. "visible, moving the mouse always keeps it visible.",
-		-410)
+		-436)
 	checkbox("mouseClicks", "Mouse clicks",
 		"After the HUD hides for being idle, a mouse click brings it back, even without moving the mouse. "
 		.. "Holding a button to move the camera doesn't count here, see Camera movement. While the HUD is "
 		.. "visible, clicking always keeps it visible.",
-		-410, 320)
+		-436, 320)
 	checkbox("activeCamera", "Camera movement",
 		"On: moving the camera with the mouse keeps the HUD visible and brings it back. "
 		.. "Off: you can look around and the HUD stays hidden.",
-		-436)
+		-462)
 	checkbox("activeAutorun", "Auto-run or follow",
 		"On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides "
 		.. "while your character keeps moving. Holding a movement key always counts as input.",
-		-436, 320)
+		-462, 320)
 
-	header("While HUD is hidden, bring it back on", -476)
+	header("While HUD is hidden, bring it back on", -502)
 	checkbox("showCombat", "Combat",
 		"Combat brings the HUD back at once, even while you are idle. If you hide it during a fight, "
-		.. "it stays hidden until that fight ends.",
-		-496)
+		.. "it stays hidden until that fight ends. Off: fights stay HUD-free too, handy for recordings.",
+		-522)
 	checkbox("showTarget", "Target",
 		"Picking a target brings the HUD back while you are playing. Once you have been idle for your idle time, "
 		.. "it hides even with a target. After you hide it with your Hide UI key, a target leaves it hidden.",
-		-496, 320)
+		-522, 320)
 	checkbox("showCasting", "Casting",
 		"Casting or channeling brings the HUD back while you are playing. After you hide it with your Hide UI "
-		.. "key, casting leaves it hidden.", -522)
+		.. "key, casting leaves it hidden.", -548)
 	checkbox("showDead", "Death",
 		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. "
 		.. "As a ghost everything works as usual.",
-		-522, 320)
+		-548, 320)
 	checkbox("showWindows", "Windows, popups, bags or typing",
 		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, "
 		.. "EllesmereUI unlock mode). Typing also counts as input, so after you send a message the HUD stays for "
 		.. "your idle time. A window or chat box left open keeps the HUD only until Hide anyway when away.",
-		-548)
+		-574)
 
-	header("Fade", -588)
-	slider("fadeOut", "Fade out", 0, 3, 0.1, -608, 16, "%.1f s")
-	slider("fadeIn", "Fade in", 0, 1, 0.05, -608, 320, "%.2f s")
-	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -658, 16, "%d%%", 100,
+	header("Fade", -614)
+	slider("fadeOut", "Fade out", 0, 3, 0.1, -634, 16, "%.1f s")
+	slider("fadeIn", "Fade in", 0, 1, 0.05, -634, 320, "%.2f s")
+	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -684, 16, "%d%%", 100,
 		"How much of the HUD stays visible while hidden: 0% is fully gone (true black on OLED), "
 		.. "higher leaves it faintly visible.")
 
-	header("Help and feedback", -712, true)
-	note("Click an address and press Ctrl+C to copy it.", -732)
-	copyBox("Addon page", "https://www.curseforge.com/wow/addons/hud-fade", -754)
-	copyBox("Report a problem", "https://github.com/AdrianMontanes/HUDFade/issues", -782)
+	header("Help and feedback", -738, true)
+	note("Click an address and press Ctrl+C to copy it.", -758)
+	copyBox("Addon page", "https://www.curseforge.com/wow/addons/hud-fade", -780)
+	copyBox("Report a problem", "https://github.com/AdrianMontanes/HUDFade/issues", -808)
 
 	-- Burn-in protection page
 	canvas = shiftPanel

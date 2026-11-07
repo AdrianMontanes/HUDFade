@@ -3,6 +3,8 @@
 ## 1.1.0
 
 - Nameplates, including EllesmereUI's names above characters, now fade out and back in with the HUD instead of vanishing all at once when the fade ends. Names the game draws itself still switch off at once: the game gives addons no way to fade them.
+- Nameplates now stay hidden in combat while the HUD is hidden, for example after you hide it mid-fight or with Combat unticked. They used to come back as soon as a fight started.
+- New **Damage numbers** option: the damage and healing numbers over your targets go with the HUD too. It is part of the Everything preset, and on unless you use the Blizzard preset.
 - After you hide the HUD with your Hide UI key, a new target or a cast no longer brings it back. It stays hidden until you press the key again, apart from combat, windows, typing and dying (each if ticked). Hiding for being idle works as before: any input, a target included, brings it back.
 - The "Target circle and glow" option is now called **Target circle**.
 

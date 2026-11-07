@@ -22,7 +22,7 @@ Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
 
 ## Why HUD Fade
 
-Most fade addons set each frame's opacity one by one, and UI addons like EllesmereUI do the same for their own mouseover rules, so the two fight: flicker, bars popping back, art showing through. HUD Fade fades the one layer every frame sits on instead, so your UI addons keep working underneath. It also handles what lives outside that layer: 3D portraits, names, chat bubbles, nameplates and the target circle.
+Most fade addons set each frame's opacity one by one, and UI addons like EllesmereUI do the same for their own mouseover rules, so the two fight: flicker, bars popping back, art showing through. HUD Fade fades the one layer every frame sits on instead, so your UI addons keep working underneath. It also handles what lives outside that layer: 3D portraits, names, chat bubbles, nameplates, damage numbers and the target circle.
 
 ![Your UI on the left, the same view with HUD Fade on the right](.github/media/hudfade-before-after.jpg)
 
@@ -36,7 +36,7 @@ Most fade addons set each frame's opacity one by one, and UI addons like Ellesme
 - **Minimap button:** left-click for settings, right-click to turn HUD Fade on or off, shift-click for a clean screenshot.
 - **Pixel shift:** moves the whole UI a pixel or two every few minutes to spread OLED wear. Optional, never in combat.
 - **Dim instead of hide:** hidden opacity from 0% (true black) up to 50%.
-- **Your call on the world:** hide names and nameplates too, or leave them like the game's own Hide UI does.
+- **Your call on the world:** hide names, nameplates and damage numbers too, or leave them like the game's own Hide UI does.
 
 No setup per addon and no reload. Keys for hide/show, peek, screenshot and on/off are in the game's Key Bindings, under AddOns.
 

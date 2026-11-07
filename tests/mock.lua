@@ -27,11 +27,14 @@ local cvars = {
 	chatBubbles = "1", cameraYawMoveSpeed = "180", cameraPitchMoveSpeed = "90",
 	UnitNameNPC = "1", UnitNameOwn = "0", ObjectSelectionCircle = "1", Outline = "2",
 	nameplateShowEnemies = "1", nameplateShowFriends = "1", nameplateShowFriendlyPlayers = "1",
+	floatingCombatTextCombatDamage_v2 = "1", floatingCombatTextCombatHealing_v2 = "1",
 }
+local refuseDamage = false -- the game ignoring a change without an error
 C_CVar = {
 	GetCVar = function(n) return cvars[n] end,
 	SetCVar = function(n, v)
 		if lockdown and n:find("nameplate") then error("blocked") end
+		if refuseDamage and n:find("floatingCombatText") then return end
 		cvars[n] = v
 	end,
 }
@@ -295,6 +298,10 @@ check("minimap hidden", Minimap.shown == false)
 Minimap:Show()
 check("minimap stays hidden if another addon shows it", Minimap.shown == false)
 check("friendly player plates off", cvars.nameplateShowFriendlyPlayers == "0")
+check("damage numbers off", cvars.floatingCombatTextCombatDamage_v2 == "0"
+	and HUDFadeDB.restore.floatingCombatTextCombatDamage_v2 == "1" and cvars.floatingCombatTextCombatHealing_v2 == "0")
+check("older damage number settings the game lacks are skipped",
+	HUDFadeDB.restore.floatingCombatTextCombatDamage == nil)
 
 -- After the hide key, a new target leaves the HUD hidden, but a window brings it back for a moment
 setTarget(true)
@@ -305,6 +312,8 @@ local bag = CreateFrame("Frame", "ContainerFrame1")
 step(0.5)
 check("a window shows", UIParent.alpha == 1 and cvars.UnitNameNPC == "1")
 check("target circle and outlines back", cvars.ObjectSelectionCircle == "1" and cvars.Outline == "2")
+check("damage numbers back", cvars.floatingCombatTextCombatDamage_v2 == "1"
+	and HUDFadeDB.restore.floatingCombatTextCombatDamage_v2 == nil)
 check("model back", model.malpha == 1)
 check("that frame back", lone.alpha == 1)
 check("minimap back", Minimap.shown == true)
@@ -806,8 +815,9 @@ HUDFade.Show()
 step(0.5)
 HUDFade.Hide()
 step(2)
-check("with it, hiding leaves names and the circle but takes nameplates", UIParent.alpha == 0
-	and cvars.UnitNameNPC == "1" and cvars.Outline == "2" and cvars.nameplateShowEnemies == "0")
+check("with it, hiding leaves names, the circle and damage numbers but takes nameplates", UIParent.alpha == 0
+	and cvars.UnitNameNPC == "1" and cvars.Outline == "2" and cvars.floatingCombatTextCombatDamage_v2 == "1"
+	and cvars.nameplateShowEnemies == "0")
 HUDFade.Show()
 step(0.5)
 HUDFadeDB.hideNameplates = false
@@ -950,12 +960,29 @@ check("the game reuses it at its own opacity", name.alpha == 1 and dimmed.alpha 
 plate.kids[3] = nil
 HUDFadeDB.showCombat = false
 fire("PLAYER_REGEN_DISABLED")
+lockdown = true
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
-check("in combat nameplates come back at full opacity, even with the HUD hidden",
-	name.alpha == 1 and cvars.nameplateShowEnemies == "1")
+check("in combat the nameplate CVars come back, but with the HUD hidden the plates stay faded out",
+	cvars.nameplateShowEnemies == "1" and name.alpha == 0 and dimmed.alpha == 0)
+local castBar = newFrame() -- e.g. a cast bar an addon parents to the plate mid-fight
+plate.kids[3] = castBar
+step(0.2)
+check("parts added to a plate while hidden are faded out too", castBar.alpha == 0)
+name.alpha = 1 -- its addon resets it
+step(0.2)
+check("and a part its addon resets goes back to faded", name.alpha == 0)
+HUDFade.Show()
+step(0.1)
+check("showing the HUD in combat fades the plates in with it", name.alpha > 0 and name.alpha < 1)
+step(0.5)
+check("and ends at full opacity", name.alpha == 1 and dimmed.alpha == 0.5 and castBar.alpha == 1)
+lockdown = false
 fire("PLAYER_REGEN_ENABLED")
+plate.kids[3] = nil
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
 HUDFadeDB.showCombat = true
+HUDFade.Hide()
+step(2)
 HUDFade.Show()
 fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
 step(0.1)
@@ -975,5 +1002,34 @@ step(1)
 HUDFade.Hide()
 step(0.5)
 check("a frame the game forbids is left alone", forbidden.alpha == 1 and name.alpha < 1)
+
+-- A change the game refuses in combat is made once combat ends
+HUDFade.Show()
+step(1)
+HUDFadeDB.showCombat = false
+fire("PLAYER_REGEN_DISABLED")
+lockdown = true
+refuseDamage = true
+HUDFade.Hide()
+step(2)
+check("hidden in combat: damage numbers the game won't change yet are not marked as off",
+	cvars.floatingCombatTextCombatDamage_v2 == "1" and HUDFadeDB.restore.floatingCombatTextCombatDamage_v2 == nil)
+refuseDamage = false
+lockdown = false
+fire("PLAYER_REGEN_ENABLED")
+check("they go off when combat ends", cvars.floatingCombatTextCombatDamage_v2 == "0")
+fire("PLAYER_REGEN_DISABLED")
+lockdown = true
+refuseDamage = true
+HUDFade.Show()
+step(1)
+check("shown in combat: a refused change back is kept to try again",
+	cvars.floatingCombatTextCombatDamage_v2 == "0" and HUDFadeDB.restore.floatingCombatTextCombatDamage_v2 == "1")
+refuseDamage = false
+lockdown = false
+fire("PLAYER_REGEN_ENABLED")
+check("and they come back when combat ends", cvars.floatingCombatTextCombatDamage_v2 == "1"
+	and HUDFadeDB.restore.floatingCombatTextCombatDamage_v2 == nil)
+HUDFadeDB.showCombat = true
 
 os.exit(failed and 1 or 0)

@@ -32,6 +32,7 @@ local DEFAULTS = {
 	hideNames = true,      -- floating player/NPC names and chat bubbles
 	hideNameplates = true,
 	hideOutline = true,    -- target selection circle and outlines
+	hideDamage = true,     -- damage and healing numbers over targets
 	mouseWakes = true,     -- mouse movement ends idle hiding (it always counts while the HUD is visible)
 	mouseClicks = true,    -- a click ends idle hiding (it always counts while the HUD is visible)
 	activeCamera = false,  -- turning the camera counts as activity for the idle timer
@@ -112,6 +113,12 @@ local NAME_CVARS = {
 local OUTLINE_CVARS = {
 	"ObjectSelectionCircle", "Outline", "findYourselfAnywhere", "findYourselfInBG", "findYourselfInRaid",
 }
+-- Damage and healing numbers over targets (world text). The _v2 names are the current ones, the rest older clients'.
+local DAMAGE_CVARS = {
+	"floatingCombatTextCombatDamage_v2", "floatingCombatTextCombatHealing_v2", "floatingCombatTextPetMeleeDamage_v2",
+	"floatingCombatTextPetSpellDamage_v2", "floatingCombatTextCombatDamage", "floatingCombatTextCombatHealing",
+	"floatingCombatTextPetMeleeDamage", "floatingCombatTextPetSpellDamage",
+}
 -- nameplateShowFriendlyPlayers also drives EllesmereUI's name-only plates.
 local PLATE_CVARS = {
 	"nameplateShowEnemies", "nameplateShowFriends", "nameplateShowFriendlyPlayers", "nameplateShowFriendlyNPCs",
@@ -120,12 +127,18 @@ local PLATE_CVARS = {
 local getCVar = (C_CVar and C_CVar.GetCVar) or GetCVar
 local setCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
 
+local function cvarIs(name, value)
+	local ok, v = pcall(getCVar, name)
+	return ok and v == value
+end
+
 -- Old values are kept in the saved variables, so a crash while hidden still restores them at the next login.
+-- Some CVars can't change in combat; a change the game refused is tried again when combat ends.
 local function cvarsOff(list)
 	for _, name in ipairs(list) do
 		local okGet, value = pcall(getCVar, name)
 		if okGet and value ~= nil and value ~= "0" and DB.restore[name] == nil then
-			if pcall(setCVar, name, "0") then DB.restore[name] = value end
+			if pcall(setCVar, name, "0") and cvarIs(name, "0") then DB.restore[name] = value end
 		end
 	end
 end
@@ -133,7 +146,9 @@ end
 local function cvarsBack(list)
 	for _, name in ipairs(list) do
 		local value = DB.restore[name]
-		if value ~= nil and pcall(setCVar, name, value) then DB.restore[name] = nil end
+		if value ~= nil and pcall(setCVar, name, value) and (value == "0" or not cvarIs(name, "0")) then
+			DB.restore[name] = nil
+		end
 	end
 end
 
@@ -178,10 +193,21 @@ local function hookMinimap()
 	end)
 end
 
-local function hideGameText()
-	state.cvarsHidden = true
+local function worldTextOff()
 	if DB.hideNames then cvarsOff(NAME_CVARS) end
 	if DB.hideOutline then cvarsOff(OUTLINE_CVARS) end
+	if DB.hideDamage then cvarsOff(DAMAGE_CVARS) end
+end
+
+local function worldTextBack()
+	cvarsBack(NAME_CVARS)
+	cvarsBack(OUTLINE_CVARS)
+	cvarsBack(DAMAGE_CVARS)
+end
+
+local function hideGameText()
+	state.cvarsHidden = true
+	worldTextOff()
 	hideMinimap()
 	-- Nameplates on a later frame: removing every plate is the most expensive part.
 	if DB.hideNameplates then
@@ -192,8 +218,7 @@ local function hideGameText()
 end
 
 local function showGameText()
-	cvarsBack(NAME_CVARS)
-	cvarsBack(OUTLINE_CVARS)
+	worldTextBack()
 	cvarsBack(PLATE_CVARS)
 	showMinimap()
 	state.cvarsHidden = false
@@ -392,7 +417,8 @@ end
 
 ---------------------------------------------------------------------------
 -- Nameplates (EllesmereUI's names too) sit outside UIParent, so its fade misses them. They follow the fade
--- until the nameplate CVars switch them off at its end. In combat, or with the option off, they stay.
+-- until the nameplate CVars switch them off at its end. In combat those CVars are locked, so the plates stay
+-- on and just stay faded out while the HUD is hidden.
 -- The game sets each nameplate's own opacity every frame (distance fade), so the frames inside it are faded.
 ---------------------------------------------------------------------------
 local plates = {} -- unit -> nameplate
@@ -400,7 +426,7 @@ local platesFaded = setmetatable({}, { __mode = "k" }) -- nameplate -> { frame i
 
 -- 1 with the HUD fully shown, 0 at the hidden opacity, so they are gone right when the fade ends.
 local function plateAlpha(a)
-	if not DB.hideNameplates or state.inCombat then return 1 end
+	if not DB.hideNameplates then return 1 end
 	local low = DB.hiddenAlpha or 0
 	if a >= 0.999 or low >= 0.999 then return 1 end
 	return math.max(0, math.min(1, (a - low) / (1 - low)))
@@ -451,7 +477,14 @@ local function plateAdded(unit)
 	local ok, p = pcall(C_NamePlate.GetNamePlateForUnit, unit)
 	if not (ok and type(p) == "table") then return end
 	plates[unit] = p
-	fadePlate(p, plateAlpha(state.current))
+	local a = plateAlpha(state.current)
+	fadePlate(p, a)
+	if a < 0.999 then
+		-- Other addons build their part of the plate on the same event, maybe after us.
+		C_Timer.After(0, function()
+			if plates[unit] == p then fadePlate(p, plateAlpha(state.current)) end
+		end)
+	end
 end
 
 local function plateRemoved(unit)
@@ -652,6 +685,7 @@ local function update(instant)
 			apply(state.target)
 		else
 			applyModels(state.current)
+			applyPlates(state.current) -- plates that got new parts or were reset by their addon
 		end
 	end
 end
@@ -662,12 +696,14 @@ HUDFade.Update = update
 local PRESETS = {
 	{
 		name = "Everything",
-		values = { hideNames = true, hideNameplates = true, hideMinimap = true, hideOutline = true },
+		values = { hideNames = true, hideNameplates = true, hideMinimap = true, hideOutline = true, hideDamage = true },
 	},
 	{
-		-- Same as the game's Hide UI (Alt+Z): world names and the target outline stay.
+		-- Same as the game's Hide UI (Alt+Z): world names, damage numbers and the target circle stay.
 		name = "Blizzard",
-		values = { hideNames = false, hideNameplates = true, hideMinimap = true, hideOutline = false },
+		values = {
+			hideNames = false, hideNameplates = true, hideMinimap = true, hideOutline = false, hideDamage = false,
+		},
 	},
 }
 HUDFade.PRESETS = PRESETS
@@ -1219,6 +1255,8 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		if arg1 ~= ADDON then return end
 		HUDFadeDB = HUDFadeDB or {}
 		DB = HUDFadeDB
+		-- Damage numbers are new in 1.1.0: follow the names, so a saved preset stays as it was.
+		if DB.hideNames ~= nil and DB.hideDamage == nil then DB.hideDamage = DB.hideNames end
 		copyDefaults(DEFAULTS, DB)
 		DB.restore = DB.restore or {}
 		-- Leftovers of the removed pointer option (its CVars come back through restoreAllCVars).
@@ -1252,19 +1290,21 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		restoreAllCVars()
 		restoreShift()
 	elseif event == "PLAYER_REGEN_DISABLED" then
-		-- Fires just before combat lockdown: the last chance to turn nameplates back on.
+		-- Fires just before combat lockdown: the last chance to turn nameplates back on. While the HUD stays
+		-- hidden they are faded out, and they fade in with it.
 		state.inCombat = true
 		cvarsBack(PLATE_CVARS)
-		applyPlates(state.current)
 		update(DB.showCombat)
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		state.inCombat = false
 		if state.pendingKeys and listenToKeys() then state.pendingKeys = false end
 		if state.pendingBinds then applyOverrides(true) end
 		if state.cvarsHidden then
+			worldTextOff() -- in case combat blocked a change
 			if DB.hideNameplates then cvarsOff(PLATE_CVARS) end
 			hideMinimap()
 		else
+			worldTextBack()
 			showMinimap() -- in case combat blocked it
 		end
 		update()
