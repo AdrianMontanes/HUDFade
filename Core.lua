@@ -33,6 +33,7 @@ local DEFAULTS = {
 	hideNameplates = true,
 	hideOutline = true,    -- target selection circle and Outline Mode glow
 	mouseWakes = true,     -- mouse movement ends idle hiding (it always counts while the HUD is visible)
+	mouseClicks = true,    -- a click ends idle hiding (it always counts while the HUD is visible)
 	activeCamera = false,  -- turning the camera counts as activity for the idle timer
 	activeAutorun = false, -- auto-run, follow and flight paths count as activity for the idle timer
 	hideMinimap = true,    -- minimap icons ignore UIParent's alpha, so the map is hidden instead
@@ -766,6 +767,26 @@ local function pollMouse()
 	end
 end
 
+-- A click is a quick press and release. Holding a button to move the camera is left to pollMouse.
+local CLICK_TIME = 0.3
+local pressedAt = {}
+local function click()
+	-- Always counts while visible; after idle hiding only with mouseClicks.
+	if DB.mouseClicks or not isIdle(now()) then input() end
+end
+local function mouseDown(button)
+	if button == "LeftButton" or button == "RightButton" then
+		pressedAt[button] = now()
+	else
+		click()
+	end
+end
+local function mouseUp(button)
+	local t = pressedAt[button]
+	pressedAt[button] = nil
+	if t and now() - t < CLICK_TIME then click() end
+end
+
 ---------------------------------------------------------------------------
 -- Commands
 ---------------------------------------------------------------------------
@@ -1101,6 +1122,8 @@ events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_TARGET_CHANGED")
 events:RegisterEvent("PLAYER_DEAD")
 pcall(events.RegisterEvent, events, "PLAYER_FOCUS_CHANGED")
+pcall(events.RegisterEvent, events, "GLOBAL_MOUSE_DOWN")
+pcall(events.RegisterEvent, events, "GLOBAL_MOUSE_UP")
 events:RegisterEvent("PLAYER_STARTED_MOVING")
 events:RegisterEvent("PLAYER_STOPPED_MOVING")
 events:RegisterEvent("UPDATE_BINDINGS")
@@ -1189,6 +1212,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		wipe(held) -- a missed key release (e.g. after Alt+Tab) must not count as held forever
 	elseif event == "UPDATE_BINDINGS" then
 		applyOverrides()
+	elseif event == "GLOBAL_MOUSE_DOWN" then
+		if DB then mouseDown(arg1) end
+	elseif event == "GLOBAL_MOUSE_UP" then
+		if DB then mouseUp(arg1) end
 	elseif event == "SCREENSHOT_SUCCEEDED" or event == "SCREENSHOT_FAILED" then
 		if state.shot then
 			C_Timer.After(0.1, function()

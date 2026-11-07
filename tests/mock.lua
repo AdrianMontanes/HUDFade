@@ -400,6 +400,32 @@ HUDFadeDB.activeCamera = false
 step(7)
 check("idle again", UIParent.alpha == 0)
 
+-- A quick click counts as input; holding a button to move the camera does not
+fire("GLOBAL_MOUSE_DOWN", "LeftButton")
+step(0.1)
+fire("GLOBAL_MOUSE_UP", "LeftButton")
+step(0.5)
+check("a click brings it back", UIParent.alpha == 1)
+step(7)
+HUDFadeDB.mouseClicks = false
+fire("GLOBAL_MOUSE_DOWN", "LeftButton")
+fire("GLOBAL_MOUSE_UP", "LeftButton")
+step(0.5)
+check("with Mouse clicks off, a click leaves it hidden", UIParent.alpha == 0)
+HUDFadeDB.mouseClicks = true
+fire("GLOBAL_MOUSE_DOWN", "RightButton")
+buttons.RightButton = true
+step(1)
+buttons.RightButton = nil
+fire("GLOBAL_MOUSE_UP", "RightButton")
+step(0.5)
+check("holding a button to move the camera is not a click", UIParent.alpha == 0)
+fire("GLOBAL_MOUSE_DOWN", "MiddleButton")
+step(0.5)
+check("other mouse buttons count when pressed", UIParent.alpha == 1)
+step(7)
+check("idle again after clicking", UIParent.alpha == 0)
+
 HUDFadeDB.showTarget = false
 keyDown("TAB")
 setTarget(true)

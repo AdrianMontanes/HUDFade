@@ -1,5 +1,10 @@
 # HUD Fade
 
+## 0.3.7
+
+- New **Mouse clicks** option under Idle, "Also counts as input" (on by default): a click brings the HUD back after idle hiding, even without moving the mouse. Holding a button to move the camera doesn't count as a click.
+- "Camera turning" is now called **Camera movement**.
+
 ## 0.3.6
 
 - The Hide UI and screenshot tooltips now mention the NVIDIA overlay, which also uses Alt+Z, and that other apps' screenshots (like NVIDIA's Alt+F1) need the HUD hidden first.

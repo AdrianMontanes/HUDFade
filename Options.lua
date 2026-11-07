@@ -332,18 +332,23 @@ local function build()
 		.. "Hide when idle set to Never. Combat still brings it back.")
 	note("Also counts as input:", -394)
 	checkbox("mouseWakes", "Mouse moving",
-		"After the HUD hides for being idle, moving the mouse brings it back. Off: only keys bring it back "
-		.. "(moving, targeting, opening a window and so on), so a bumped mouse or coming back from alt-tab "
-		.. "leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.",
+		"After the HUD hides for being idle, moving the mouse brings it back. Off: a bumped mouse or coming back "
+		.. "from alt-tab leaves it hidden, and keys (and clicks, if ticked) bring it back. While the HUD is "
+		.. "visible, moving the mouse always keeps it visible.",
 		-410)
-	checkbox("activeCamera", "Camera turning",
-		"On: looking around with the mouse keeps the HUD visible and brings it back. "
-		.. "Off: you can look around and the HUD stays hidden.",
+	checkbox("mouseClicks", "Mouse clicks",
+		"After the HUD hides for being idle, a mouse click brings it back, even without moving the mouse. "
+		.. "Holding a button to move the camera doesn't count here, see Camera movement. While the HUD is "
+		.. "visible, clicking always keeps it visible.",
 		-410, 320)
+	checkbox("activeCamera", "Camera movement",
+		"On: moving the camera with the mouse keeps the HUD visible and brings it back. "
+		.. "Off: you can look around and the HUD stays hidden.",
+		-436)
 	checkbox("activeAutorun", "Auto-run or follow",
 		"On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides "
 		.. "while your character keeps moving. Holding a movement key always counts as input.",
-		-436)
+		-436, 320)
 
 	header("While HUD is hidden, bring it back on", -476)
 	checkbox("showCombat", "Combat",
