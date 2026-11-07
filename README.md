@@ -67,4 +67,6 @@ Try [REPLAYD](https://replayd.download/with/hudfade), my native game recorder fo
 
 ## Like HUD Fade?
 
-It's free and always will be. If you'd like to say thanks, you can [buy me a coffee on Ko-fi](https://ko-fi.com/44dri44n).
+It's free and always will be. If you'd like to say thanks, you can buy me a coffee:
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/44dri44n)
