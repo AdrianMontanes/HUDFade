@@ -1,6 +1,6 @@
 -- HUD Fade options: a page in the game's AddOns settings, and the /hudfade command.
 
-local ADDON, ns = ...
+local _, ns = ...
 local HUDFade = ns.core
 local say = HUDFade.Print
 

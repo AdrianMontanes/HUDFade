@@ -8,7 +8,7 @@ GitHub Releases, CurseForge, Wago and WoWInterface. A site is skipped if its tok
 
 1. Set `## Version:` in `HUDFade.toc` to the new version, for example `0.3.0`.
 2. Add a section for it at the top of `CHANGELOG.md`. That text becomes the changelog on every site.
-3. Run the tests: `lua5.1 tests/mock.lua .`
+3. Run the tests and the linter: `lua5.1 tests/mock.lua .` and `luacheck .` (both also run on every push).
 4. Commit, then tag and push:
 
    ```

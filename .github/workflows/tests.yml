@@ -1,4 +1,4 @@
-# Runs the addon against the small fake WoW API in tests/mock.lua on every push.
+# Lints the Lua code and runs the addon against the small fake WoW API in tests/mock.lua on every push.
 name: Tests
 
 on:
@@ -6,6 +6,12 @@ on:
   pull_request:
 
 jobs:
+  luacheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lunarmodules/luacheck@v1
+
   test:
     runs-on: ubuntu-latest
     steps:
