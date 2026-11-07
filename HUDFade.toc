@@ -2,7 +2,7 @@
 ## Title: HUD Fade
 ## Notes: Fade or hide the whole UI at once (Blizzard UI and EllesmereUI together) to protect OLED screens and take HUD-free screenshots.
 ## Author: Adrian
-## Version: 0.3.3
+## Version: 0.3.4
 ## X-License: MIT
 ## X-Curse-Project-ID: 1788415
 ## SavedVariables: HUDFadeDB

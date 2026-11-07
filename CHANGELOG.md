@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.3.4
+
+- Help and feedback now has two buttons, **Addon page** and **Report a problem**, instead of raw addresses. Click one and its address appears, selected and ready to copy with Ctrl+C (addons can't open your browser).
+
 ## 0.3.3
 
 - The second preset is now called **Blizzard** (it was "Like the game's Hide UI").
