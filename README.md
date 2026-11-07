@@ -57,6 +57,10 @@ No setup per addon and no reload. Keys for hide/show, peek, screenshot and on/of
 
 Works on WoW Forever and Retail (12.x). Classic versions are planned.
 
+## Alt+Z opens the NVIDIA overlay?
+
+The NVIDIA app uses Alt+Z for its overlay too. Change the overlay's shortcut in the NVIDIA app, or bind the game's Hide UI to another key. NVIDIA's own screenshots (Alt+F1) can't hide the HUD, so hide it first.
+
 ## Something stays visible?
 
 Hover it, type `/hudfade what`, and [open an issue](https://github.com/AdrianMontanes/HUDFade/issues/new/choose) with what it printed and which UI addons you use.

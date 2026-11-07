@@ -290,12 +290,14 @@ local function build()
 	header("General", -120)
 	checkbox("replaceAltZ", function() return "Use Hide UI key (" .. keyName("TOGGLEUI") .. ")" end,
 		"Your Hide UI key fades the HUD out and back in instead of switching it off, and the HUD still comes back "
-		.. "when something needs it.",
+		.. "when something needs it.\n\nThe NVIDIA overlay uses Alt+Z too. If Alt+Z opens it, change the "
+		.. "overlay's shortcut in the NVIDIA app, or bind Hide UI to another key.",
 		-140, 16, HUDFade.ApplyOverrides)
 	checkbox("startHidden", "Start hidden", "Each session starts with the HUD hidden.", -140, 320)
 	checkbox("cleanPrintScreen", function() return "HUD-free screenshots (" .. keyName("SCREENSHOT") .. ")" end,
 		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back. "
-		.. "There is also a separate key for this under Key Bindings > AddOns.",
+		.. "There is also a separate key for this under Key Bindings > AddOns.\n\nScreenshots taken by other "
+		.. "apps, like NVIDIA's Alt+F1, can't hide the HUD: hide it first with your Hide UI key.",
 		-166, 16, HUDFade.ApplyOverrides)
 
 	header("While HUD is hidden, also hide", -206)

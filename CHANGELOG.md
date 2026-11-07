@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.3.6
+
+- The Hide UI and screenshot tooltips now mention the NVIDIA overlay, which also uses Alt+Z, and that other apps' screenshots (like NVIDIA's Alt+F1) need the HUD hidden first.
+
 ## 0.3.5
 
 - Help and feedback is back to showing both addresses to copy, without the buttons.
