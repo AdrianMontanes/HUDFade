@@ -46,3 +46,7 @@ If you capture your HDR gameplay, try [REPLAYD](https://replayd.download/with/hu
 ## License
 
 MIT
+
+## Credits
+
+Made by Adrian, with much of the code written with the help of Claude, Anthropic's AI assistant.

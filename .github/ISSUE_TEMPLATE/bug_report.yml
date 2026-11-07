@@ -1,0 +1,46 @@
+name: Bug report
+description: Something stays visible, the HUD won't hide or keeps coming back, or you got an error
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: command-output
+    attributes:
+      label: Output of /hudfade what or /hudfade why
+      description: >
+        If something stays visible, hover it and type `/hudfade what`.
+        If the HUD won't hide or keeps coming back, type `/hudfade why`. Paste what it printed.
+      render: text
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game version
+      options:
+        - WoW Forever
+        - Retail
+        - Other (say which above)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: HUD Fade version
+      description: Shown in the AddOns list or your addon manager.
+      placeholder: "0.3.1"
+  - type: textarea
+    id: addons
+    attributes:
+      label: UI addons you use
+      description: For example EllesmereUI, ElvUI, Plater or WeakAuras.
+  - type: textarea
+    id: error
+    attributes:
+      label: Lua error, if any
+      description: Paste the full message (from BugSack, or the game's error window after `/console scriptErrors 1`).
+      render: text

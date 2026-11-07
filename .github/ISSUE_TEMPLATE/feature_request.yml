@@ -1,0 +1,16 @@
+name: Idea or request
+description: Suggest something HUD Fade could do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: addons
+    attributes:
+      label: UI addons you use
+      description: Optional. Helps when the idea is about another addon's frames.
