@@ -7,7 +7,7 @@
 
 # HUD Fade
 
-Fade your whole World of Warcraft UI at once, Blizzard's and EllesmereUI's together.<br>
+Fade your entire World of Warcraft UI at once, Blizzard's and EllesmereUI's together.<br>
 Made for OLED burn-in care and HUD-free screenshots.
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-HUD%20Fade-F16436?logo=curseforge&logoColor=white)](https://www.curseforge.com/wow/addons/hud-fade)
