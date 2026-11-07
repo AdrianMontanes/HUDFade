@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.16
+
+- "Names and chat bubbles" also switches off the circle under your target while the HUD is hidden, where the game still has that setting. Your target's own name always shows: the game has no setting for it.
+
 ## 0.2.15
 
 - 3D portraits that an addon creates on first use (EllesmereUI's target portrait) now fade the moment they get a unit to show. Before, they could stay solid until the background check had walked every frame in the game, which can take half a minute or more with many addons installed.

@@ -2,7 +2,7 @@
 -- Minimal WoW API mock to run HUD Fade's logic outside the game.
 local T = 0
 function GetTime() return T end
-local cvars = { chatBubbles="1", cameraYawMoveSpeed="180", cameraPitchMoveSpeed="90", UnitNameNPC="1", UnitNameOwn="0", nameplateShowEnemies="1", nameplateShowFriends="1", nameplateShowFriendlyPlayers="1" }
+local cvars = { chatBubbles="1", cameraYawMoveSpeed="180", cameraPitchMoveSpeed="90", UnitNameNPC="1", UnitNameOwn="0", ObjectSelectionCircle="1", nameplateShowEnemies="1", nameplateShowFriends="1", nameplateShowFriendlyPlayers="1" }
 C_CVar = { GetCVar=function(n) return cvars[n] end, SetCVar=function(n,v) if lockdown and n:find("nameplate") then error("blocked") end cvars[n]=v end }
 lockdown=false
 function InCombatLockdown() return lockdown end
@@ -129,6 +129,8 @@ check("Alt+Z overridden", binds["ALT-Z"]=="HUDFADE_TOGGLE")
 HUDFade.Toggle(); step(1.5)
 check("toggle hides", UIParent.alpha==0)
 check("NPC names off", cvars.UnitNameNPC=="0" and HUDFadeDB.restore.UnitNameNPC=="1")
+check("target circle off", cvars.ObjectSelectionCircle=="0" and HUDFadeDB.restore.ObjectSelectionCircle=="1")
+check("a setting the game lacks is skipped", HUDFadeDB.restore.UnitNameHostleNPC==nil and cvars.UnitNameHostleNPC==nil)
 check("own name untouched (was 0)", cvars.UnitNameOwn=="0" and HUDFadeDB.restore.UnitNameOwn==nil)
 check("plates off", cvars.nameplateShowEnemies=="0")
 check("model faded", model.malpha==0)
@@ -139,6 +141,7 @@ Minimap:Show(); check("minimap stays hidden if another addon shows it", Minimap.
 check("friendly player plates off", cvars.nameplateShowFriendlyPlayers=="0")
 target=true; fire("PLAYER_TARGET_CHANGED"); step(0.5)
 check("target shows", UIParent.alpha==1 and cvars.UnitNameNPC=="1")
+check("target circle back", cvars.ObjectSelectionCircle=="1")
 check("model back", model.malpha==1)
 check("that frame back", lone.alpha==1)
 check("minimap back", Minimap.shown==true)

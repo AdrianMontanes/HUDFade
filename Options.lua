@@ -194,7 +194,7 @@ local function build()
 
 	header("While HUD is hidden, also hide", -206)
 	checkbox("hideNames", "Names and chat bubbles",
-		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after.", -226)
+		"The floating names, chat bubbles and the circle under your target are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after. Your target's own name is the exception: the game always shows it.", -226)
 	checkbox("hideNameplates", "Nameplates",
 		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.", -226, 320)
 	checkbox("hideMinimap", "Minimap",

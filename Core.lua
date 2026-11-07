@@ -107,7 +107,9 @@ local NAME_CVARS = {
 	"UnitNameFriendlyPetName", "UnitNameEnemyPetName", "UnitNameFriendlyGuardianName", "UnitNameEnemyGuardianName",
 	"UnitNameFriendlyTotemName", "UnitNameEnemyTotemName", "UnitNameFriendlyMinionName", "UnitNameEnemyMinionName",
 	"chatBubbles", "chatBubblesParty", -- (chat bubbles float in the game world too, like the names)
+	"ObjectSelectionCircle", -- (the circle under your target; an old setting that may be gone, skipped if so)
 }
+-- (Your target's own name is not among these: the game shows it whatever the settings say.)
 -- nameplateShowFriendlyPlayers drives EllesmereUI's name-only plates over other players.
 local PLATE_CVARS = { "nameplateShowEnemies", "nameplateShowFriends", "nameplateShowFriendlyPlayers", "nameplateShowFriendlyNPCs" }
 
