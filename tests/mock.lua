@@ -7,6 +7,8 @@ C_CVar = { GetCVar=function(n) return cvars[n] end, SetCVar=function(n,v) if loc
 lockdown=false
 function InCombatLockdown() return lockdown end
 local frames = {}
+-- What every model shares (the game keeps a widget type's methods in one table, so a hook there sees every model).
+modelMethods = setmetatable({ SetUnit=function() end }, {__index=function(t,k) return function() end end})
 local function newFrame(kind)
   local f = { scripts={}, shown=true, alpha=1, events={}, kind=kind or "Frame" }
   function f:SetScript(n, fn) self.scripts[n]=fn end
@@ -23,7 +25,7 @@ local function newFrame(kind)
   function f:GetObjectType() return self.kind end
   function f:GetParent() return self.parent end
   function f:GetEffectiveScale() return 1 end
-  setmetatable(f, {__index=function(t,k) return function() end end})
+  setmetatable(f, {__index=(kind=="PlayerModel" or kind=="Model") and modelMethods or function(t,k) return function() end end})
   frames[#frames+1]=f
   return f
 end
@@ -400,6 +402,18 @@ fire("PLAYER_TARGET_CHANGED"); step(2)
 check("a portrait made while hidden is found and faded within seconds", lazy.malpha==0)
 HUDFade.Show(); step(0.5)
 check("and restored when the HUD comes back", lazy.malpha==1)
+-- Faded the moment it is given a unit, without waiting for a scan
+HUDFade.Hide(); step(1.5)
+local late = CreateFrame("PlayerModel", nil, UIParent); late.malpha=1
+function late:SetModelAlpha(a) self.malpha=a end
+function late:GetModelAlpha() return self.malpha end
+late:SetUnit("target")
+check("a portrait given a unit while hidden is faded at once", late.malpha==0)
+local loose = CreateFrame("PlayerModel"); loose.malpha=1
+function loose:SetModelAlpha(a) self.malpha=a end
+loose:SetUnit("target"); check("a model outside the UI is left alone", loose.malpha==1)
+HUDFade.Show(); step(0.5)
+check("and restored when the HUD comes back", late.malpha==1)
 -- Pixel shift
 check("pixel shift off by default", select(1, uiOffset())==0 and select(2, uiOffset())==0)
 SlashCmdList.HUDFADE("shift on"); step(1.1)

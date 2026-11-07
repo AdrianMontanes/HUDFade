@@ -331,23 +331,57 @@ local function applyLoners(a)
 	end
 end
 
+local function fadeModel(m, a)
+	if a >= 0.999 then
+		local base = baseAlpha[m]
+		if base then
+			pcall(m.SetModelAlpha, m, base)
+			baseAlpha[m] = nil
+		end
+	else
+		-- (hidden ones too: harmless, and a portrait that appears while hidden is already faded)
+		if baseAlpha[m] == nil then
+			local own = ask(m, "GetModelAlpha")
+			baseAlpha[m] = type(own) == "number" and own or 1
+		end
+		pcall(m.SetModelAlpha, m, baseAlpha[m] * a)
+	end
+end
+
+-- Models seen being given something to show (see hookModels), on top of what the scans found.
+local seenModels = setmetatable({}, { __mode = "k" })
+
 local function applyModels(a)
 	applyLoners(a)
-	for _, m in ipairs(models) do
-		if a >= 0.999 then
-			local base = baseAlpha[m]
-			if base then
-				pcall(m.SetModelAlpha, m, base)
-				baseAlpha[m] = nil
+	for _, m in ipairs(models) do fadeModel(m, a) end
+	for m in pairs(seenModels) do fadeModel(m, a) end
+end
+
+-- The background scan takes a while to walk every frame in a big UI (half a minute or more with many addons), and
+-- a portrait an addon creates on first use (EllesmereUI's target portrait) stayed solid until it got there. Every
+-- model is given a unit or a model to show before it shows anything, so watching those calls finds it at once.
+local function noteModel(m)
+	if seenModels[m] or not underUIParent(m) then return end
+	seenModels[m] = true
+	if state.current < 0.999 then fadeModel(m, state.current) end
+end
+
+local function hookModels()
+	if not hooksecurefunc then return end
+	local hooked = {}
+	for kind in pairs(MODEL_TYPES) do
+		local ok, f = pcall(CreateFrame, kind)
+		local mt = ok and type(f) == "table" and getmetatable(f)
+		local methods = type(mt) == "table" and mt.__index
+		if type(methods) == "table" and not hooked[methods] then
+			hooked[methods] = true
+			for _, name in ipairs({ "SetUnit", "SetDisplayInfo", "SetCreature", "SetModel" }) do
+				if type(methods[name]) == "function" then
+					pcall(hooksecurefunc, methods, name, function(m) pcall(noteModel, m) end)
+				end
 			end
-		else
-			-- (hidden ones too: harmless, and a portrait that appears while hidden is already faded)
-			if baseAlpha[m] == nil then
-				local own = ask(m, "GetModelAlpha")
-				baseAlpha[m] = type(own) == "number" and own or 1
-			end
-			pcall(m.SetModelAlpha, m, baseAlpha[m] * a)
 		end
+		if ok and type(f) == "table" then pcall(f.Hide, f) end
 	end
 end
 
@@ -1414,6 +1448,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		-- Logged out or crashed while hidden last time: put the names and nameplates back first.
 		restoreAllCVars()
 		pcall(scanModels) -- (the one full scan, under the loading screen)
+		pcall(hookModels)
 		state.inCombat = InCombatLockdown() and true or false
 		state.lastInput = now()
 		hookMinimap()

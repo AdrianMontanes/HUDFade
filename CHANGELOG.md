@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.15
+
+- 3D portraits that an addon creates on first use (EllesmereUI's target portrait) now fade the moment they get a unit to show. Before, they could stay solid until the background check had walked every frame in the game, which can take half a minute or more with many addons installed.
+
 ## 0.2.14
 
 - Hidden pointer on flight paths: moving the mouse no longer turns the camera. Mouse look speed goes down to almost nothing while the pointer is hidden there, so the camera only moves when you click and drag, at your normal speed. A click or any key brings the pointer back, and moving the mouse does too where the game reports mouse movement.
