@@ -1,10 +1,8 @@
 -- HUD Fade: fades the whole interface as one layer.
 --
--- Why one layer: EllesmereUI (and other UI addons) keep setting the opacity of their own frames for their
--- mouseover and visibility rules. Fade addons that set the opacity of those same frames end up fighting them.
--- HUD Fade never touches a single frame's opacity. It only changes UIParent's, which multiplies with whatever
--- each addon does underneath, so both keep working. The few things that ignore UIParent's opacity (3D models,
--- floating unit names, nameplates) are handled on their own below.
+-- UI addons like EllesmereUI set their own frames' alpha for mouseover and visibility rules, so fading those
+-- frames one by one fights them. We only change UIParent's alpha, which multiplies with whatever they do.
+-- The few things that ignore UIParent's alpha (3D models, world names, nameplates) are handled separately.
 
 local ADDON, ns = ...
 
@@ -19,7 +17,7 @@ BINDING_NAME_HUDFADE_SCREENSHOT = "Take a screenshot without the HUD"
 BINDING_NAME_HUDFADE_ENABLE = "Turn HUD Fade on / off"
 
 local DEFAULTS = {
-	enabled = true,        -- the whole addon; off = the game behaves as if HUD Fade were not installed
+	enabled = true,        -- master switch
 	startHidden = false,   -- begin each session with the HUD hidden
 	idleSeconds = 30,      -- hide after this long with no input at all (0 = never)
 	awayMinutes = 10,      -- after this long with no input, hide even over an open window or chat box
@@ -33,22 +31,22 @@ local DEFAULTS = {
 	showDead = true,
 	hideNames = true,      -- floating player/NPC names and chat bubbles
 	hideNameplates = true,
-	hideOutline = true,    -- the circle under your target and the glow around it (and around what is under the mouse)
-	mouseWakes = true,     -- moving the mouse brings the HUD back after it hid for being idle (it always keeps it up)
+	hideOutline = true,    -- target selection circle and Outline Mode glow
+	mouseWakes = true,     -- mouse movement ends idle hiding (it always counts while the HUD is visible)
 	activeCamera = false,  -- turning the camera counts as activity for the idle timer
 	activeAutorun = false, -- auto-run, follow and flight paths count as activity for the idle timer
-	hideMinimap = true,    -- the minimap's icons and arrow ignore the UI's opacity, so the map is hidden instead
-	replaceAltZ = true,    -- the game's own "hide UI" key (Alt+Z) does HUD Fade's toggle instead
+	hideMinimap = true,    -- minimap icons ignore UIParent's alpha, so the map is hidden instead
+	replaceAltZ = true,    -- the game's Hide UI key (Alt+Z) runs our toggle instead
 	cleanPrintScreen = false, -- the game's screenshot key leaves the HUD out
-	pixelShift = false,    -- burn-in protection: move the whole UI a pixel or two every few minutes
-	shiftPixels = 2,       -- how far, in screen pixels
-	shiftMinutes = 3,      -- how often
+	pixelShift = false,    -- burn-in protection, see Pixel shift below
+	shiftPixels = 2,       -- screen pixels
+	shiftMinutes = 3,      -- minutes between moves
 	welcomed = false,
 }
 HUDFade.DEFAULTS = DEFAULTS
 
 local GRACE = 1 -- seconds
-local held = {} -- movement keys held down right now (holding W to run counts as activity the whole time)
+local held = {} -- movement keys currently held down (holding W counts as input the whole time)
 
 local DB
 local state = {
@@ -61,8 +59,8 @@ local state = {
 	casting = false,
 	moving = false,
 	lastInput = 0,
-	lastWanted = -math.huge, -- last time a reason to show the HUD was active (for the short grace below)
-	suppressed = {},    -- reasons that were active when you pressed hide; ignored until they end
+	lastWanted = -math.huge, -- last time any reason to show the HUD was active (for GRACE)
+	suppressed = {},    -- reasons active when the user hid the HUD; ignored until they end
 	cvarsHidden = false,
 }
 HUDFade.state = state
@@ -74,9 +72,8 @@ local function say(msg)
 end
 HUDFade.Print = say
 
--- Since 12.0 the game hands addons some values as "secrets" (a target frame's range fade, for one). Comparing a
--- secret or doing maths on it is an error, so anything read from a frame goes through ask(): it calls the method
--- safely and gives back nil for an error or a secret, which the code below treats as "could not tell".
+-- Since 12.0 some values are "secrets" (e.g. a target frame's range fade) and comparing one is an error.
+-- Frame reads go through ask(), which returns nil on an error or a secret.
 local function readable(v)
 	if issecretvalue and issecretvalue(v) then return nil end
 	return v
@@ -90,7 +87,7 @@ local function ask(f, method, arg)
 	return readable(v)
 end
 
--- The same for yes/no game questions such as UnitExists("target"): an error or a secret answers "no".
+-- Same for boolean API calls like UnitExists("target"): an error or a secret counts as false.
 local function is(fn, arg)
 	if type(fn) ~= "function" then return false end
 	local ok, v = pcall(fn, arg)
@@ -98,27 +95,30 @@ local function is(fn, arg)
 end
 
 ---------------------------------------------------------------------------
--- Game settings changed while hidden (unit names, nameplates)
+-- CVars turned off while hidden (world names, target outline, nameplates)
 ---------------------------------------------------------------------------
 local NAME_CVARS = {
 	"UnitNameOwn", "UnitNameNPC", "UnitNameInteractiveNPC", "UnitNameHostleNPC", "UnitNameFriendlySpecialNPCName",
 	"UnitNameNonCombatCreatureName", "UnitNameFriendlyPlayerName", "UnitNameEnemyPlayerName",
 	"UnitNameFriendlyPetName", "UnitNameEnemyPetName", "UnitNameFriendlyGuardianName", "UnitNameEnemyGuardianName",
 	"UnitNameFriendlyTotemName", "UnitNameEnemyTotemName", "UnitNameFriendlyMinionName", "UnitNameEnemyMinionName",
-	"chatBubbles", "chatBubblesParty", -- (chat bubbles float in the game world too, like the names)
+	"chatBubbles", "chatBubblesParty", -- chat bubbles are world text too
 }
--- (Your target's own name is not among these: the game shows it whatever the settings say.)
--- The circle under your target, the glow around it and around what is under the mouse (Outline Mode), and the
--- highlight some people put around their own character. A setting the game no longer has is skipped.
-local OUTLINE_CVARS = { "ObjectSelectionCircle", "Outline", "findYourselfAnywhere", "findYourselfInBG", "findYourselfInRaid" }
--- nameplateShowFriendlyPlayers drives EllesmereUI's name-only plates over other players.
-local PLATE_CVARS = { "nameplateShowEnemies", "nameplateShowFriends", "nameplateShowFriendlyPlayers", "nameplateShowFriendlyNPCs" }
+-- There is no CVar for the target's own name: the game always shows it.
+
+-- Target selection circle, Outline Mode glow, and the "find yourself" highlight. CVars the client lacks are skipped.
+local OUTLINE_CVARS = {
+	"ObjectSelectionCircle", "Outline", "findYourselfAnywhere", "findYourselfInBG", "findYourselfInRaid",
+}
+-- nameplateShowFriendlyPlayers also drives EllesmereUI's name-only plates.
+local PLATE_CVARS = {
+	"nameplateShowEnemies", "nameplateShowFriends", "nameplateShowFriendlyPlayers", "nameplateShowFriendlyNPCs",
+}
 
 local getCVar = (C_CVar and C_CVar.GetCVar) or GetCVar
 local setCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
 
--- Turns a list of CVars off, remembering what they were (in the saved variables, so a crash or logout while
--- hidden still gets them back next login).
+-- Old values are kept in the saved variables, so a crash while hidden still restores them at the next login.
 local function cvarsOff(list)
 	for _, name in ipairs(list) do
 		local okGet, value = pcall(getCVar, name)
@@ -136,8 +136,8 @@ local function cvarsBack(list)
 end
 
 ---------------------------------------------------------------------------
--- Minimap: the game draws its icons and the player arrow at full strength whatever the UI's opacity, and at
--- partial opacity it can draw a blank map indoors. So it is hidden outright while the HUD is hidden.
+-- Minimap: its icons and player arrow ignore UIParent's alpha, and a partly faded map can render blank indoors,
+-- so it is hidden outright.
 ---------------------------------------------------------------------------
 local minimapHiddenByUs = false
 local minimapBusy = false
@@ -167,7 +167,7 @@ end
 
 local function hookMinimap()
 	if not Minimap or not hooksecurefunc then return end
-	-- Another addon showing the map again while the HUD is hidden: hide it straight away, before it is drawn.
+	-- Re-hide it right away if another addon shows it while we have it hidden.
 	hooksecurefunc(Minimap, "Show", function(m)
 		if minimapBusy or not minimapHiddenByUs or not canTouch(m) then return end
 		minimapBusy = true
@@ -181,7 +181,7 @@ local function hideGameText()
 	if DB.hideNames then cvarsOff(NAME_CVARS) end
 	if DB.hideOutline then cvarsOff(OUTLINE_CVARS) end
 	hideMinimap()
-	-- Nameplates a moment later: dropping every plate is the heaviest part, so it gets a frame of its own.
+	-- Nameplates on a later frame: removing every plate is the most expensive part.
 	if DB.hideNameplates then
 		C_Timer.After(0.1, function()
 			if state.cvarsHidden and DB.hideNameplates and not InCombatLockdown() then cvarsOff(PLATE_CVARS) end
@@ -206,11 +206,11 @@ local function restoreAllCVars()
 end
 
 ---------------------------------------------------------------------------
--- 3D models: they draw at full strength even when their parent is see-through, so they get their own opacity.
+-- 3D models ignore their parent's alpha, so they are faded directly with SetModelAlpha.
 ---------------------------------------------------------------------------
 local MODEL_TYPES = { Model = true, PlayerModel = true, DressUpModel = true, CinematicModel = true, TabardModel = true }
 local models = {}                                  -- every model found under UIParent
-local baseAlpha = setmetatable({}, { __mode = "k" }) -- model -> its own opacity before we changed it
+local baseAlpha = setmetatable({}, { __mode = "k" }) -- model -> its alpha before we changed it
 local lastScan = -100
 
 local function underUIParent(f)
@@ -223,8 +223,7 @@ local function underUIParent(f)
 	return false
 end
 
--- Frames set to ignore their parent's opacity (the game's own vehicle and flight "leave" button is one) would
--- stay fully visible too, so they get their own opacity the same way.
+-- Frames that ignore their parent's alpha (like the vehicle leave button) are faded one by one too.
 local loners = {}
 local lonerBase = setmetatable({}, { __mode = "k" })
 local lonerWritten = setmetatable({}, { __mode = "k" })
@@ -234,12 +233,12 @@ local function sortFrame(f, ms, ls)
 	if kind and MODEL_TYPES[kind] and f.SetModelAlpha then
 		if underUIParent(f) then ms[#ms + 1] = f end
 	elseif ask(f, "IsIgnoringParentAlpha") == true and underUIParent(f) then
-		-- (a frame that keeps this secret is left alone: we cannot tell, and guessing could leave it invisible)
+		-- A secret answer is left alone: guessing wrong could leave the frame invisible.
 		ls[#ls + 1] = f
 	end
 end
 
--- Named here too in case the game draws it some other way: alpha on a normal child is harmless.
+-- Listed by name as a fallback; setting alpha on a normal child frame is harmless.
 local function addNamedLoners(ls)
 	for _, name in ipairs({ "MainMenuBarVehicleLeaveButton" }) do
 		local b = _G[name]
@@ -251,23 +250,22 @@ local function addNamedLoners(ls)
 	end
 end
 
--- All frames at once: only at login, while the loading screen is up.
+-- Full scan, only at login while the loading screen hides the cost.
 local function scanModels()
 	if not EnumerateFrames then return end
 	lastScan = now()
 	local ms, ls = {}, {}
 	local f = EnumerateFrames()
 	while f do
-		pcall(sortFrame, f, ms, ls) -- (one odd frame never stops the scan)
+		pcall(sortFrame, f, ms, ls)
 		f = EnumerateFrames(f)
 	end
 	addNamedLoners(ls)
 	models, loners = ms, ls
 end
 
--- After that, a few hundred frames a tick in the background. (Walking through every frame in the game at the start
--- of each hide caused a visible hitch.) Addons create some 3D portraits only when first needed (EllesmereUI's target
--- portrait), so a target or focus change asks for a pass soon.
+-- After login, rescan in small batches in the background (a full scan at hide time hitches). Target and focus
+-- changes ask for an early pass, since some addons create portraits on first use.
 local SCAN_BATCH, SCAN_EVERY = 300, 15
 local scan = {}
 local function scanSoon()
@@ -323,7 +321,7 @@ local function applyLoners(a)
 			end
 		elseif ask(f, "IsVisible") then
 			local cur = ask(f, "GetAlpha")
-			-- Its owner changed it since we last wrote: take that as its own opacity from now on.
+			-- Its owner changed it since our last write: use that as its base alpha from now on.
 			if type(cur) == "number" and (lonerBase[f] == nil or math.abs(cur - (lonerWritten[f] or -1)) > 0.01) then
 				lonerBase[f] = cur
 			end
@@ -344,7 +342,7 @@ local function fadeModel(m, a)
 			baseAlpha[m] = nil
 		end
 	else
-		-- (hidden ones too: harmless, and a portrait that appears while hidden is already faded)
+		-- Hidden models too, so one that appears while the HUD is hidden is already faded.
 		if baseAlpha[m] == nil then
 			local own = ask(m, "GetModelAlpha")
 			baseAlpha[m] = type(own) == "number" and own or 1
@@ -353,7 +351,7 @@ local function fadeModel(m, a)
 	end
 end
 
--- Models seen being given something to show (see hookModels), on top of what the scans found.
+-- Models caught by hookModels, on top of the ones the scans found.
 local seenModels = setmetatable({}, { __mode = "k" })
 
 local function applyModels(a)
@@ -362,9 +360,9 @@ local function applyModels(a)
 	for m in pairs(seenModels) do fadeModel(m, a) end
 end
 
--- The background scan takes a while to walk every frame in a big UI (half a minute or more with many addons), and
--- a portrait an addon creates on first use (EllesmereUI's target portrait) stayed solid until it got there. Every
--- model is given a unit or a model to show before it shows anything, so watching those calls finds it at once.
+-- The background scan can take a while in a big UI, and a portrait created on first use (EllesmereUI's target
+-- portrait) would stay solid until it got there. Every model gets SetUnit or similar before it draws anything,
+-- so hooking those methods catches new models right away.
 local function noteModel(m)
 	if seenModels[m] or not underUIParent(m) then return end
 	seenModels[m] = true
@@ -428,8 +426,7 @@ end)
 
 local function setTarget(a, instant)
 	if a < state.target and a < 0.999 and not state.cvarsHidden then
-		-- Starting to hide. Names, nameplates and the minimap go once the fade has finished: each makes the game
-		-- rebuild things, and doing all of it on the first frame of the fade was a visible hitch.
+		-- Starting to hide. CVars and the minimap change once the fade ends: doing it on the first frame hitches.
 		state.textPending = true
 	elseif a >= 0.999 then
 		state.textPending = false
@@ -458,7 +455,8 @@ local WINDOWS = {
 	"TradeFrame", "AuctionHouseFrame", "AuctionFrame", "BankFrame", "GuildBankFrame", "ClassTrainerFrame",
 	"FriendsFrame", "PVEFrame", "CollectionsJournal", "EncounterJournal", "AchievementFrame", "ProfessionsFrame",
 	"TradeSkillFrame", "MacroFrame", "KeyBindingFrame", "ReadyCheckFrame", "LFGDungeonReadyPopup", "TaxiFrame",
-	"FlightMapFrame", "ItemTextFrame", "BarberShopFrame", "StaticPopup1", "StaticPopup2", "StaticPopup3", "StaticPopup4",
+	"FlightMapFrame", "ItemTextFrame", "BarberShopFrame",
+	"StaticPopup1", "StaticPopup2", "StaticPopup3", "StaticPopup4",
 	"ContainerFrameCombinedBags", "ContainerFrame1", "ContainerFrame2", "ContainerFrame3", "ContainerFrame4",
 	"ContainerFrame5", "ContainerFrame6",
 	-- EllesmereUI
@@ -468,11 +466,11 @@ local WINDOWS = {
 local function shown(name)
 	local f = _G[name]
 	if type(f) ~= "table" then return false end
-	if f.which == "DEATH" then return false end -- (see "dying" below)
+	if f.which == "DEATH" then return false end -- the Release Spirit popup, see softReasons
 	return ask(f, "IsVisible") == true
 end
 
--- Arranging your frames in the game's Edit Mode or EllesmereUI's unlock mode: what is open, or nil.
+-- Edit Mode or EllesmereUI's unlock mode: returns which one is open, or nil.
 local function arranging()
 	if EditModeManagerFrame and ask(EditModeManagerFrame, "IsShown") == true then return "Edit Mode" end
 	local eui = _G.EllesmereUI
@@ -483,8 +481,7 @@ local function arranging()
 	return nil
 end
 
--- Returns what is open (for /hudfade why), or nil. Arranging your frames counts too, so the HUD stays visible
--- while you do it, until the away time.
+-- Returns what is open (for /hudfade why), or nil. Layout modes count as open windows.
 local function windowOpen()
 	if GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus() then return "typing" end
 	if GetCursorInfo and GetCursorInfo() then return "holding something on the cursor" end
@@ -501,15 +498,14 @@ local function windowOpen()
 	return nil
 end
 
--- Away: the safety net over the idle time. After this long with no input at all the HUD hides even over an open
--- window or chat box, and even with Hide when idle set to Never, so a window left open while you are away from the
--- keyboard never keeps it on screen for hours. Combat still brings it back.
+-- Away: after awayMinutes with no input the HUD hides even over open windows and with idle hiding set to Never,
+-- so a window left open while AFK can't keep it on screen for hours. Combat still shows it.
 local function isAway(t)
 	local minutes = tonumber(DB.awayMinutes) or 10
 	return minutes > 0 and (t - state.lastInput) >= minutes * 60
 end
 
--- Reasons that bring the HUD back even while you are idle.
+-- Reasons that show the HUD even while idle.
 local function urgentReasons(out)
 	if state.peek then out.peek = true end
 	if DB.showCombat and state.inCombat then out.combat = true end
@@ -519,10 +515,8 @@ local function urgentReasons(out)
 	end
 end
 
--- Reasons that bring it back only while you are playing (not idle).
--- Dying counts as activity the moment it happens (see PLAYER_DEAD), so the HUD comes up and then hides again after
--- your idle time, even if you stay dead: lying dead while away must not leave the HUD on screen for hours. For the
--- same reason the Release Spirit popup, which stays up the whole time, does not count as an open window.
+-- Reasons that show the HUD only while not idle. Death counts as input once (PLAYER_DEAD), so lying dead while
+-- AFK still hides the HUD after the idle time. That is also why the Release Spirit popup is not a window.
 local function softReasons(out)
 	if DB.showDead and is(UnitIsDead, "player") then out.dead = true end
 	if DB.showTarget and is(UnitExists, "target") then out.target = true end
@@ -534,7 +528,7 @@ local function currentReasons(idle)
 	wipe(reasons)
 	urgentReasons(reasons)
 	if not idle then softReasons(reasons) end
-	-- A reason you hid the HUD over stays ignored until it ends.
+	-- A reason that was active when the user hid the HUD stays ignored until it ends.
 	for r in pairs(state.suppressed) do
 		if not reasons[r] then state.suppressed[r] = nil else reasons[r] = nil end
 	end
@@ -545,8 +539,7 @@ local function isIdle(t)
 	return (DB.idleSeconds > 0 and (t - state.lastInput) >= DB.idleSeconds) or isAway(t)
 end
 
--- Typing (chat and the like) is activity: once you send, the idle timer starts from there. A chat box left open
--- without typing is not.
+-- Typing counts as input; an edit box left open without typing does not.
 local function typing(t)
 	local box = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
 	if not box then
@@ -574,25 +567,33 @@ local function update(instant)
 	local base = not state.hudOff and not idle
 	local reason = next(currentReasons(idle)) ~= nil
 	if reason then state.lastWanted = t end
-	-- A short grace after a reason ends (a target cleared between two pulls, a window closed), so the HUD does not
-	-- blink. None when you go idle or press hide: those happen exactly when you set them.
+	-- Short grace after a reason ends so the HUD doesn't blink between pulls. Idle and the hide key act at once.
 	local show = base or reason or (not idle and (t - state.lastWanted) < GRACE)
 	setTarget(show and 1 or DB.hiddenAlpha, instant)
-	-- While hidden and still: put our opacity back if something else changed it, and catch models that just appeared.
+	-- While hidden: reapply our alpha if something changed it, and fade models that just appeared.
 	if state.target < 0.999 and not driver:IsShown() then
 		local a = ask(UIParent, "GetAlpha")
-		if type(a) == "number" and math.abs(a - state.target) > 0.01 then apply(state.target) else applyModels(state.current) end
+		if type(a) == "number" and math.abs(a - state.target) > 0.01 then
+			apply(state.target)
+		else
+			applyModels(state.current)
+		end
 	end
 end
 HUDFade.Update = update
 
--- Presets for what goes with the HUD. Which one is in use is read from the settings themselves, so changing one of
--- them by hand shows as Custom, and choosing a preset again sets them back. The minimap goes in both: its icons
--- ignore the fade, and the game's own Hide UI hides it too.
+-- Presets for the "also hide" options. The active one is derived from the settings, so a change by hand shows
+-- as Custom. Both hide the minimap, as the game's own Hide UI does.
 local PRESETS = {
-	{ name = "Everything", values = { hideNames = true, hideNameplates = true, hideMinimap = true, hideOutline = true } },
-	-- What the game's Hide UI (Alt+Z) leaves: names, chat bubbles, the target circle and glow stay; nameplates go.
-	{ name = "Like the game's Hide UI", values = { hideNames = false, hideNameplates = true, hideMinimap = true, hideOutline = false } },
+	{
+		name = "Everything",
+		values = { hideNames = true, hideNameplates = true, hideMinimap = true, hideOutline = true },
+	},
+	{
+		-- Same as the game's Hide UI (Alt+Z): world names and the target outline stay.
+		name = "Like the game's Hide UI",
+		values = { hideNames = false, hideNameplates = true, hideMinimap = true, hideOutline = false },
+	},
 }
 HUDFade.PRESETS = PRESETS
 
@@ -614,8 +615,7 @@ function HUDFade.ApplyPreset(i)
 	update()
 end
 
--- Why the HUD is up or hidden right now, for /hudfade why. Returns the lines to print, first one without the
--- "HUD Fade:" label.
+-- /hudfade why: returns the lines to print (the first one goes after the "HUD Fade:" prefix).
 local REASON_ORDER = { "peek", "combat", "dead", "window", "target", "casting" }
 local REASON_TEXT = {
 	peek = "Peek key held", combat = "Combat", dead = "Death",
@@ -651,7 +651,8 @@ function HUDFade.Explain(skipTyping)
 		local why = {}
 		if state.hudOff then why[#why + 1] = "You hid it" end
 		if isAway(t) then
-			why[#why + 1] = string.format("Away for %d min (open windows no longer keep it visible)", math.floor(idleFor / 60))
+			why[#why + 1] = string.format("Away for %d min (open windows no longer keep it visible)",
+				math.floor(idleFor / 60))
 		elseif idle then
 			why[#why + 1] = string.format("Idle for %ds", idleFor)
 		end
@@ -699,8 +700,7 @@ local function input()
 end
 
 local keys = CreateFrame("Frame")
--- Only movement keys count as you being active. Any other key acts through what it does: Tab gives you a target
--- (shown if "You have a target" is ticked), an ability starts a cast or a fight, B opens your bags, and so on.
+-- Only movement keys count as input. Other keys act through their effects instead (a target, a cast, a window).
 local MOVE_ACTIONS = {
 	MOVEFORWARD = true, MOVEBACKWARD = true, STRAFELEFT = true, STRAFERIGHT = true, TURNLEFT = true,
 	TURNRIGHT = true, JUMP = true, SITORSTAND = true, MOVEANDSTEER = true, PITCHUP = true, PITCHDOWN = true,
@@ -722,7 +722,7 @@ local function onKeyUp(_, key)
 	if key then held[key] = nil end
 end
 local function listenToKeys()
-	-- Only take keyboard events if they can pass straight through to the game; otherwise we would swallow keys.
+	-- Only listen if keys can propagate to the game, otherwise we would swallow them.
 	if keys.SetPropagateKeyboardInput and pcall(keys.SetPropagateKeyboardInput, keys, true) then
 		keys:EnableKeyboard(true)
 		keys:SetScript("OnKeyDown", onKey)
@@ -743,27 +743,25 @@ local function pollMouse()
 	local right = IsMouseButtonDown and IsMouseButtonDown("RightButton")
 	local x, y = GetCursorPosition()
 	if left or right or (IsMouselooking and IsMouselooking()) then
-		-- A button is turning the camera or steering, so the pointer is parked: where the game puts it back as you let
-		-- go is not you moving the mouse. Running with both buttons is moving yourself; turning the camera only counts
-		-- if you want it to.
+		-- Mouselook: the cursor jump on release is not real movement. Both buttons means running; turning the
+		-- camera only counts with activeCamera.
 		lastX, lastY, dragAt = x, y, t
 		if (left and right) or DB.activeCamera then input() end
 	elseif t - dragAt < 0.3 then
 		lastX, lastY = x, y
 	elseif math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2 then
 		lastX, lastY = x, y
-		-- While the HUD is up, using the mouse keeps it up. Once it has hidden for being idle, the mouse only brings it
-		-- back if you want it to (otherwise keys do, e.g. coming back from alt-tab).
+		-- Always counts while visible; after idle hiding only with mouseWakes (so alt-tabbing back can't wake it).
 		if DB.mouseWakes or not isIdle(t) then input() end
 	end
-	if IsKeyDown then -- (drop keys whose release never reached us)
+	if IsKeyDown then -- drop keys whose release we missed
 		for k in pairs(held) do
 			local ok, down = pcall(IsKeyDown, k)
 			if ok and readable(down) == false then held[k] = nil end
 		end
 	end
 	if state.moving then
-		-- Moving counts while you hold a key for it. Auto-run, follow and flight paths only count if you want them to.
+		-- Held movement keys count; auto-run, follow and flight paths only with activeAutorun.
 		if next(held) or DB.activeAutorun then input() end
 	end
 end
@@ -806,7 +804,7 @@ function HUDFade.Toggle()
 	if HUDFade.IsHidden() then HUDFade.Show() else HUDFade.Hide() end
 end
 
--- The switch for the whole addon. Off: HUD fully back, names and minimap back, your Hide UI key does its normal job.
+-- Master switch. Off restores everything and gives the Hide UI key back to the game.
 function HUDFade.SetEnabled(on)
 	DB.enabled = on and true or false
 	state.hudOff = false
@@ -835,10 +833,10 @@ function HUDFade.CleanScreenshot()
 	if not Screenshot then return end
 	state.shot = true
 	update(true)
-	-- Names and nameplates go away on the next frame; wait a moment so they are out of the picture.
+	-- CVar changes take a frame to show, so wait before taking the shot.
 	C_Timer.After(0.25, function()
 		Screenshot()
-		-- In case the game never tells us the screenshot finished.
+		-- Fallback in case SCREENSHOT_SUCCEEDED/FAILED never fires.
 		C_Timer.After(2, function()
 			if state.shot then state.shot = false; update() end
 		end)
@@ -878,21 +876,19 @@ end
 HUDFade.ApplyOverrides = applyOverrides
 
 ---------------------------------------------------------------------------
--- Pixel shift (burn-in protection). Every few minutes the whole interface moves a pixel or two around a small
--- circle, so the same pixels never show the same shapes for hours. Like the fade, it moves the one layer every
--- frame hangs from (UIParent): Blizzard UI, EllesmereUI and every other addon move together and keep their layout.
--- Nothing is saved. The normal position is remembered and put back when the option or the addon is turned off and
--- while Edit Mode is open. Nothing moves during combat (the game forbids it, and a jump mid-fight would be rude).
+-- Pixel shift (burn-in protection): every few minutes, move UIParent a pixel or two around a small circle.
+-- All frames move together and no layout is saved. The original anchors come back when it is turned off, in
+-- layout modes and at logout. Never moves in combat (UIParent is protected then).
 ---------------------------------------------------------------------------
 local SHIFT_STEPS = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, { -1, 1 }, { -1, 0 }, { -1, -1 }, { 0, -1 }, { 1, -1 } }
 local shift = {
-	index = (math.random and math.random(#SHIFT_STEPS)) or 1, -- (each session starts somewhere else on the circle)
+	index = (math.random and math.random(#SHIFT_STEPS)) or 1, -- random start point each session
 	nextAt = 0,
 	base = nil,     -- UIParent's own anchors, while we have it moved
 	sig = nil,      -- what its anchors looked like right after our last move
 	px = 0, py = 0, -- current offset, in pixels
 	inset = 0,      -- how far in from every screen edge the interface is kept, in pixels
-	ex = 0, ey = 0, -- how far that took the interface's bottom-left corner, in its own units
+	ex = 0, ey = 0, -- resulting move of the bottom-left corner, in UI units
 	fights = 0, since = 0, gaveUp = false,
 	lastSync = -100,
 }
@@ -919,8 +915,8 @@ local function anchorSig(t)
 	return table.concat(parts, ";")
 end
 
--- Moves the interface by dx, dy, kept "inset" in from every screen edge. With the inset as large as the furthest
--- move, a frame you placed against an edge never goes past it: at most it comes back to exactly where you put it.
+-- Moves UIParent by dx, dy and insets it from every screen edge. With the inset as large as the largest move,
+-- a frame placed against an edge never goes past it.
 local function placeUI(t, dx, dy, inset)
 	UIParent:ClearAllPoints()
 	for _, a in ipairs(t) do
@@ -931,7 +927,7 @@ local function placeUI(t, dx, dy, inset)
 	end
 end
 
--- How far a move takes the interface's bottom-left corner (EllesmereUI counts from there, see below).
+-- How far a move takes the bottom-left corner (EllesmereUI positions from there, see below).
 local function cornerMove(t, dx, dy, inset)
 	local x, y
 	for _, a in ipairs(t) do
@@ -959,8 +955,7 @@ local function pixelUnit()
 	return factor / scale
 end
 
--- While you arrange your frames (the game's Edit Mode, EllesmereUI's unlock mode) the interface goes back to its
--- exact place, so the positions you save are never off by the shift.
+-- Unshift while a layout mode is open, so saved positions never include the offset.
 local function layoutModeOpen()
 	return arranging() ~= nil
 end
@@ -975,8 +970,7 @@ local function syncShift(force)
 	if not DB or InCombatLockdown() then return end
 	local cur = readAnchors(UIParent)
 	if not cur then return end
-	-- Something else moved the interface since our last move (an ultrawide addon, the game): that is the new normal.
-	-- If it keeps happening, step aside instead of fighting over it.
+	-- Something else moved UIParent (an ultrawide addon, the game): adopt that, and give up if it keeps happening.
 	if shift.base and anchorSig(cur) ~= shift.sig then
 		shift.base, shift.px, shift.py, shift.inset, shift.ex, shift.ey = nil, 0, 0, 0, 0, 0
 		if t - shift.since > 10 then shift.since, shift.fights = t, 0 end
@@ -998,7 +992,7 @@ local function syncShift(force)
 	end
 	local unit = pixelUnit()
 	if not unit then return end
-	-- (a changed UI scale changes what a pixel is, so that counts as a change too)
+	-- A UI scale change changes the size of a pixel, so it counts as a change too.
 	if px == shift.px and py == shift.py and inset == shift.inset and (unit == shift.unit or inset == 0) then return end
 	local base = shift.base or cur
 	if not pcall(placeUI, base, px * unit, py * unit, inset * unit) then
@@ -1008,7 +1002,7 @@ local function syncShift(force)
 		say("pixel shift stopped: the game refused to move the interface.")
 		return
 	end
-	if inset == 0 then -- (back in its own place: nothing of ours to keep)
+	if inset == 0 then -- back at the original anchors
 		shift.base, shift.sig, shift.ex, shift.ey = nil, nil, 0, 0
 	else
 		shift.base, shift.sig = base, anchorSig(readAnchors(UIParent))
@@ -1017,12 +1011,9 @@ local function syncShift(force)
 	shift.px, shift.py, shift.inset, shift.unit = px, py, inset, unit
 end
 
--- EllesmereUI places an element you anchored to another one (its cast bar under the player frame, a bar on top of
--- another) from where that one is on screen, counting from the screen's corner as if the interface started there.
--- With the interface moved, that puts the element off by the move a second time. It shows on anything placed again
--- while shifted, like a cast bar appearing for a cast. Those placements go through EllesmereUI.SetFramePoint, so for
--- anchored elements we take our move back out of what it asks for. Its unlock mode gets the interface back in place
--- the moment it opens, before any mover reads a position.
+-- EllesmereUI positions elements anchored to other elements (like the cast bar under the player frame) from
+-- screen coordinates, so under a shift they would move twice. Its SetFramePoint is wrapped to take our offset
+-- back out for those. Its unlock mode listener unshifts before any mover reads a position.
 local euiHook, euiListening
 
 local function euiAnchored(eui, frame)
@@ -1053,7 +1044,7 @@ hookEUI = function()
 	local eui = _G.EllesmereUI
 	if type(eui) ~= "table" then return end
 	local set = eui.SetFramePoint
-	if not euiHook and type(set) == "function" then -- (once: every addon has loaded by now)
+	if not euiHook and type(set) == "function" then -- once; every addon has loaded by now
 		euiHook = function(frame, point, rel, relPoint, x, y, ...)
 			if shift.ex ~= 0 or shift.ey ~= 0 then
 				local ok, px, py = pcall(euiPlace, eui, frame, rel, relPoint, x, y)
@@ -1071,8 +1062,7 @@ hookEUI = function()
 	end
 end
 
--- Nothing of the shift is saved: put the interface back in its own place before logging out or reloading, in case
--- another addon saves frame positions from where they are on screen.
+-- Unshift before logout or reload, in case another addon saves frame positions from the screen.
 local function restoreShift()
 	if shift.base and not InCombatLockdown() then pcall(placeUI, shift.base, 0, 0, 0) end
 	shift.base, shift.sig, shift.px, shift.py, shift.inset, shift.ex, shift.ey = nil, nil, 0, 0, 0, 0, 0
@@ -1093,7 +1083,8 @@ function HUDFade.ShiftStatus()
 	local text = "pixel shift is on: " .. DB.shiftPixels .. " px every " .. DB.shiftMinutes .. " min"
 	if not DB.enabled then return text .. ", but HUD Fade is turned off." end
 	if shift.gaveUp then return text .. ", stopped because another addon keeps moving the interface back." end
-	text = text .. ". Offset now " .. shift.px .. "," .. shift.py .. " px, kept " .. shift.inset .. " px in from the screen edges"
+	text = text .. ". Offset now " .. shift.px .. "," .. shift.py .. " px, kept " .. shift.inset
+		.. " px in from the screen edges"
 	if InCombatLockdown() then return text .. ", waiting for combat to end." end
 	return text .. string.format(", next move in %d s.", math.max(0, shift.nextAt - now()))
 end
@@ -1133,13 +1124,13 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		DB = HUDFadeDB
 		copyDefaults(DEFAULTS, DB)
 		DB.restore = DB.restore or {}
-		-- (left by the mouse pointer option, removed in 0.3.0; its look speeds come back with restoreAllCVars at login)
+		-- Leftovers of the removed pointer option (its CVars come back through restoreAllCVars).
 		DB.hideCursor, DB.hideCursorSteer, DB.mouseReported, DB.log = nil, nil, nil, nil
 		HUDFade.db = DB
 	elseif event == "PLAYER_LOGIN" then
-		-- Logged out or crashed while hidden last time: put the names and nameplates back first.
+		-- CVars left off by a crash while hidden.
 		restoreAllCVars()
-		pcall(scanModels) -- (the one full scan, under the loading screen)
+		pcall(scanModels)
 		pcall(hookModels)
 		state.inCombat = InCombatLockdown() and true or false
 		state.lastInput = now()
@@ -1164,7 +1155,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		restoreAllCVars()
 		restoreShift()
 	elseif event == "PLAYER_REGEN_DISABLED" then
-		-- Runs just before combat lockdown starts: the last moment nameplates can be turned back on.
+		-- Fires just before combat lockdown: the last chance to turn nameplates back on.
 		state.inCombat = true
 		cvarsBack(PLATE_CVARS)
 		update(DB.showCombat)
@@ -1176,7 +1167,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 			if DB.hideNameplates then cvarsOff(PLATE_CVARS) end
 			hideMinimap()
 		else
-			showMinimap() -- (in case combat stopped it coming back)
+			showMinimap() -- in case combat blocked it
 		end
 		update()
 		syncShift(true)
@@ -1195,7 +1186,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		state.moving = true
 	elseif event == "PLAYER_STOPPED_MOVING" then
 		state.moving = false
-		wipe(held) -- (a key whose release the game never passed on, e.g. after Alt+Tab, cannot keep you "active")
+		wipe(held) -- a missed key release (e.g. after Alt+Tab) must not count as held forever
 	elseif event == "UPDATE_BINDINGS" then
 		applyOverrides()
 	elseif event == "SCREENSHOT_SUCCEEDED" or event == "SCREENSHOT_FAILED" then

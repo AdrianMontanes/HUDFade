@@ -146,27 +146,27 @@ end
 
 local function shiftChanged()
 	HUDFade.UpdateShift()
-	if HUDFade.RefreshOptions then HUDFade.RefreshOptions() end -- (the switch is on both pages)
+	if HUDFade.RefreshOptions then HUDFade.RefreshOptions() end -- the switch is on both pages
 end
 
-local SHIFT_TIP = "Moves the whole interface a pixel or two every few minutes, so nothing sits on the same pixels for hours. "
-	.. "Everything moves together, so your layout stays as it is. Distance and timing are on the Burn-in protection page under HUD Fade."
+local SHIFT_TIP = "Moves the whole interface a pixel or two every few minutes, so nothing sits on the same pixels "
+	.. "for hours. Everything moves together, so your layout stays as it is. Distance and timing are on the "
+	.. "Burn-in protection page under HUD Fade."
 
--- The settings go on a scrolling page, so on a short settings window the last ones scroll into view instead of
--- spilling over the window's border.
+-- A scrolling page, so the last settings don't spill past the bottom of a short settings window.
 local function scrollPage(page, height)
 	local ok, scroll = pcall(CreateFrame, "ScrollFrame", nil, page, "ScrollFrameTemplate")
 	if not ok then ok, scroll = pcall(CreateFrame, "ScrollFrame", nil, page, "UIPanelScrollFrameTemplate") end
 	if not ok then scroll = CreateFrame("ScrollFrame", nil, page) end
 	scroll:SetPoint("TOPLEFT", 0, -4)
-	scroll:SetPoint("BOTTOMRIGHT", -28, 4) -- (room for the scroll bar on the right)
+	scroll:SetPoint("BOTTOMRIGHT", -28, 4) -- room for the scroll bar
 	local content = CreateFrame("Frame", nil, scroll)
 	content:SetSize(600, height)
 	scroll:SetScrollChild(content)
 	scroll:HookScript("OnSizeChanged", function(_, w)
 		if type(w) == "number" and w > 0 then content:SetWidth(w) end
 	end)
-	if not scroll:GetScript("OnMouseWheel") then -- (the templates scroll with the wheel themselves)
+	if not scroll:GetScript("OnMouseWheel") then -- the templates handle the wheel themselves
 		scroll:EnableMouseWheel(true)
 		scroll:SetScript("OnMouseWheel", function(self, delta)
 			local range = self:GetVerticalScrollRange() or 0
@@ -176,7 +176,7 @@ local function scrollPage(page, height)
 	return content
 end
 
--- The preset menu above the "also hide" checkboxes. Changing one of the checkboxes yourself shows as Custom.
+-- Preset menu above the "also hide" checkboxes.
 local presetWidget
 local function presetName()
 	local i = HUDFade.CurrentPreset()
@@ -185,15 +185,16 @@ end
 local function presetChanged()
 	if presetWidget then presetWidget.refresh() end
 end
-local refreshAll -- (below)
+local refreshAll -- defined below
 local function choosePreset(i)
 	HUDFade.ApplyPreset(i)
 	refreshAll()
 end
 
 local PRESET_TIP = "Everything: names, nameplates, the target circle and glow all go with the HUD. "
-	.. "Like the game's Hide UI: what Alt+Z leaves stays (names, chat bubbles, the target circle and glow); nameplates go. "
-	.. "Either way you keep the fade, idle hiding and the rest. Change a box below and it shows as Custom."
+	.. "Like the game's Hide UI: what Alt+Z leaves stays (names, chat bubbles, the target circle and glow); "
+	.. "nameplates go. Either way you keep the fade, idle hiding and the rest. "
+	.. "Change a box below and it shows as Custom."
 
 local function presetMenu(y)
 	local title = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
@@ -204,16 +205,17 @@ local function presetMenu(y)
 	if ok and dd and dd.SetupMenu then
 		dd:SetPoint("TOPLEFT", 80, y)
 		dd:SetWidth(240)
-		if dd.SetDefaultText then dd:SetDefaultText("Custom") end -- (shown when the boxes match no preset)
+		if dd.SetDefaultText then dd:SetDefaultText("Custom") end -- shown when the boxes match no preset
 		dd:SetupMenu(function(_, root)
 			for i, p in ipairs(HUDFade.PRESETS) do
-				root:CreateRadio(p.name, function() return HUDFade.CurrentPreset() == i end, function() choosePreset(i) end)
+				local function isSelected() return HUDFade.CurrentPreset() == i end
+				root:CreateRadio(p.name, isSelected, function() choosePreset(i) end)
 			end
 		end)
 		w = dd
 		w.refresh = function() if dd.GenerateMenu then dd:GenerateMenu() end end
 	else
-		-- (no dropdown in this client: a button that steps through the presets)
+		-- No dropdown template in this client: a button that cycles through the presets.
 		w = CreateFrame("Button", nil, canvas, "UIPanelButtonTemplate")
 		w:SetPoint("TOPLEFT", 80, y)
 		w:SetSize(240, 22)
@@ -242,13 +244,16 @@ local function build()
 	built = true
 	canvas = scrollPage(panel, 720)
 	pageTitle("HUD Fade")
-	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
+	note("Fades the whole interface at once, Blizzard UI and EllesmereUI together, to protect OLED screens and "
+		.. "take clean screenshots. Bind keys under Key Bindings > AddOns > HUD Fade.", -40)
 
-	panel.master = checkbox("enabled", "Enable HUD Fade", "Off: the HUD stays visible, names and minimap stay as they are, and your Hide UI key does its normal job. No reload needed. You can also bind a key for this under Key Bindings > AddOns.",
+	panel.master = checkbox("enabled", "Enable HUD Fade",
+		"Off: the HUD stays visible, names and minimap stay as they are, and your Hide UI key does its normal job. "
+		.. "No reload needed. You can also bind a key for this under Key Bindings > AddOns.",
 		-76, 16, function() HUDFade.SetEnabled(db().enabled) end, true)
 	checkbox("pixelShift", "Pixel shift (burn-in protection)", SHIFT_TIP, -76, 320, shiftChanged)
 
-	-- (your own keys for the game's Hide UI and screenshots, read each time the page opens)
+	-- The player's own Hide UI and screenshot keys, read each time the page opens.
 	local function keyName(action)
 		local key = GetBindingKey(action)
 		return key and (GetBindingText and GetBindingText(key) or key) or "not bound"
@@ -256,69 +261,103 @@ local function build()
 
 	header("General", -120)
 	checkbox("replaceAltZ", function() return "Use Hide UI key (" .. keyName("TOGGLEUI") .. ")" end,
-		"Your Hide UI key fades the HUD out and back in instead of switching it off, and the HUD still comes back when something needs it.",
+		"Your Hide UI key fades the HUD out and back in instead of switching it off, and the HUD still comes back "
+		.. "when something needs it.",
 		-140, 16, HUDFade.ApplyOverrides)
 	checkbox("startHidden", "Start hidden", "Each session starts with the HUD hidden.", -140, 320)
 	checkbox("cleanPrintScreen", function() return "HUD-free screenshots (" .. keyName("SCREENSHOT") .. ")" end,
-		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back. There is also a separate key for this under Key Bindings > AddOns.", -166, 16, HUDFade.ApplyOverrides)
+		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back. "
+		.. "There is also a separate key for this under Key Bindings > AddOns.",
+		-166, 16, HUDFade.ApplyOverrides)
 
 	header("While HUD is hidden, also hide", -206)
 	presetMenu(-226)
 	checkbox("hideNames", "Names and chat bubbles",
-		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are switched off while the HUD is hidden and back on after. Your target's own name is the exception: the game always shows it.", -258, 16, presetChanged)
+		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are "
+		.. "switched off while the HUD is hidden and back on after. Your target's own name is the exception: "
+		.. "the game always shows it.",
+		-258, 16, presetChanged)
 	checkbox("hideNameplates", "Nameplates",
-		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.", -258, 320, presetChanged)
+		"Includes EllesmereUI's name-only plates over other players. Nameplates always come back when combat starts.",
+		-258, 320, presetChanged)
 	checkbox("hideMinimap", "Minimap",
-		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, so the minimap is switched off instead.", -284, 16, presetChanged)
+		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, "
+		.. "so the minimap is switched off instead.",
+		-284, 16, presetChanged)
 	checkbox("hideOutline", "Target circle and glow",
-		"The circle under your target and the glow around it and around whatever is under the mouse (the game's Outline Mode) are switched off while the HUD is hidden and back on after. So is the highlight around your own character, if you use one.", -284, 320, presetChanged)
+		"The circle under your target and the glow around it and around whatever is under the mouse "
+		.. "(the game's Outline Mode) are switched off while the HUD is hidden and back on after. "
+		.. "So is the highlight around your own character, if you use one.",
+		-284, 320, presetChanged)
 
 	header("Idle", -324)
 	slider("idleSeconds", "Hide when idle", 0, 120, 5, -344, 16,
 		function(v) return v == 0 and "Never" or string.format("after %d s", v) end, nil,
-		"After this long with no input, the HUD fades out. Moving, typing and using the mouse count as input, and so do the boxes below if ticked.")
+		"After this long with no input, the HUD fades out. Moving, typing and using the mouse count as input, "
+		.. "and so do the boxes below if ticked.")
 	slider("awayMinutes", "Hide anyway when away", nil, nil, nil, -344, 320,
-		function(v) return v >= 60 and "after 1 hour" or string.format("after %d min", v) end, { 2, 5, 10, 15, 20, 30, 45, 60 },
-		"After this long with no input, the HUD hides even over an open window or chat box, and even with Hide when idle set to Never. Combat still brings it back.")
+		function(v) return v >= 60 and "after 1 hour" or string.format("after %d min", v) end,
+		{ 2, 5, 10, 15, 20, 30, 45, 60 },
+		"After this long with no input, the HUD hides even over an open window or chat box, and even with "
+		.. "Hide when idle set to Never. Combat still brings it back.")
 	note("Also counts as input:", -394)
 	checkbox("mouseWakes", "Mouse moving",
-		"After the HUD hides for being idle, moving the mouse brings it back. Off: only keys bring it back (moving, targeting, opening a window and so on), so a bumped mouse or coming back from alt-tab leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.", -410)
+		"After the HUD hides for being idle, moving the mouse brings it back. Off: only keys bring it back "
+		.. "(moving, targeting, opening a window and so on), so a bumped mouse or coming back from alt-tab "
+		.. "leaves it hidden. While the HUD is visible, using the mouse always keeps it visible.",
+		-410)
 	checkbox("activeCamera", "Camera turning",
-		"On: looking around with the mouse keeps the HUD visible and brings it back. Off: you can look around and the HUD stays hidden.", -410, 320)
+		"On: looking around with the mouse keeps the HUD visible and brings it back. "
+		.. "Off: you can look around and the HUD stays hidden.",
+		-410, 320)
 	checkbox("activeAutorun", "Auto-run or follow",
-		"On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides while your character keeps moving. Holding a movement key always counts as input.", -436)
+		"On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides "
+		.. "while your character keeps moving. Holding a movement key always counts as input.",
+		-436)
 
 	header("While HUD is hidden, bring it back on", -476)
 	checkbox("showCombat", "Combat",
-		"Combat brings the HUD back at once, even while you are idle. If you hide it during a fight, it stays hidden until that fight ends.", -496)
+		"Combat brings the HUD back at once, even while you are idle. If you hide it during a fight, "
+		.. "it stays hidden until that fight ends.",
+		-496)
 	checkbox("showTarget", "Target",
-		"Picking a target brings the HUD back while you are playing. Once you have been idle for your idle time, it hides even with a target.", -496, 320)
+		"Picking a target brings the HUD back while you are playing. Once you have been idle for your idle time, "
+		.. "it hides even with a target.",
+		-496, 320)
 	checkbox("showCasting", "Casting",
 		"Casting or channeling brings the HUD back while you are playing.", -522)
 	checkbox("showDead", "Death",
-		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. As a ghost everything works as usual.", -522, 320)
+		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. "
+		.. "As a ghost everything works as usual.",
+		-522, 320)
 	checkbox("showWindows", "Windows, popups, bags or typing",
-		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, EllesmereUI unlock mode). Typing also counts as input, so after you send a message the HUD stays for your idle time. A window or chat box left open keeps the HUD only until Hide anyway when away.", -548)
+		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, "
+		.. "EllesmereUI unlock mode). Typing also counts as input, so after you send a message the HUD stays for "
+		.. "your idle time. A window or chat box left open keeps the HUD only until Hide anyway when away.",
+		-548)
 
 	header("Fade", -588)
 	slider("fadeOut", "Fade out", 0, 3, 0.1, -608, 16, "%.1f s")
 	slider("fadeIn", "Fade in", 0, 1, 0.05, -608, 320, "%.2f s")
 	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -658, 16, "%d%%", 100,
-		"How much of the HUD stays visible while hidden: 0% is fully gone (true black on OLED), higher leaves it faintly visible.")
+		"How much of the HUD stays visible while hidden: 0% is fully gone (true black on OLED), "
+		.. "higher leaves it faintly visible.")
 
 	-- Burn-in protection page
 	canvas = shiftPanel
 	pageTitle("Burn-in protection")
-	note("Pixel shift moves the whole interface a pixel or two every few minutes, around a small circle, so the same pixels "
-		.. "never show the same shapes for hours. Blizzard UI, EllesmereUI and every other addon move together, so your "
-		.. "layout stays exactly as it is and nothing is saved. It never moves during combat and steps aside while Edit Mode or EllesmereUI's unlock mode is open.", -40)
+	note("Pixel shift moves the whole interface a pixel or two every few minutes, around a small circle, so the "
+		.. "same pixels never show the same shapes for hours. Blizzard UI, EllesmereUI and every other addon move "
+		.. "together, so your layout stays exactly as it is and nothing is saved. It never moves during combat "
+		.. "and steps aside while Edit Mode or EllesmereUI's unlock mode is open.", -40)
 	header("Pixel shift", -110)
 	checkbox("pixelShift", "Pixel shift (burn-in protection)", nil, -130, 16, shiftChanged)
 	slider("shiftPixels", "Distance", 1, 4, 1, -170, 16, function(v) return string.format("%d px", v) end)
 	slider("shiftMinutes", "Move every", 1, 10, 1, -170, 320, function(v) return string.format("%d min", v) end)
-	note("The interface is also kept that distance in from the screen edges, so a frame you placed against an edge never goes past it. "
-		.. "Nothing is saved: each login starts from your own layout. Many OLED monitors also shift the whole picture on their own; "
-		.. "using both is fine. Type /hudfade shift now to see a move straight away.", -230)
+	note("The interface is also kept that distance in from the screen edges, so a frame you placed against an "
+		.. "edge never goes past it. Nothing is saved: each login starts from your own layout. Many OLED monitors "
+		.. "also shift the whole picture on their own; using both is fine. Type /hudfade shift now to see a move "
+		.. "straight away.", -230)
 	canvas = panel
 end
 
@@ -400,7 +439,7 @@ SlashCmdList.HUDFADE = function(msg)
 	elseif cmd == "shot" or cmd == "screenshot" then
 		HUDFade.CleanScreenshot()
 	elseif cmd == "why" then
-		-- (asked a moment later, once the chat box you typed this in has closed)
+		-- Wait for the chat box this was typed in to close, so it doesn't count as typing.
 		C_Timer.After(0.5, function()
 			local lines = HUDFade.Explain(true)
 			say(lines[1])
