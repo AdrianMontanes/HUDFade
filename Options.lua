@@ -289,9 +289,11 @@ local function build()
 
 	header("General", -120)
 	checkbox("replaceAltZ", function() return "Use Hide UI key (" .. keyName("TOGGLEUI") .. ")" end,
-		"Your Hide UI key fades the HUD out and back in instead of switching it off, and the HUD still comes back "
-		.. "when something needs it.\n\nThe NVIDIA overlay uses Alt+Z too. If Alt+Z opens it, change the "
-		.. "overlay's shortcut in the NVIDIA app, or bind Hide UI to another key.",
+		"Your Hide UI key fades the HUD out and back in instead of switching it off. While hidden this way it "
+		.. "stays hidden until you press the key again, except for a moment when combat, a window, typing or "
+		.. "dying needs it (if ticked below). A new target or a cast doesn't bring it back.\n\nThe NVIDIA "
+		.. "overlay uses Alt+Z too. If Alt+Z opens it, change the overlay's shortcut in the NVIDIA app, or bind "
+		.. "Hide UI to another key.",
 		-140, 16, HUDFade.ApplyOverrides)
 	checkbox("startHidden", "Start hidden", "Each session starts with the HUD hidden.", -140, 320)
 	checkbox("cleanPrintScreen", function() return "HUD-free screenshots (" .. keyName("SCREENSHOT") .. ")" end,
@@ -361,10 +363,11 @@ local function build()
 		-496)
 	checkbox("showTarget", "Target",
 		"Picking a target brings the HUD back while you are playing. Once you have been idle for your idle time, "
-		.. "it hides even with a target.",
+		.. "it hides even with a target. After you hide it with your Hide UI key, a target leaves it hidden.",
 		-496, 320)
 	checkbox("showCasting", "Casting",
-		"Casting or channeling brings the HUD back while you are playing.", -522)
+		"Casting or channeling brings the HUD back while you are playing. After you hide it with your Hide UI "
+		.. "key, casting leaves it hidden.", -522)
 	checkbox("showDead", "Death",
 		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. "
 		.. "As a ghost everything works as usual.",

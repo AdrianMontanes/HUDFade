@@ -234,6 +234,10 @@ local function check(label, cond)
 	if not cond then failed = true end
 end
 
+local namePlates = {}
+C_NamePlate = {}
+function C_NamePlate.GetNamePlateForUnit(unit) return namePlates[unit] end
+
 -- Just enough of LibStub, LibDataBroker and LibDBIcon for the minimap button
 local icon = {}
 function icon:Register(name, obj, db)
@@ -292,24 +296,29 @@ Minimap:Show()
 check("minimap stays hidden if another addon shows it", Minimap.shown == false)
 check("friendly player plates off", cvars.nameplateShowFriendlyPlayers == "0")
 
--- Target, combat, toggle, peek and screenshot
+-- After the hide key, a new target leaves the HUD hidden, but a window brings it back for a moment
 setTarget(true)
 step(0.5)
-check("target shows", UIParent.alpha == 1 and cvars.UnitNameNPC == "1")
+check("after the hide key, a new target leaves it hidden", UIParent.alpha == 0 and cvars.UnitNameNPC == "0")
+setTarget(false)
+local bag = CreateFrame("Frame", "ContainerFrame1")
+step(0.5)
+check("a window shows", UIParent.alpha == 1 and cvars.UnitNameNPC == "1")
 check("target circle and glow back", cvars.ObjectSelectionCircle == "1" and cvars.Outline == "2")
 check("model back", model.malpha == 1)
 check("that frame back", lone.alpha == 1)
 check("minimap back", Minimap.shown == true)
-setTarget(false)
+bag:Hide()
 step(0.5)
-check("short grace after the target clears", UIParent.alpha == 1)
+check("short grace after the window closes", UIParent.alpha == 1)
 step(2)
 check("hides after the grace", UIParent.alpha == 0)
 
+-- Combat, toggle, peek and screenshot
 HUDFadeDB.hideOutline = false
-setTarget(true)
+bag:Show()
 step(0.5)
-setTarget(false)
+bag:Hide()
 step(3)
 check("with Target circle and glow off, the glow stays",
 	UIParent.alpha == 0 and cvars.Outline == "2" and cvars.UnitNameNPC == "0")
@@ -324,11 +333,13 @@ fire("PLAYER_REGEN_ENABLED")
 step(5)
 check("hidden again after combat", UIParent.alpha == 0)
 
+HUDFade.Toggle()
+step(0.5)
 setTarget(true)
 step(0.5)
 HUDFade.Toggle()
 step(1.5)
-check("hide with target suppresses target", UIParent.alpha == 0)
+check("the hide key works with a target", UIParent.alpha == 0)
 HUDFade.Toggle()
 step(0.5)
 check("toggle shows", UIParent.alpha == 1)
@@ -908,5 +919,39 @@ SlashCmdList.HUDFADE("minimap")
 check("/hudfade minimap hides the button", not icon.shown and HUDFadeDB.minimap.hide == true)
 SlashCmdList.HUDFADE("reset")
 check("reset shows it again", icon.shown and HUDFadeDB.minimap.hide == false)
+
+-- Nameplates (EllesmereUI's names among them) follow the fade, then the nameplate CVars take them away
+HUDFade.Show()
+step(1)
+local plate = newFrame()
+namePlates.nameplate1 = plate
+fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+check("a nameplate starts at full opacity", plate.alpha == 1)
+HUDFade.Hide()
+step(0.5)
+check("halfway through the fade it is half faded", plate.alpha > 0.2 and plate.alpha < 0.8)
+step(1)
+check("it fades out with the HUD before the CVars take it away", plate.alpha == 0 and cvars.nameplateShowEnemies == "0")
+fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
+check("the game reuses it at full opacity", plate.alpha == 1)
+HUDFadeDB.showCombat = false
+fire("PLAYER_REGEN_DISABLED")
+fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+check("in combat nameplates come back at full opacity, even with the HUD hidden",
+	plate.alpha == 1 and cvars.nameplateShowEnemies == "1")
+fire("PLAYER_REGEN_ENABLED")
+fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
+HUDFadeDB.showCombat = true
+HUDFade.Show()
+fire("NAME_PLATE_UNIT_ADDED", "nameplate1")
+step(0.1)
+check("a nameplate coming back fades in with the HUD", plate.alpha > 0 and plate.alpha < 1)
+step(0.5)
+check("and ends at full opacity", plate.alpha == 1)
+HUDFadeDB.hideNameplates = false
+HUDFade.Hide()
+step(0.5)
+check("with nameplates not hidden, they don't fade", plate.alpha == 1)
+HUDFadeDB.hideNameplates = true
 
 os.exit(failed and 1 or 0)

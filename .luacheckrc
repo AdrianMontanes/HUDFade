@@ -28,6 +28,7 @@ globals = {
 read_globals = {
 	"BackdropTemplateMixin",
 	"C_CVar",
+	"C_NamePlate",
 	"C_Timer",
 	"ClearOverrideBindings",
 	"CreateFrame",

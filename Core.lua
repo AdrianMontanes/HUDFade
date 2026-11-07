@@ -391,6 +391,51 @@ local function hookModels()
 end
 
 ---------------------------------------------------------------------------
+-- Nameplates (EllesmereUI's names too) sit outside UIParent, so its fade misses them. They follow the fade
+-- until the nameplate CVars switch them off at its end. In combat, or with the option off, they stay.
+---------------------------------------------------------------------------
+local plates = {} -- unit -> nameplate
+local platesFaded = setmetatable({}, { __mode = "k" })
+
+-- 1 with the HUD fully shown, 0 at the hidden opacity, so they are gone right when the fade ends.
+local function plateAlpha(a)
+	if not DB.hideNameplates or state.inCombat then return 1 end
+	local low = DB.hiddenAlpha or 0
+	if a >= 0.999 or low >= 0.999 then return 1 end
+	return math.max(0, math.min(1, (a - low) / (1 - low)))
+end
+
+local function fadePlate(p, a)
+	if a >= 0.999 then
+		-- Nameplates are pooled: one we faded must be back at full opacity before its next unit.
+		if platesFaded[p] then
+			pcall(p.SetAlpha, p, 1)
+			platesFaded[p] = nil
+		end
+	elseif not ask(p, "IsForbidden") and pcall(p.SetAlpha, p, a) then
+		platesFaded[p] = true
+	end
+end
+
+local function applyPlates(a)
+	local pa = plateAlpha(a)
+	for _, p in pairs(plates) do fadePlate(p, pa) end
+end
+
+local function plateAdded(unit)
+	local ok, p = pcall(C_NamePlate.GetNamePlateForUnit, unit)
+	if not (ok and type(p) == "table") then return end
+	plates[unit] = p
+	fadePlate(p, plateAlpha(state.current))
+end
+
+local function plateRemoved(unit)
+	local p = plates[unit]
+	plates[unit] = nil
+	if p then fadePlate(p, 1) end
+end
+
+---------------------------------------------------------------------------
 -- The fade
 ---------------------------------------------------------------------------
 local applyFailed = false
@@ -402,6 +447,7 @@ local function apply(a)
 		say("the game refused to change the UI's opacity (" .. tostring(err) .. ").")
 	end
 	applyModels(a)
+	applyPlates(a)
 end
 
 local driver = CreateFrame("Frame")
@@ -519,8 +565,10 @@ end
 
 -- Reasons that show the HUD only while not idle. Death counts as input once (PLAYER_DEAD), so lying dead while
 -- AFK still hides the HUD after the idle time. That is also why the Release Spirit popup is not a window.
+-- After the hide key, a target or a cast leaves it hidden: you hid it on purpose, often to frame a shot.
 local function softReasons(out)
 	if DB.showDead and is(UnitIsDead, "player") then out.dead = true end
+	if state.hudOff then return end
 	if DB.showTarget and is(UnitExists, "target") then out.target = true end
 	if DB.showCasting and state.casting then out.casting = true end
 end
@@ -1120,6 +1168,10 @@ events:RegisterEvent("PLAYER_TARGET_CHANGED")
 events:RegisterEvent("PLAYER_DEAD")
 pcall(events.RegisterEvent, events, "PLAYER_FOCUS_CHANGED")
 pcall(events.RegisterEvent, events, "GLOBAL_MOUSE_DOWN")
+if C_NamePlate then
+	pcall(events.RegisterEvent, events, "NAME_PLATE_UNIT_ADDED")
+	pcall(events.RegisterEvent, events, "NAME_PLATE_UNIT_REMOVED")
+end
 pcall(events.RegisterEvent, events, "GLOBAL_MOUSE_UP")
 events:RegisterEvent("PLAYER_STARTED_MOVING")
 events:RegisterEvent("PLAYER_STOPPED_MOVING")
@@ -1178,6 +1230,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		-- Fires just before combat lockdown: the last chance to turn nameplates back on.
 		state.inCombat = true
 		cvarsBack(PLATE_CVARS)
+		applyPlates(state.current)
 		update(DB.showCombat)
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		state.inCombat = false
@@ -1209,6 +1262,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		wipe(held) -- a missed key release (e.g. after Alt+Tab) must not count as held forever
 	elseif event == "UPDATE_BINDINGS" then
 		applyOverrides()
+	elseif event == "NAME_PLATE_UNIT_ADDED" then
+		if DB then plateAdded(arg1) end
+	elseif event == "NAME_PLATE_UNIT_REMOVED" then
+		plateRemoved(arg1)
 	elseif event == "GLOBAL_MOUSE_DOWN" then
 		if DB then mouseDown(arg1) end
 	elseif event == "GLOBAL_MOUSE_UP" then
