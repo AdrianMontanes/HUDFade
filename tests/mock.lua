@@ -180,7 +180,7 @@ HUDFade.Peek(false)
 HUDFadeDB.hideCursor = true
 HUDFade.Hide(); step(4)
 check("pointer hidden when still", mouselook==true)
-check("mouse look slowed to a tenth while hidden", tonumber(cvars.cameraYawMoveSpeed)==18 and tonumber(cvars.cameraPitchMoveSpeed)==9 and HUDFadeDB.restore.cameraYawMoveSpeed=="180")
+check("mouse look slowed to a tenth while hidden, up and down to almost nothing", tonumber(cvars.cameraYawMoveSpeed)==18 and tonumber(cvars.cameraPitchMoveSpeed)==0.09 and HUDFadeDB.restore.cameraYawMoveSpeed=="180" and HUDFadeDB.restore.cameraPitchMoveSpeed=="90")
 step(1); check("idle timer not reset by our own mouselook", HUDFade.state.lastInput < GetTime() - 0.9)
 step(1); facingV=1.0004; step(0.2); check("tiny drift does not count as a move", mouselook==true)
 facingV=1.2; step(0.2)

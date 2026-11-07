@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.19
+
+- Hidden pointer: moving the mouse up or down tilted the camera without bringing the pointer back (a tilt turns nothing HUD Fade can notice). While the pointer is hidden, the up-and-down look speed now drops to almost nothing, so the camera stays level, and the next sideways move brings the pointer back as before.
+
 ## 0.2.18
 
 - New "Target circle and glow" option under "While HUD is hidden, also hide", on by default: the circle under your target, the glow around it and around whatever is under the mouse (the game's Outline Mode), and your own character's highlight if you use one, are switched off while the HUD is hidden. The target circle moved here from "Names and chat bubbles".

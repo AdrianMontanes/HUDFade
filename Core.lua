@@ -745,12 +745,13 @@ local startedAt = 0
 local SETTLE, TURN = 0.4, 0.006
 
 -- That turn is also why the camera moved a little before the pointer came back. So while the pointer is hidden,
--- mouse look speed is turned down to a tenth: the turn is too small to see but still enough to notice. Where the game
--- also reports the mouse's own movement (GetCursorDelta), that is used too, and once it has been seen to work the
--- speed goes down to almost nothing: the camera stays still until the pointer is back. That also covers sitting down
--- (your character does not turn there, so only the camera moved) and flight paths (the route turns you). The real
--- speeds wait in the saved variables like the names above, so even a crash gets them back at the next login.
--- Right-drags and steering while flying keep the normal speed.
+-- mouse look speed is turned down to a tenth: the turn is too small to see but still enough to notice. Up and down
+-- the mouse only tilts the camera, which turns nothing that can be noticed, so that speed goes down to almost
+-- nothing: the camera stays level and the next sideways move brings the pointer back. Where the game also reports the
+-- mouse's own movement (GetCursorDelta), that is used too, and once it has been seen to work the sideways speed goes
+-- down to almost nothing as well. On flight paths it always does (the route turns you, so the turn says nothing).
+-- The real speeds wait in the saved variables like the names above, so even a crash gets them back at the next
+-- login. Right-drags and steering while flying keep the normal speed.
 local LOOK_CVARS = { "cameraYawMoveSpeed", "cameraPitchMoveSpeed" }
 local LOOK_SLOW, TURN_SLOW, LOOK_STILL = 0.1, 0.0008, 0.001
 local MOVE_PX = 8 -- (mouse movement, in pixels the game reports, that brings the pointer back)
@@ -768,7 +769,8 @@ local function slowMouse(share)
 				value = ok and readable(v) or nil
 			end
 			local n = tonumber(value)
-			if n and n > 0 and pcall(setCVar, name, tostring(n * share)) and saved == nil then
+			local part = name == "cameraPitchMoveSpeed" and LOOK_STILL or share
+			if n and n > 0 and pcall(setCVar, name, tostring(n * part)) and saved == nil then
 				DB.restore[name] = value
 			end
 		end
