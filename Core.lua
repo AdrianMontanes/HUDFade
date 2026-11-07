@@ -433,10 +433,24 @@ local function shown(name)
 	return ask(f, "IsVisible") == true
 end
 
--- Returns what is open (for /hudfade why), or nil.
+-- Arranging your frames in the game's Edit Mode or EllesmereUI's unlock mode: what is open, or nil.
+local function arranging()
+	if EditModeManagerFrame and ask(EditModeManagerFrame, "IsShown") == true then return "Edit Mode" end
+	local eui = _G.EllesmereUI
+	if type(eui) == "table" and type(eui.IsUnlockModeActive) == "function" then
+		local ok, on = pcall(eui.IsUnlockModeActive, eui)
+		if ok and readable(on) == true then return "EllesmereUI unlock mode" end
+	end
+	return nil
+end
+
+-- Returns what is open (for /hudfade why), or nil. Arranging your frames counts too, so the HUD stays visible
+-- while you do it, until the away time.
 local function windowOpen()
 	if GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus() then return "typing" end
 	if GetCursorInfo and GetCursorInfo() then return "holding something on the cursor" end
+	local layout = arranging()
+	if layout then return layout end
 	for _, name in ipairs(WINDOWS) do
 		if shown(name) then return name end
 	end
@@ -544,6 +558,7 @@ local REASON_TEXT = {
 local function windowText(v)
 	if v == "typing" then return "Typing" end
 	if v == "holding something on the cursor" then return "Holding something on the cursor" end
+	if v == "Edit Mode" or v == "EllesmereUI unlock mode" then return v end
 	return "Window open (" .. tostring(v) .. ")"
 end
 
@@ -1189,13 +1204,7 @@ end
 -- While you arrange your frames (the game's Edit Mode, EllesmereUI's unlock mode) the interface goes back to its
 -- exact place, so the positions you save are never off by the shift.
 local function layoutModeOpen()
-	if EditModeManagerFrame and ask(EditModeManagerFrame, "IsShown") == true then return true end
-	local eui = _G.EllesmereUI
-	if type(eui) == "table" and type(eui.IsUnlockModeActive) == "function" then
-		local ok, on = pcall(eui.IsUnlockModeActive, eui)
-		if ok and readable(on) == true then return true end
-	end
-	return false
+	return arranging() ~= nil
 end
 
 local hookEUI

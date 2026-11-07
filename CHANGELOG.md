@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.2.13
+
+- Edit Mode and EllesmereUI's unlock mode count as an open window: the HUD stays visible while you arrange your frames, and only "Hide anyway when away" hides it.
+
 ## 0.2.12
 
 - Pixel shift: EllesmereUI elements anchored to another one (like the cast bar under the player frame) no longer appear offset when they show up while the interface is shifted. EllesmereUI places them counting from the screen corner, so HUD Fade now takes its own move back out of those placements.

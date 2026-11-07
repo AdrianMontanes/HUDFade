@@ -213,7 +213,7 @@ local function build()
 	checkbox("showDead", "Death",
 		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. As a ghost everything works as usual.", -390)
 	checkbox("showWindows", "Windows, popups, bags or typing",
-		"Any window you open, a popup, your bags, or typing in chat. Typing also counts as activity, so after you send a message the HUD stays for your idle time. A window or chat box left open keeps the HUD only until Hide anyway when away.", -390, 320)
+		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, EllesmereUI unlock mode). Typing also counts as activity, so after you send a message the HUD stays for your idle time. A window or chat box left open keeps the HUD only until Hide anyway when away.", -390, 320)
 
 	header("Timing", -430)
 	slider("idleSeconds", "Hide when idle", 0, 120, 5, -450, 16,

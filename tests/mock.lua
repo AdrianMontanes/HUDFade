@@ -448,6 +448,14 @@ UIParent.points = { {"TOPLEFT", nil, "TOPLEFT", 0, 0}, {"BOTTOMRIGHT", nil, "BOT
 check("gives up after another addon fights it 3 times", select(1, uiOffset())==0 and HUDFade.ShiftStatus():find("stopped", 1, true))
 SlashCmdList.HUDFADE("shift on"); repeat HUDFade.ShiftNow() until select(1, uiOffset())~=0
 check("/hudfade shift on tries again", select(1, uiOffset())~=0)
+-- Arranging frames counts as an open window: only the away time hides the HUD then
+step(7); check("idle-hidden before arranging frames", UIParent.alpha==0)
+EllesmereUI._unlockModeSessionActive = true; step(0.5)
+check("EllesmereUI's unlock mode brings the HUD back like a window", UIParent.alpha==1)
+step(30); check("and keeps it visible while you arrange frames", UIParent.alpha==1)
+check("/hudfade why names unlock mode", table.concat(HUDFade.Explain(), " "):find("EllesmereUI unlock mode", 1, true) ~= nil)
+HUDFadeDB.awayMinutes=2; step(91); check("until the away time", UIParent.alpha==0)
+EllesmereUI._unlockModeSessionActive = false; HUDFadeDB.awayMinutes=10
 HUDFade.Hide(); HUDFadeDB.hideCursor=true; cx=cx+40; step(3)
 local slowedAtLogout = tonumber(cvars.cameraYawMoveSpeed)==18
 fire("PLAYER_LOGOUT")
