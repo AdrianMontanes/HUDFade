@@ -746,7 +746,7 @@ SlashCmdList.HUDFADE("reset")
 -- Presets
 check("defaults are the Everything preset", HUDFade.CurrentPreset() == 1 and HUDFade.PRESETS[1].name == "Everything")
 HUDFade.ApplyPreset(2)
-check("Like the game's Hide UI: names and glow stay, nameplates and minimap go",
+check("Blizzard: names and glow stay, nameplates and minimap go",
 	HUDFadeDB.hideNames == false and HUDFadeDB.hideOutline == false and HUDFadeDB.hideNameplates == true
 	and HUDFadeDB.hideMinimap == true and HUDFade.CurrentPreset() == 2)
 HUDFade.Show()

@@ -220,7 +220,7 @@ local function choosePreset(i)
 end
 
 local PRESET_TIP = "Everything: names, nameplates, the target circle and glow all go with the HUD. "
-	.. "Like the game's Hide UI: what Alt+Z leaves stays (names, chat bubbles, the target circle and glow); "
+	.. "Blizzard: as with the game's own Hide UI (Alt+Z), names, chat bubbles, the target circle and glow stay; "
 	.. "nameplates go. Either way you keep the fade, idle hiding and the rest. "
 	.. "Change a box below and it shows as Custom."
 

@@ -591,7 +591,7 @@ local PRESETS = {
 	},
 	{
 		-- Same as the game's Hide UI (Alt+Z): world names and the target outline stay.
-		name = "Like the game's Hide UI",
+		name = "Blizzard",
 		values = { hideNames = false, hideNameplates = true, hideMinimap = true, hideOutline = false },
 	},
 }

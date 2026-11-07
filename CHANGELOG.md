@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 0.3.3
+
+- The second preset is now called **Blizzard** (it was "Like the game's Hide UI").
+
 ## 0.3.2
 
 - New "Help and feedback" section at the bottom of the settings: the addon page and the place to report a problem, ready to copy.
