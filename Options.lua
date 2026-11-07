@@ -219,8 +219,8 @@ local function choosePreset(i)
 	refreshAll()
 end
 
-local PRESET_TIP = "Everything: names, nameplates, the target circle and glow all go with the HUD. "
-	.. "Blizzard: as with the game's own Hide UI (Alt+Z), names, chat bubbles, the target circle and glow stay; "
+local PRESET_TIP = "Everything: names, nameplates and the target circle all go with the HUD. "
+	.. "Blizzard: as with the game's own Hide UI (Alt+Z), names, chat bubbles and the target circle stay; "
 	.. "nameplates go. Either way you keep the fade, idle hiding and the rest. "
 	.. "Change a box below and it shows as Custom."
 
@@ -320,9 +320,8 @@ local function build()
 		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, "
 		.. "so the minimap is switched off instead.",
 		-284, 16, presetChanged)
-	checkbox("hideOutline", "Target circle and glow",
-		"The circle under your target and the glow around it and around whatever is under the mouse "
-		.. "(the game's Outline Mode) are switched off while the HUD is hidden and back on after. "
+	checkbox("hideOutline", "Target circle",
+		"The circle under your target is switched off while the HUD is hidden and back on after. "
 		.. "So is the highlight around your own character, if you use one.",
 		-284, 320, presetChanged)
 

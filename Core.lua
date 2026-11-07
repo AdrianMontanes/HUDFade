@@ -31,7 +31,7 @@ local DEFAULTS = {
 	showDead = true,
 	hideNames = true,      -- floating player/NPC names and chat bubbles
 	hideNameplates = true,
-	hideOutline = true,    -- target selection circle and Outline Mode glow
+	hideOutline = true,    -- target selection circle and outlines
 	mouseWakes = true,     -- mouse movement ends idle hiding (it always counts while the HUD is visible)
 	mouseClicks = true,    -- a click ends idle hiding (it always counts while the HUD is visible)
 	activeCamera = false,  -- turning the camera counts as activity for the idle timer
@@ -108,7 +108,7 @@ local NAME_CVARS = {
 }
 -- There is no CVar for the target's own name: the game always shows it.
 
--- Target selection circle, Outline Mode glow, and the "find yourself" highlight. CVars the client lacks are skipped.
+-- Target selection circle, Outline Mode, and the "find yourself" highlight. CVars the client lacks are skipped.
 local OUTLINE_CVARS = {
 	"ObjectSelectionCircle", "Outline", "findYourselfAnywhere", "findYourselfInBG", "findYourselfInRaid",
 }

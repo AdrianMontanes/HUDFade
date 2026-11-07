@@ -282,7 +282,7 @@ HUDFade.Toggle()
 step(1.5)
 check("toggle hides", UIParent.alpha == 0)
 check("NPC names off", cvars.UnitNameNPC == "0" and HUDFadeDB.restore.UnitNameNPC == "1")
-check("target circle and glow off", cvars.ObjectSelectionCircle == "0"
+check("target circle and outlines off", cvars.ObjectSelectionCircle == "0"
 	and HUDFadeDB.restore.ObjectSelectionCircle == "1" and cvars.Outline == "0" and HUDFadeDB.restore.Outline == "2")
 check("a setting the game lacks is skipped",
 	HUDFadeDB.restore.UnitNameHostleNPC == nil and cvars.UnitNameHostleNPC == nil)
@@ -304,7 +304,7 @@ setTarget(false)
 local bag = CreateFrame("Frame", "ContainerFrame1")
 step(0.5)
 check("a window shows", UIParent.alpha == 1 and cvars.UnitNameNPC == "1")
-check("target circle and glow back", cvars.ObjectSelectionCircle == "1" and cvars.Outline == "2")
+check("target circle and outlines back", cvars.ObjectSelectionCircle == "1" and cvars.Outline == "2")
 check("model back", model.malpha == 1)
 check("that frame back", lone.alpha == 1)
 check("minimap back", Minimap.shown == true)
@@ -320,7 +320,7 @@ bag:Show()
 step(0.5)
 bag:Hide()
 step(3)
-check("with Target circle and glow off, the glow stays",
+check("with Target circle off, the outlines stay",
 	UIParent.alpha == 0 and cvars.Outline == "2" and cvars.UnitNameNPC == "0")
 HUDFadeDB.hideOutline = true
 
@@ -799,14 +799,14 @@ SlashCmdList.HUDFADE("reset")
 -- Presets
 check("defaults are the Everything preset", HUDFade.CurrentPreset() == 1 and HUDFade.PRESETS[1].name == "Everything")
 HUDFade.ApplyPreset(2)
-check("Blizzard: names and glow stay, nameplates and minimap go",
+check("Blizzard: names and the circle stay, nameplates and minimap go",
 	HUDFadeDB.hideNames == false and HUDFadeDB.hideOutline == false and HUDFadeDB.hideNameplates == true
 	and HUDFadeDB.hideMinimap == true and HUDFade.CurrentPreset() == 2)
 HUDFade.Show()
 step(0.5)
 HUDFade.Hide()
 step(2)
-check("with it, hiding leaves names and the glow but takes nameplates", UIParent.alpha == 0
+check("with it, hiding leaves names and the circle but takes nameplates", UIParent.alpha == 0
 	and cvars.UnitNameNPC == "1" and cvars.Outline == "2" and cvars.nameplateShowEnemies == "0")
 HUDFade.Show()
 step(0.5)
