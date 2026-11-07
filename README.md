@@ -14,6 +14,7 @@ Made for OLED burn-in care and HUD-free screenshots.
 [![Latest release](https://img.shields.io/github/v/release/AdrianMontanes/HUDFade?label=release&color=F7752A)](https://github.com/AdrianMontanes/HUDFade/releases/latest)
 [![WoW Forever and Retail](https://img.shields.io/badge/WoW-Forever%20%7C%20Retail-148EFF)](#install)
 [![MIT license](https://img.shields.io/github/license/AdrianMontanes/HUDFade?color=blue)](LICENSE)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/44dri44n)
 
 </div>
 
@@ -63,3 +64,7 @@ Hover it, type `/hudfade what`, and [open an issue](https://github.com/AdrianMon
 ## Recording in HDR?
 
 Try [REPLAYD](https://replayd.download/with/hudfade), my native game recorder for Windows, built from scratch with HDR and OLED monitors in mind.
+
+## Like HUD Fade?
+
+It's free and always will be. If you'd like to say thanks, you can [buy me a coffee on Ko-fi](https://ko-fi.com/44dri44n).
