@@ -769,7 +769,6 @@ local realCreate = CreateFrame
 local templates = {}
 local presetMenu
 local copyBoxes = {}
-local linkButtons = {}
 CreateFrame = function(kind, name, parent, template)
 	if template then templates[#templates + 1] = template end
 	if template == "ScrollFrameTemplate" then error("no such template") end -- the fallback must cope
@@ -781,10 +780,6 @@ CreateFrame = function(kind, name, parent, template)
 	end
 	if template == "InputBoxTemplate" then
 		copyBoxes[#copyBoxes + 1] = f
-		rawset(f, "SetText", function(self, text) self.text = text end)
-	end
-	if template == "UIPanelButtonTemplate" then
-		linkButtons[#linkButtons + 1] = f
 		rawset(f, "SetText", function(self, text) self.text = text end)
 	end
 	return f
@@ -815,19 +810,13 @@ check("choosing one in the menu applies it",
 	HUDFade.CurrentPreset() == 2 and HUDFadeDB.hideNames == false and radios[2].isSel() == true)
 SlashCmdList.HUDFADE("reset")
 
--- Help and feedback buttons
-local linkBox = copyBoxes[1]
-check("help shows two buttons and no address until one is clicked",
-	#linkButtons == 2 and linkButtons[2].text == "Report a problem" and #copyBoxes == 1 and not linkBox.shown)
-linkButtons[2].scripts.OnClick(linkButtons[2])
-check("a button shows its address to copy", linkBox.shown and linkBox.text:find("/issues") ~= nil)
-linkBox:SetText("typed over")
-linkBox.scripts.OnTextChanged(linkBox, true)
-check("typing in the address box puts the address back", linkBox.text:find("/issues") ~= nil)
-linkButtons[1].scripts.OnClick(linkButtons[1])
-check("the other button swaps in its address", linkBox.text:find("curseforge") ~= nil)
-linkBox.scripts.OnEscapePressed(linkBox)
-check("Escape hides the address again", not linkBox.shown)
+-- Help and feedback addresses
+local pageBox = copyBoxes[1]
+check("the settings show the addon page and issues addresses",
+	#copyBoxes == 2 and pageBox.text:find("curseforge") ~= nil and copyBoxes[2].text:find("/issues") ~= nil)
+pageBox:SetText("typed over")
+pageBox.scripts.OnTextChanged(pageBox, true)
+check("typing in an address box puts the address back", pageBox.text:find("curseforge") ~= nil)
 CreateFrame = realCreate
 
 -- The away slider stops at 2, 5, 10, 15, 20, 30, 45 and 60 minutes

@@ -37,58 +37,32 @@ local function note(text, y, x)
 	return fs
 end
 
--- Addons can't open web pages, so each button shows its address in a box, selected for Ctrl+C.
-local function linkButtons(links, y)
+-- Addons can't open web pages, so an address goes in a read-only box that selects itself for Ctrl+C.
+local function copyBox(label, url, y)
+	local fs = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	fs:SetPoint("TOPLEFT", 20, y - 3)
+	fs:SetText(label)
 	local box = CreateFrame("EditBox", nil, canvas, "InputBoxTemplate")
-	box:SetPoint("TOPLEFT", 22, y - 34)
+	box:SetPoint("TOPLEFT", 150, y)
 	box:SetSize(360, 20)
 	box:SetAutoFocus(false)
-	box:Hide()
-	local hint = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-	hint:SetPoint("LEFT", box, "RIGHT", 10, 0)
-	hint:SetText("Ctrl+C to copy")
-	hint:Hide()
-	local url
-	local function close()
-		box:ClearFocus()
-		box:Hide()
-		hint:Hide()
+	local function reset(self)
+		self:SetText(url)
+		self:SetCursorPosition(0)
 	end
+	reset(box)
 	box:SetScript("OnTextChanged", function(self, typed)
 		if typed then
-			self:SetText(url)
+			reset(self)
 			self:HighlightText()
 		end
 	end)
 	box:SetScript("OnEditFocusGained", function(self) self:HighlightText() end)
 	box:SetScript("OnMouseUp", function(self) self:HighlightText() end)
 	box:SetScript("OnEditFocusLost", function(self) self:HighlightText(0, 0) end)
-	box:SetScript("OnEscapePressed", close)
-	box:SetScript("OnEnterPressed", close)
-	panel:HookScript("OnHide", close)
-
-	for i, link in ipairs(links) do
-		local b = CreateFrame("Button", nil, canvas, "UIPanelButtonTemplate")
-		b:SetPoint("TOPLEFT", 16 + (i - 1) * 158, y)
-		b:SetSize(150, 24)
-		b:SetText(link.label)
-		b:SetScript("OnClick", function()
-			url = link.url
-			box:SetText(url)
-			box:SetCursorPosition(0)
-			box:Show()
-			hint:Show()
-			box:SetFocus()
-			box:HighlightText()
-		end)
-		b:SetScript("OnEnter", function(self)
-			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-			GameTooltip:SetText(link.label, 1, 1, 1)
-			GameTooltip:AddLine(link.tip, nil, nil, nil, true)
-			GameTooltip:Show()
-		end)
-		b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	end
+	box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+	return box
 end
 
 local function checkbox(key, label, tip, y, x, onChange, master)
@@ -398,19 +372,9 @@ local function build()
 		.. "higher leaves it faintly visible.")
 
 	header("Help and feedback", -712, true)
-	linkButtons({
-		{
-			label = "Addon page",
-			url = "https://www.curseforge.com/wow/addons/hud-fade",
-			tip = "Shows the address of HUD Fade's CurseForge page, to copy into your browser.",
-		},
-		{
-			label = "Report a problem",
-			url = "https://github.com/AdrianMontanes/HUDFade/issues",
-			tip = "Shows the address of the GitHub page for reporting a bug or asking for a feature, "
-				.. "to copy into your browser.",
-		},
-	}, -734)
+	note("Click an address and press Ctrl+C to copy it.", -732)
+	copyBox("Addon page", "https://www.curseforge.com/wow/addons/hud-fade", -754)
+	copyBox("Report a problem", "https://github.com/AdrianMontanes/HUDFade/issues", -782)
 
 	-- Burn-in protection page
 	canvas = shiftPanel
