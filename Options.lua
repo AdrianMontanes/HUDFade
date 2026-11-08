@@ -379,8 +379,9 @@ local function build()
 		-548, 320)
 	checkbox("showWindows", "Windows, popups, bags or typing",
 		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, "
-		.. "EllesmereUI unlock mode). Typing also counts as input, so after you send a message the HUD stays for "
-		.. "your idle time. A window or chat box left open keeps the HUD only until Hide anyway when away.",
+		.. "EllesmereUI unlock mode). Opening one and typing also count as input, so after you close it or send a "
+		.. "message the HUD stays for your idle time. A window or chat box left open keeps the HUD only until "
+		.. "Hide anyway when away.",
 		-574)
 
 	header("Fade", -614)

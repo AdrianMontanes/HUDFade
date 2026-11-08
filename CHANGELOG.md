@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 1.1.1
+
+- Opening a window, like the map or your bags, now counts as activity. After you close it the HUD stays for your idle time instead of hiding right away. A popup that arrives while you are away still leaves it hidden.
+
 ## 1.1.0
 
 - Nameplates, including EllesmereUI's names above characters, now fade out and back in with the HUD instead of vanishing all at once when the fade ends. Names the game draws itself still switch off at once: the game gives addons no way to fade them.

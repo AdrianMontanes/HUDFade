@@ -61,6 +61,7 @@ local state = {
 	inCombat = false,
 	casting = false,
 	moving = false,
+	window = false,     -- the open window seen last tick, so opening one counts as input once
 	lastInput = 0,
 	lastWanted = -math.huge, -- last time any reason to show the HUD was active (for GRACE)
 	suppressed = {},    -- reasons active when the user hid the HUD; ignored until they end
@@ -611,12 +612,13 @@ local function isAway(t)
 	return minutes > 0 and (t - state.lastInput) >= minutes * 60
 end
 
--- Reasons that show the HUD even while idle.
-local function urgentReasons(out)
+-- Reasons that show the HUD even while idle. window: what windowOpen() returned this tick, if known.
+local function urgentReasons(out, window)
 	if state.peek then out.peek = true end
 	if DB.showCombat and state.inCombat then out.combat = true end
 	if DB.showWindows and not isAway(now()) then
-		local w = windowOpen()
+		local w = window
+		if w == nil then w = windowOpen() end
 		if w then out.window = w end
 	end
 end
@@ -632,9 +634,9 @@ local function softReasons(out)
 end
 
 local reasons = {}
-local function currentReasons(idle)
+local function currentReasons(idle, window)
 	wipe(reasons)
-	urgentReasons(reasons)
+	urgentReasons(reasons, window)
 	if not idle then softReasons(reasons) end
 	-- A reason that was active when the user hid the HUD stays ignored until it ends.
 	for r in pairs(state.suppressed) do
@@ -671,9 +673,14 @@ local function update(instant)
 		return
 	end
 	if DB.showWindows then typing(t) end
+	-- Opening a window counts as input, like typing, so the HUD stays for the idle time after it closes.
+	-- Not while away, so a popup that arrives then (an invite) can't wake it.
+	local window = DB.showWindows and not isAway(t) and windowOpen() or false
+	if window and window ~= state.window then state.lastInput = t end
+	state.window = window
 	local idle = isIdle(t)
 	local base = not state.hudOff and not idle
-	local reason = next(currentReasons(idle)) ~= nil
+	local reason = next(currentReasons(idle, window)) ~= nil
 	if reason then state.lastWanted = t end
 	-- Short grace after a reason ends so the HUD doesn't blink between pulls. Idle and the hide key act at once.
 	local show = base or reason or (not idle and (t - state.lastWanted) < GRACE)

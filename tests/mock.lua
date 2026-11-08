@@ -536,6 +536,26 @@ check("and hides once you have been away", UIParent.alpha == 0)
 HUDFadeDB.idleSeconds = 5
 HUDFadeDB.awayMinutes = 10
 
+-- Opening a window counts as input, so the HUD stays for the idle time after it closes
+step(1)
+local map = CreateFrame("Frame", "WorldMapFrame")
+step(0.5)
+check("opening the map brings the HUD back", UIParent.alpha == 1)
+step(2)
+map:Hide()
+step(2)
+check("after closing it, the HUD stays for the idle time", UIParent.alpha == 1)
+step(4)
+check("then hides", UIParent.alpha == 0)
+HUDFadeDB.awayMinutes = 2
+step(120)
+map:Show()
+step(0.5)
+check("a window that opens while you are away leaves it hidden", UIParent.alpha == 0)
+map:Hide()
+HUDFadeDB.awayMinutes = 10
+step(0.5)
+
 -- Mouse moving off: the mouse keeps the HUD up, but only keys bring it back once idle
 HUDFadeDB.mouseWakes = false
 step(7)
