@@ -1,21 +1,18 @@
 # Releasing HUD Fade
 
-Releases are automatic. Pushing a version tag runs `.github/workflows/release.yml`, which uses the
+Releases are automatic. `.github/workflows/release.yml` uses the
 [BigWigs packager](https://github.com/BigWigsMods/packager) to build `HUDFade-<version>.zip` and upload it to
 GitHub Releases, CurseForge, Wago and WoWInterface. A site is skipped if its token secret is missing.
 
+It runs when a push to `main` changes `HUDFade.toc` to a version that has no tag yet (it tags that commit
+itself), or when a version tag is pushed by hand.
+
 ## Steps
 
-1. Set `## Version:` in `HUDFade.toc` to the new version, for example `0.3.0`.
+1. Set `## Version:` in `HUDFade.toc` to the new version, for example `1.2.0`.
 2. Add a section for it at the top of `CHANGELOG.md`. That text becomes the changelog on every site.
 3. Run the tests and the linter: `lua5.1 tests/mock.lua .` and `luacheck .` (both also run on every push).
-4. Commit, then tag and push:
-
-   ```
-   git tag 0.3.0
-   git push origin main 0.3.0
-   ```
-
+4. Commit and push to `main`. Only push a new version once it has been tested in game: the push is the release.
 5. Watch the Release run under the repo's Actions tab (about two minutes).
 
 Tags with `alpha` or `beta` in them (like `0.3.0-beta1`) are uploaded as alpha or beta files, which the

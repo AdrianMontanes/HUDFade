@@ -1,14 +1,20 @@
-# Builds the addon zip and uploads it to GitHub Releases, CurseForge, Wago and WoWInterface
-# whenever a version tag (like 0.2.0) is pushed. A site whose token secret is missing is skipped.
+# Builds the addon zip and uploads it to GitHub Releases, CurseForge, Wago and WoWInterface.
+# Runs when a version tag (like 1.1.0) is pushed, or when a push to main changes HUDFade.toc to a version
+# that has no tag yet: then it tags that commit itself first. A site whose token secret is missing is skipped.
 name: Release
 
 on:
   push:
     tags:
       - "*"
+    branches:
+      - main
+    paths:
+      - HUDFade.toc
+      - .github/workflows/release.yml
 
 permissions:
-  contents: write # lets the packager create the GitHub release
+  contents: write # lets the job push the tag and the packager create the GitHub release
 
 jobs:
   release:
@@ -21,8 +27,25 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0 # full history, for the changelog
+          fetch-depth: 0 # full history and tags, for the changelog and the check below
+
+      # A tag pushed with this job's token doesn't start another run, so this run does the release.
+      - name: Tag a new version
+        id: tag
+        if: github.ref_type == 'branch'
+        run: |
+          version=$(sed -n 's/^## Version:[[:space:]]*//p' HUDFade.toc | tr -d '\r[:space:]')
+          if [ -z "$version" ] || git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
+            echo "Version '$version' already has a tag, so there is nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            git tag "$version"
+            git push origin "refs/tags/$version"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - run: sudo apt-get update && sudo apt-get install -y subversion # the libraries in .pkgmeta come from svn
+        if: github.ref_type == 'tag' || steps.tag.outputs.release == 'true'
 
       - uses: BigWigsMods/packager@v2
+        if: github.ref_type == 'tag' || steps.tag.outputs.release == 'true'
