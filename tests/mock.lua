@@ -966,15 +966,15 @@ step(0.5)
 check("halfway through the fade its frames are half faded", name.alpha > 0.2 and name.alpha < 0.8
 	and math.abs(dimmed.alpha - name.alpha * 0.5) < 0.001)
 check("the nameplate's own opacity is left to the game", plate.alpha == 0.6)
-local late = newFrame() -- an addon builds its plate after we first saw the unit
-plate.kids[3] = late
+local latePart = newFrame() -- an addon builds its plate after we first saw the unit
+plate.kids[3] = latePart
 step(0.05)
-check("a frame added mid-fade fades too", late.alpha > 0 and late.alpha < 0.8)
+check("a frame added mid-fade fades too", latePart.alpha > 0 and latePart.alpha < 0.8)
 step(1)
 check("it fades out with the HUD before the CVars take it away",
-	name.alpha == 0 and dimmed.alpha == 0 and late.alpha == 0 and cvars.nameplateShowEnemies == "0")
+	name.alpha == 0 and dimmed.alpha == 0 and latePart.alpha == 0 and cvars.nameplateShowEnemies == "0")
 fire("NAME_PLATE_UNIT_REMOVED", "nameplate1")
-check("the game reuses it at its own opacity", name.alpha == 1 and dimmed.alpha == 0.5 and late.alpha == 1)
+check("the game reuses it at its own opacity", name.alpha == 1 and dimmed.alpha == 0.5 and latePart.alpha == 1)
 plate.kids[3] = nil
 HUDFadeDB.showCombat = false
 fire("PLAYER_REGEN_DISABLED")
