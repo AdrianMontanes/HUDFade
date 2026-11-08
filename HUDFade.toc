@@ -5,6 +5,7 @@
 ## Version: 1.1.0
 ## X-License: MIT
 ## X-Curse-Project-ID: 1788415
+## X-Wago-ID: QNl4ZaNe
 ## SavedVariables: HUDFadeDB
 ## IconTexture: Interface\AddOns\HUDFade\media\icon
 ## AddonCompartmentFunc: HUDFade_OnCompartmentClick

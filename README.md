@@ -59,6 +59,7 @@ No setup per addon and no reload. Keys for hide/show, peek, screenshot and on/of
 ## Install
 
 - **CurseForge:** install it from the [HUD Fade page](https://www.curseforge.com/wow/addons/hud-fade), or search for HUD Fade in the CurseForge app.
+- **Wago or WowUp:** install it from the [Wago page](https://addons.wago.io/addons/QNl4ZaNe), or search for HUD Fade in the Wago app or WowUp.
 - **By hand:** download the zip from [Releases](https://github.com/AdrianMontanes/HUDFade/releases/latest) and unzip it into `World of Warcraft\_forever_\Interface\AddOns` (or `_retail_` for Retail), so you end up with an `AddOns\HUDFade` folder.
 
 Made and tested on WoW Forever. Retail (12.x) runs on the same engine, so it should work there too. If something doesn't, please [open an issue](https://github.com/AdrianMontanes/HUDFade/issues/new/choose).
