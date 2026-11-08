@@ -57,7 +57,7 @@ local function newFrame(kind)
 	function f:RegisterUnitEvent(e) self.events[e] = true end
 	function f:SetAlpha(a) self.alpha = a end
 	function f:GetAlpha() return self.alpha end
-	function f:EnableKeyboard() end
+	function f:EnableKeyboard(on) self.keyboard = on end
 	function f:SetPropagateKeyboardInput() end
 	function f:GetObjectType() return self.kind end
 	function f:GetParent() return self.parent end
@@ -167,7 +167,9 @@ C_Timer = {
 local BINDINGS = { W = "MOVEFORWARD", D = "TURNRIGHT", NUMLOCK = "TOGGLEAUTORUN", TAB = "TARGETNEARESTENEMY" }
 function GetBindingKey(command)
 	if command == "TOGGLEUI" then return "ALT-Z" end
-	if command == "TOGGLEAUTORUN" then return "NUMLOCK" end
+	for key, action in pairs(BINDINGS) do
+		if action == command then return key end
+	end
 end
 function GetBindingAction(key) return BINDINGS[key] or "" end
 function SetOverrideBinding(_, _, key, command) binds[key] = command end
@@ -189,6 +191,17 @@ function SetMouselookOverrideBinding(key, binding) mlBinds[key] = binding end
 function Screenshot() shots = shots + 1 end
 function GetBuildInfo() return "1.60.1", "1", "Nov 1 2026", 16001 end
 UISpecialFrames = {}
+local escHandlers = {}
+GameMenuEscPriority = { Dialog = 1, AddOn = 8 }
+function RegisterGameMenuEscHandler(priority, handler)
+	escHandlers[#escHandlers + 1] = { priority = priority, handler = handler }
+end
+local function closeSpecialWindows() -- what the game runs on Escape
+	for _, frameName in ipairs(UISpecialFrames) do
+		local f = _G[frameName]
+		if f and f.shown then f:Hide() end
+	end
+end
 SlashCmdList = {}
 function wipe(t)
 	for k in pairs(t) do t[k] = nil end
@@ -1069,5 +1082,66 @@ fire("PLAYER_REGEN_ENABLED")
 check("and they come back when combat ends", cvars.floatingCombatTextCombatDamage_v2 == "1"
 	and HUDFadeDB.restore.floatingCombatTextCombatDamage_v2 == nil)
 HUDFadeDB.showCombat = true
+
+-- Welcome window: once, after the first loading screen; it shows the keys but leaves setting them to the game
+HUDFadeDB.idleSeconds = 5
+HUDFade.Show()
+step(7)
+check("idle-hidden before the welcome window", UIParent.alpha == 0 and HUDFadeDB.welcomeShown == false)
+local welcomeTexts = {}
+local function recordText(self, text) self.text = text end
+CreateFrame = function(kind, frameName, parent)
+	local f = realCreate(kind, frameName, parent)
+	rawset(f, "CreateFontString", function()
+		local fs = stubObject()
+		rawset(fs, "SetText", recordText)
+		welcomeTexts[#welcomeTexts + 1] = fs
+		return fs
+	end)
+	return f
+end
+fire("PLAYER_ENTERING_WORLD")
+step(2.5)
+CreateFrame = realCreate
+local welcome = HUDFadeWelcome
+check("the welcome window opens after the first loading screen", welcome ~= nil and welcome.shown == true)
+check("and keeps the HUD up like any window", UIParent.alpha == 1)
+local function shown(text)
+	for _, fs in ipairs(welcomeTexts) do
+		if type(fs.text) == "string" and fs.text:find(text, 1, true) then return true end
+	end
+	return false
+end
+check("hide / show lists the Hide UI key", shown("ALT-Z"))
+check("a key that isn't bound says Not set", shown("Not set"))
+check("the screenshot key isn't listed while it takes plain screenshots", not shown("PRINTSCREEN"))
+BINDINGS.PRINTSCREEN, HUDFadeDB.cleanPrintScreen = "SCREENSHOT", true
+BINDINGS["SHIFT-P"] = "HUDFADE_PEEK"
+SlashCmdList.HUDFADE("welcome")
+check("it is once HUD-free screenshots is ticked", shown("PRINTSCREEN"))
+check("keys bound in Key Bindings show up", shown("SHIFT-P"))
+BINDINGS.PRINTSCREEN, BINDINGS["SHIFT-P"], HUDFadeDB.cleanPrintScreen = nil, nil, false
+check("the idle line says the mouse brings it back", shown("Moving the mouse brings it back."))
+check("both idle timers are there", shown("Hide when idle: ") and shown("Always hide when AFK: "))
+HUDFadeDB.mouseWakes = false
+SlashCmdList.HUDFADE("welcome")
+check("with mouse moving off, it says a click does", shown("A click or a movement key brings it back."))
+HUDFadeDB.mouseWakes = true
+
+check("the window takes no keys, so you can still move",
+	welcome.scripts.OnKeyDown == nil and not rawget(welcome, "keyboard"))
+check("it stays out of the game's Escape handlers, which would taint Escape", #escHandlers == 0)
+closeSpecialWindows()
+check("Escape closes it like other windows", welcome.shown == false)
+welcome.scripts.OnHide(welcome)
+check("closing it marks it seen", HUDFadeDB.welcomeShown == true)
+fire("PLAYER_ENTERING_WORLD")
+step(2.5)
+check("later loading screens don't open it again", welcome.shown == false)
+SlashCmdList.HUDFADE("welcome")
+check("/hudfade welcome opens it again", welcome.shown == true)
+welcome:Hide()
+SlashCmdList.HUDFADE("reset")
+check("reset doesn't bring it back at the next login", HUDFadeDB.welcomeShown == true)
 
 os.exit(failed and 1 or 0)

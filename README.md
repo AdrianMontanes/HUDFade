@@ -16,7 +16,7 @@ Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/AdrianMontanes/HUDFade/blob/main/LICENSE)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-29ABE0?logo=kofi&logoColor=FF5E5B)](https://ko-fi.com/44dri44n)
 
-<img src="https://raw.githubusercontent.com/AdrianMontanes/HUDFade/main/.github/media/hudfade-fade.webp" alt="The whole UI, EllesmereUI included, fading out with one key">
+<img src="https://raw.githubusercontent.com/AdrianMontanes/HUDFade/main/.github/media/hudfade-fade.webp" alt="The entire UI, EllesmereUI included, fading out with one key">
 
 </div>
 
@@ -34,7 +34,7 @@ Most fade addons set each frame's opacity one by one, and UI addons like Ellesme
 - **Clean screenshots:** a key that takes one with no HUD, names or chat bubbles, then puts everything back.
 - **Hold to peek** at the HUD while it's hidden.
 - **Minimap button:** left-click for settings, right-click to turn HUD Fade on or off, shift-click for a clean screenshot.
-- **Pixel shift:** moves the whole UI a pixel or two every few minutes to spread OLED wear. Optional, never in combat.
+- **Pixel shift:** moves the entire UI a pixel or two every few minutes to spread OLED wear. Optional, never in combat.
 - **Dim instead of hide:** hidden opacity from 0% (true black) up to 50%.
 - **Your call on the world:** hide names, nameplates and damage numbers too, or leave them like the game's own Hide UI does.
 
@@ -45,6 +45,7 @@ No setup per addon and no reload. Keys for hide/show, peek, screenshot and on/of
 | Command | What it does |
 | :--- | :--- |
 | `/hudfade` | Open the settings |
+| `/hudfade welcome` | Open the welcome window: the main choices and keys |
 | `/hudfade toggle` | Hide or show the HUD (also `show` and `hide`) |
 | `/hudfade on` / `off` | Turn HUD Fade on or off |
 | `/hudfade shot` | Take a screenshot without the HUD |

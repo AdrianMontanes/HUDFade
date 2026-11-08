@@ -44,7 +44,7 @@ local DEFAULTS = {
 	pixelShift = false,    -- burn-in protection, see Pixel shift below
 	shiftPixels = 2,       -- screen pixels
 	shiftMinutes = 3,      -- minutes between moves
-	welcomed = false,
+	welcomeShown = false,  -- the welcome window has been closed once
 }
 HUDFade.DEFAULTS = DEFAULTS
 
@@ -1291,6 +1291,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		DB.restore = DB.restore or {}
 		-- Leftovers of the removed pointer option (its CVars come back through restoreAllCVars).
 		DB.hideCursor, DB.hideCursorSteer, DB.mouseReported, DB.log = nil, nil, nil, nil
+		DB.welcomed = nil -- the old chat welcome's flag: everyone sees the welcome window once
 		HUDFade.db = DB
 	elseif event == "PLAYER_LOGIN" then
 		-- CVars left off by a crash while hidden.
@@ -1310,12 +1311,6 @@ events:SetScript("OnEvent", function(_, event, arg1)
 			scanStep()
 		end)
 		update(true)
-		if not DB.welcomed then
-			DB.welcomed = true
-			local key = GetBindingKey("TOGGLEUI")
-			say("installed. " .. (DB.replaceAltZ and key and ("Press " .. key .. " to hide or show the HUD. ") or "")
-				.. "Type /hudfade for settings.")
-		end
 	elseif event == "PLAYER_LOGOUT" then
 		restoreAllCVars()
 		restoreShift()

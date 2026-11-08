@@ -2,7 +2,7 @@
 ## Title: HUD Fade
 ## Notes: Fade your entire World of Warcraft UI, including addon UIs, all at once. Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
 ## Author: Adrian
-## Version: 1.1.1
+## Version: 1.2.0
 ## X-License: MIT
 ## X-Curse-Project-ID: 1788415
 ## X-Wago-ID: QNl4ZaNe

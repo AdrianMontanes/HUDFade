@@ -1,4 +1,4 @@
--- HUD Fade options: a page in the game's AddOns settings, and the /hudfade command.
+-- HUD Fade options: a page in the game's AddOns settings, the welcome window, and the /hudfade command.
 
 local _, ns = ...
 local HUDFade = ns.core
@@ -28,10 +28,10 @@ local function header(text, y, alwaysOn)
 	return fs
 end
 
-local function note(text, y, x)
+local function note(text, y, x, width)
 	local fs = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	fs:SetPoint("TOPLEFT", x or 16, y)
-	fs:SetWidth(560)
+	fs:SetWidth(width or 560)
 	fs:SetJustifyH("LEFT")
 	fs:SetText(text)
 	return fs
@@ -166,6 +166,16 @@ local function slider(key, label, minV, maxV, step, y, x, fmt, scale, tip)
 	return s
 end
 
+local function keyText(key)
+	return GetBindingText and GetBindingText(key) or key
+end
+
+-- The key bound to a game or HUD Fade action, read each time a page opens.
+local function keyName(action, none)
+	local key = GetBindingKey(action)
+	return key and keyText(key) or none or "not bound"
+end
+
 local function pageTitle(text)
 	local title = canvas:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 	title:SetPoint("TOPLEFT", 16, -16)
@@ -177,7 +187,18 @@ local function shiftChanged()
 	if HUDFade.RefreshOptions then HUDFade.RefreshOptions() end -- the switch is on both pages
 end
 
-local SHIFT_TIP = "Moves the whole interface a pixel or two every few minutes, so nothing sits on the same pixels "
+local PRINT_TIP = "Your screenshot key hides the HUD for a moment, takes the picture, and brings it back. "
+	.. "There is also a separate key for this under Key Bindings > AddOns.\n\nScreenshots taken by other "
+	.. "apps, like NVIDIA's Alt+F1, can't hide the HUD: hide it first with your Hide UI key."
+
+local function idleText(v) return v == 0 and "Never" or string.format("after %d s", v) end
+local IDLE_TIP = "After this long with no input, the HUD fades out. Moving, typing and using the mouse count as input"
+local function awayText(v) return v >= 60 and "after 1 hour" or string.format("after %d min", v) end
+local AWAY_STOPS = { 2, 5, 10, 15, 20, 30, 45, 60 }
+local AWAY_TIP = "After this long with no input, the HUD hides even over an open window or chat box, and even with "
+	.. "Hide when idle set to Never. Combat still brings it back."
+
+local SHIFT_TIP = "Moves the entire interface a pixel or two every few minutes, so nothing sits on the same pixels "
 	.. "for hours. Everything moves together, so your layout stays as it is. Distance and timing are on the "
 	.. "Burn-in protection page under HUD Fade."
 
@@ -204,14 +225,14 @@ local function scrollPage(page, height)
 	return content
 end
 
--- Preset menu above the "also hide" checkboxes.
-local presetWidget
+-- Preset menus above the "also hide" checkboxes (the settings page and the welcome window).
+local presetWidgets = {}
 local function presetName()
 	local i = HUDFade.CurrentPreset()
 	return i and HUDFade.PRESETS[i].name or "Custom"
 end
 local function presetChanged()
-	if presetWidget then presetWidget.refresh() end
+	for _, w in ipairs(presetWidgets) do w.refresh() end
 end
 local refreshAll -- defined below
 local function choosePreset(i)
@@ -224,14 +245,15 @@ local PRESET_TIP = "Everything: names, nameplates, the target circle and damage 
 	.. "numbers stay; nameplates go. Either way you keep the fade, idle hiding and the rest. "
 	.. "Change a box below and it shows as Custom."
 
-local function presetMenu(y)
+local function presetMenu(y, x)
+	x = x or 20
 	local title = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-	title:SetPoint("TOPLEFT", 20, y - 6)
+	title:SetPoint("TOPLEFT", x, y - 6)
 	title:SetText("Preset")
 	local w
 	local ok, dd = pcall(CreateFrame, "DropdownButton", nil, canvas, "WowStyle1DropdownTemplate")
 	if ok and dd and dd.SetupMenu then
-		dd:SetPoint("TOPLEFT", 80, y)
+		dd:SetPoint("TOPLEFT", x + 60, y)
 		dd:SetWidth(240)
 		if dd.SetDefaultText then dd:SetDefaultText("Custom") end -- shown when the boxes match no preset
 		dd:SetupMenu(function(_, root)
@@ -245,7 +267,7 @@ local function presetMenu(y)
 	else
 		-- No dropdown template in this client: a button that cycles through the presets.
 		w = CreateFrame("Button", nil, canvas, "UIPanelButtonTemplate")
-		w:SetPoint("TOPLEFT", 80, y)
+		w:SetPoint("TOPLEFT", x + 60, y)
 		w:SetSize(240, 22)
 		w:SetScript("OnClick", function() choosePreset((HUDFade.CurrentPreset() or 0) % #HUDFade.PRESETS + 1) end)
 		w.refresh = function() w:SetText(presetName()) end
@@ -262,7 +284,7 @@ local function presetMenu(y)
 		if w.SetEnabled then w:SetEnabled(on) end
 		title:SetAlpha(on and 1 or 0.5)
 	end
-	presetWidget = w
+	presetWidgets[#presetWidgets + 1] = w
 	widgets[#widgets + 1] = w
 end
 
@@ -281,12 +303,6 @@ local function build()
 		-76, 16, function() HUDFade.SetEnabled(db().enabled) end, true)
 	checkbox("pixelShift", "Pixel shift (burn-in protection)", SHIFT_TIP, -76, 320, shiftChanged)
 
-	-- The player's own Hide UI and screenshot keys, read each time the page opens.
-	local function keyName(action)
-		local key = GetBindingKey(action)
-		return key and (GetBindingText and GetBindingText(key) or key) or "not bound"
-	end
-
 	header("General", -120)
 	checkbox("replaceAltZ", function() return "Use Hide UI key (" .. keyName("TOGGLEUI") .. ")" end,
 		"Your Hide UI key fades the HUD out and back in instead of switching it off. While hidden this way it "
@@ -297,10 +313,7 @@ local function build()
 		-140, 16, HUDFade.ApplyOverrides)
 	checkbox("startHidden", "Start hidden", "Each session starts with the HUD hidden.", -140, 320)
 	checkbox("cleanPrintScreen", function() return "HUD-free screenshots (" .. keyName("SCREENSHOT") .. ")" end,
-		"Your screenshot key hides the HUD for a moment, takes the picture, and brings it back. "
-		.. "There is also a separate key for this under Key Bindings > AddOns.\n\nScreenshots taken by other "
-		.. "apps, like NVIDIA's Alt+F1, can't hide the HUD: hide it first with your Hide UI key.",
-		-166, 16, HUDFade.ApplyOverrides)
+		PRINT_TIP, -166, 16, HUDFade.ApplyOverrides)
 	checkbox("minimapButton", "Minimap button",
 		"Left-click it for these settings, right-click to turn HUD Fade on or off, and shift-click for a "
 		.. "screenshot without the HUD. Drag it to move it around the minimap.",
@@ -332,15 +345,9 @@ local function build()
 		-310, 16, presetChanged)
 
 	header("Idle", -350)
-	slider("idleSeconds", "Hide when idle", 0, 120, 5, -370, 16,
-		function(v) return v == 0 and "Never" or string.format("after %d s", v) end, nil,
-		"After this long with no input, the HUD fades out. Moving, typing and using the mouse count as input, "
-		.. "and so do the boxes below if ticked.")
-	slider("awayMinutes", "Hide anyway when away", nil, nil, nil, -370, 320,
-		function(v) return v >= 60 and "after 1 hour" or string.format("after %d min", v) end,
-		{ 2, 5, 10, 15, 20, 30, 45, 60 },
-		"After this long with no input, the HUD hides even over an open window or chat box, and even with "
-		.. "Hide when idle set to Never. Combat still brings it back.")
+	slider("idleSeconds", "Hide when idle", 0, 120, 5, -370, 16, idleText, nil,
+		IDLE_TIP .. ", and so do the boxes below if ticked.")
+	slider("awayMinutes", "Always hide when AFK", nil, nil, nil, -370, 320, awayText, AWAY_STOPS, AWAY_TIP)
 	note("Also counts as input:", -420)
 	checkbox("mouseWakes", "Mouse moving",
 		"After the HUD hides for being idle, moving the mouse brings it back. Off: a bumped mouse or coming back "
@@ -381,7 +388,7 @@ local function build()
 		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, "
 		.. "EllesmereUI unlock mode). Opening one and typing also count as input, so after you close it or send a "
 		.. "message the HUD stays for your idle time. A window or chat box left open keeps the HUD only until "
-		.. "Hide anyway when away.",
+		.. "Always hide when AFK.",
 		-574)
 
 	header("Fade", -614)
@@ -399,7 +406,7 @@ local function build()
 	-- Burn-in protection page
 	canvas = shiftPanel
 	pageTitle("Burn-in protection")
-	note("Pixel shift moves the whole interface a pixel or two every few minutes, around a small circle, so the "
+	note("Pixel shift moves the entire interface a pixel or two every few minutes, around a small circle, so the "
 		.. "same pixels never show the same shapes for hours. Blizzard UI, EllesmereUI and every other addon move "
 		.. "together, so your layout stays exactly as it is and nothing is saved. It never moves during combat "
 		.. "and steps aside while Edit Mode or EllesmereUI's unlock mode is open.", -40)
@@ -409,14 +416,13 @@ local function build()
 	slider("shiftMinutes", "Move every", 1, 10, 1, -170, 320, function(v) return string.format("%d min", v) end)
 	note("The interface is also kept that distance in from the screen edges, so a frame you placed against an "
 		.. "edge never goes past it. Nothing is saved: each login starts from your own layout. Many OLED monitors "
-		.. "also shift the whole picture on their own; using both is fine. Type /hudfade shift now to see a move "
+		.. "also shift the entire picture on their own; using both is fine. Type /hudfade shift now to see a move "
 		.. "straight away.", -230)
 	canvas = panel
 end
 
 function refreshAll()
-	if not built then return end
-	if panel.master then panel.master.refresh() end
+	if built then panel.master.refresh() end
 	local on = db().enabled and true or false
 	for _, w in ipairs(widgets) do
 		w.refresh()
@@ -457,17 +463,191 @@ function HUDFade.OpenOptions()
 	end
 end
 
+---------------------------------------------------------------------------
+-- Welcome window: the main choices and keys, shown once on the first login with HUD Fade
+---------------------------------------------------------------------------
+local welcome, welcomeIntro
+
+-- Every key bound to these actions (an action can be false, to skip it).
+local function keysOf(...)
+	local list = {}
+	for i = 1, select("#", ...) do
+		local action = select(i, ...)
+		if action then
+			for _, key in ipairs({ GetBindingKey(action) }) do list[#list + 1] = keyText(key) end
+		end
+	end
+	return list
+end
+
+-- An action and the keys that do it. Only shown here: keys are set in the game's Key Bindings, since an addon
+-- window that takes key presses keeps every key from the game on some clients.
+local function keyRow(label, keysFor, x, y, width)
+	local name = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	name:SetPoint("TOPLEFT", x, y)
+	name:SetText(label)
+	local keys = canvas:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	keys:SetPoint("TOPRIGHT", canvas, "TOPLEFT", x + width, y)
+	keys:SetJustifyH("RIGHT")
+	local row = {}
+	row.refresh = function()
+		local list = keysFor()
+		keys:SetText(#list > 0 and table.concat(list, ", ") or "|cff9d9d9dNot set|r")
+	end
+	row.setActive = function(on)
+		name:SetAlpha(on and 1 or 0.5)
+		keys:SetAlpha(on and 1 or 0.5)
+	end
+	widgets[#widgets + 1] = row
+end
+
+-- What brings the HUD back after idle hiding depends on the mouse choices in the settings.
+local function wakeText()
+	local d = db()
+	return "With no mouse, movement keys or typing for this long, the HUD fades out on its own. "
+		.. (d.mouseWakes and "Moving the mouse brings it back."
+		or d.mouseClicks and "A click or a movement key brings it back."
+		or "A movement key or typing brings it back.")
+		.. " When you're AFK, it hides even over open windows and chat."
+end
+
+local function welcomeText()
+	local key = db().replaceAltZ and GetBindingKey("TOGGLEUI")
+	local how = key and ("Press " .. keyText(key) .. " (your Hide UI key) to fade the entire HUD out, and again to "
+		.. "bring it back.") or "Bind a hide / show key, or use /hudfade toggle, to fade the entire HUD out and back in."
+	return how .. " Here are a few choices to start with. You can change these and more at any time with /hudfade."
+end
+
+-- The keys note ends 370 px down, then a 14 px gap, the 22 px buttons and 14 px to the bottom edge.
+local WELCOME_HEIGHT = 420
+
+local function buildWelcome()
+	if welcome then return end
+	local ok, f = pcall(CreateFrame, "Frame", "HUDFadeWelcome", UIParent, "BasicFrameTemplateWithInset")
+	if not (ok and type(f) == "table") then
+		f = CreateFrame("Frame", "HUDFadeWelcome", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+		if f.SetBackdrop then
+			f:SetBackdrop({
+				bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+				edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+				tile = true, tileSize = 32, edgeSize = 32,
+				insets = { left = 11, right = 12, top = 12, bottom = 11 },
+			})
+		end
+	end
+	welcome = f
+	f:Hide()
+	f:SetSize(540, WELCOME_HEIGHT)
+	f:SetPoint("CENTER")
+	f:SetFrameStrata("DIALOG")
+	f:EnableMouse(true)
+	f:SetMovable(true)
+	f:SetClampedToScreen(true)
+	f:RegisterForDrag("LeftButton")
+	f:SetScript("OnDragStart", f.StartMoving)
+	f:SetScript("OnDragStop", f.StopMovingOrSizing)
+	-- As an open window it keeps the HUD visible while you read it. It takes no keys, so you can still move.
+	-- Don't add it to the game's Escape handlers (RegisterGameMenuEscHandler): that taints Escape and every press
+	-- after it shows a "blocked from an action" popup. Taking keys to catch Escape stopped all movement.
+	table.insert(UISpecialFrames, "HUDFadeWelcome")
+	f:SetScript("OnHide", function() db().welcomeShown = true end)
+
+	local title = f.TitleText
+	if type(title) ~= "table" then
+		title = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+		title:SetPoint("TOP", 0, -6)
+	end
+	title:SetText("Welcome to HUD Fade")
+
+	-- Two columns between 16 px margins; every section is a header, then its content 18 px below.
+	local L, R, W = 16, 278, 246 -- left column, right column, column width
+	canvas = f
+	welcomeIntro = note("", -38, L, 508)
+	header("Idle", -74)
+	slider("idleSeconds", "Hide when idle", 0, 120, 5, -88, L, idleText, nil, IDLE_TIP .. ".")
+	slider("awayMinutes", "Always hide when AFK", nil, nil, nil, -88, R, awayText, AWAY_STOPS, AWAY_TIP)
+	local idleNote = note("", -136, L, 508)
+	idleNote.refresh = function() idleNote:SetText(wakeText()) end
+	idleNote.setActive = function(on) idleNote:SetAlpha(on and 1 or 0.5) end
+	widgets[#widgets + 1] = idleNote
+	header("While the HUD is hidden, also hide", -174)
+	presetMenu(-192, L)
+	note("Everything also hides names and nameplates. Blizzard works like the game's own Hide UI.", -220, L, 508)
+	header("Screenshots and OLED", -246)
+	-- A check box's square sits 6 px in from its frame.
+	checkbox("cleanPrintScreen", function() return "HUD-free screenshots (" .. keyName("SCREENSHOT") .. ")" end,
+		PRINT_TIP, -264, L - 6, function()
+			HUDFade.ApplyOverrides()
+			refreshAll()
+		end)
+	checkbox("pixelShift", "Pixel shift (burn-in protection)", SHIFT_TIP, -264, R - 6, shiftChanged)
+	header("Keys", -304)
+	keyRow("Hide / show", function() return keysOf(db().replaceAltZ and "TOGGLEUI", "HUDFADE_TOGGLE") end,
+		L, -322, W)
+	keyRow("Peek (hold)", function() return keysOf("HUDFADE_PEEK") end, R, -322, W)
+	keyRow("HUD-free screenshot",
+		function() return keysOf(db().cleanPrintScreen and "SCREENSHOT", "HUDFADE_SCREENSHOT") end, L, -340, W)
+	keyRow("HUD Fade on / off", function() return keysOf("HUDFADE_ENABLE") end, R, -340, W)
+	note("Set or change these in the game's Key Bindings, under AddOns > HUD Fade.", -358, L, 508)
+	canvas = panel
+
+	local done = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+	done:SetSize(110, 22)
+	done:SetPoint("BOTTOMRIGHT", -L, 14)
+	done:SetText("Done")
+	done:SetScript("OnClick", function() f:Hide() end)
+	local all = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+	all:SetSize(130, 22)
+	all:SetPoint("RIGHT", done, "LEFT", -8, 0)
+	all:SetText("All settings")
+	all:SetScript("OnClick", function()
+		f:Hide()
+		HUDFade.OpenOptions()
+	end)
+	local again = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	again:SetPoint("LEFT", f, "BOTTOMLEFT", L, 25)
+	again:SetText("Open this again with /hudfade welcome.")
+end
+
+function HUDFade.ShowWelcome()
+	buildWelcome()
+	welcomeIntro:SetText(welcomeText())
+	refreshAll()
+	welcome:Show()
+end
+
+-- A moment after the first loading screen, and never in combat.
+local function welcomeWhenReady()
+	local d = db()
+	if d.welcomeShown or not d.enabled then return end
+	if InCombatLockdown() then
+		C_Timer.After(5, welcomeWhenReady)
+		return
+	end
+	HUDFade.ShowWelcome()
+end
+
+local welcomeChecked = false
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_LOGIN")
-loader:SetScript("OnEvent", register)
+loader:RegisterEvent("PLAYER_ENTERING_WORLD")
+loader:SetScript("OnEvent", function(_, event)
+	if event == "PLAYER_LOGIN" then
+		register()
+	elseif not welcomeChecked then
+		welcomeChecked = true
+		C_Timer.After(2, welcomeWhenReady)
+	end
+end)
 
 ---------------------------------------------------------------------------
 -- /hudfade
 ---------------------------------------------------------------------------
 local HELP = {
 	"/hudfade - open the settings",
+	"/hudfade welcome - the welcome window: the main choices and keys",
 	"/hudfade toggle | show | hide - hide or show the HUD",
-	"/hudfade on | off - turn the whole addon on or off",
+	"/hudfade on | off - turn the entire addon on or off",
 	"/hudfade shot - screenshot without the HUD",
 	"/hudfade minimap - show or hide the minimap button",
 	"/hudfade shift [on | off | now] - pixel shift status, switch it, or move now to see it",
@@ -482,6 +662,8 @@ SlashCmdList.HUDFADE = function(msg)
 	local cmd = (msg or ""):lower():match("^%s*(%S*)")
 	if cmd == "" or cmd == "options" or cmd == "config" or cmd == "settings" then
 		HUDFade.OpenOptions()
+	elseif cmd == "welcome" or cmd == "setup" then
+		HUDFade.ShowWelcome()
 	elseif cmd == "toggle" then
 		HUDFade.Toggle()
 	elseif cmd == "on" or cmd == "off" then
@@ -522,7 +704,7 @@ SlashCmdList.HUDFADE = function(msg)
 	elseif cmd == "reset" then
 		local d = db()
 		for k, v in pairs(HUDFade.DEFAULTS) do
-			if k ~= "welcomed" then d[k] = v end
+			if k ~= "welcomeShown" then d[k] = v end
 		end
 		HUDFade.ApplyOverrides(true)
 		HUDFade.UpdateMinimapButton()

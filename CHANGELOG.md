@@ -1,7 +1,8 @@
 # HUD Fade
 
-## 1.1.1
+## 1.2.0
 
+- New **welcome window** on your first login with HUD Fade (and once for everyone updating): choose how long before the HUD hides when idle and when you're AFK, what else to hide, HUD-free Print Screen and pixel shift, and see which keys do what (keys are set in the game's Key Bindings, under AddOns). Open it again any time with `/hudfade welcome`. It replaces the chat message on first login.
 - Opening a window, like the map or your bags, now counts as activity. After you close it the HUD stays for your idle time instead of hiding right away. A popup that arrives while you are away still leaves it hidden.
 
 ## 1.1.0
