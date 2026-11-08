@@ -187,6 +187,7 @@ function MouselookStart() mouselookStarted = true end
 function SetMouselookOverrideBinding(key, binding) mlBinds[key] = binding end
 
 function Screenshot() shots = shots + 1 end
+function GetBuildInfo() return "1.60.1", "1", "Nov 1 2026", 16001 end
 UISpecialFrames = {}
 SlashCmdList = {}
 function wipe(t)
@@ -367,9 +368,27 @@ HUDFade.CleanScreenshot()
 check("shot hides instantly", UIParent.alpha == 0 and cvars.UnitNameNPC == "0")
 step(0.3)
 check("screenshot taken", shots == 1)
-fire("SCREENSHOT_SUCCEEDED")
-step(0.5)
+local realPrint = print
+local function shotSays(event)
+	local out = {}
+	print = function(s) out[#out + 1] = s end
+	fire(event)
+	step(0.5)
+	print = realPrint
+	return table.concat(out, "\n")
+end
+local said = shotSays("SCREENSHOT_SUCCEEDED")
 check("back after shot", UIParent.alpha == 1)
+check("the first screenshot names the folder",
+	said:find("screenshot saved to World of Warcraft\\_forever_\\Screenshots.", 1, true))
+HUDFade.CleanScreenshot()
+step(0.3)
+said = shotSays("SCREENSHOT_SUCCEEDED")
+check("later ones just say saved", said:find("screenshot saved.", 1, true) and not said:find("Screenshots", 1, true))
+HUDFade.CleanScreenshot()
+step(0.3)
+said = shotSays("SCREENSHOT_FAILED")
+check("a failed one says so", said:find("the screenshot failed.", 1, true))
 HUDFade.Peek(false)
 
 for _, f in ipairs(frames) do
@@ -584,7 +603,6 @@ moveMouse()
 step(0.5)
 
 -- /hudfade why
-local realPrint = print
 local function why()
 	local out = {}
 	print = function(s) out[#out + 1] = s end

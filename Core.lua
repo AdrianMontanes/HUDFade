@@ -960,6 +960,29 @@ function HUDFade.Peek(down)
 	update(down)
 end
 
+-- The game's folder for this client, named in the first "saved" message of a session.
+local function screenshotFolder()
+	local ok, _, _, _, toc = pcall(GetBuildInfo)
+	toc = ok and readable(toc)
+	if type(toc) ~= "number" then return nil end
+	if toc >= 16000 and toc < 20000 then return "World of Warcraft\\_forever_\\Screenshots" end
+	if toc >= 110000 then return "World of Warcraft\\_retail_\\Screenshots" end
+	return nil
+end
+
+local shotNamed = false
+local function shotDone(saved)
+	if not saved then
+		say("the screenshot failed.")
+	elseif shotNamed then
+		say("screenshot saved.")
+	else
+		shotNamed = true
+		local folder = screenshotFolder()
+		say("screenshot saved to " .. (folder or "the Screenshots folder of your game") .. ".")
+	end
+end
+
 function HUDFade.CleanScreenshot()
 	if not Screenshot then return end
 	state.shot = true
@@ -1340,6 +1363,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 			C_Timer.After(0.1, function()
 				state.shot = false
 				update()
+				shotDone(event == "SCREENSHOT_SUCCEEDED")
 			end)
 		end
 	elseif event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START" then

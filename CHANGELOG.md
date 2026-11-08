@@ -6,6 +6,7 @@
 - Nameplates now stay hidden in combat while the HUD is hidden, for example after you hide it mid-fight or with Combat unticked. They used to come back as soon as a fight started.
 - New **Damage numbers** option: the damage and healing numbers over your targets go with the HUD too. It is part of the Everything preset, and on unless you use the Blizzard preset.
 - After you hide the HUD with your Hide UI key, a new target or a cast no longer brings it back. It stays hidden until you press the key again, apart from combat, windows, typing and dying (each if ticked). Hiding for being idle works as before: any input, a target included, brings it back.
+- After a screenshot without the HUD, the chat says it was saved, and the first time each session also where.
 - The "Target circle and glow" option is now called **Target circle**.
 
 ## 1.0.0

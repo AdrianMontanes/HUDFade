@@ -38,6 +38,7 @@ read_globals = {
 	"GetBindingAction",
 	"GetBindingKey",
 	"GetBindingText",
+	"GetBuildInfo",
 	"GetCVar",
 	"GetCurrentKeyBoardFocus",
 	"GetCursorInfo",
