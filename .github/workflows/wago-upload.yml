@@ -1,0 +1,32 @@
+# Uploads a version that is already released to Wago Addons only, for versions from before the Wago project
+# existed. Run it by hand from the Actions tab. CurseForge and GitHub are skipped because their tokens aren't passed.
+name: Upload to Wago
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Released version to upload, for example 1.1.0
+        required: true
+        default: "1.1.0"
+
+jobs:
+  wago:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the version tags
+
+      - run: sudo apt-get update && sudo apt-get install -y subversion # the libraries in .pkgmeta come from svn
+
+      - name: Package the version and upload it to Wago
+        env:
+          VERSION: ${{ inputs.version }}
+          WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+        run: |
+          # Older versions have no X-Wago-ID in their TOC, so the ID comes from the current one.
+          wago_id=$(sed -n 's/^## X-Wago-ID:[[:space:]]*//p' HUDFade.toc | tr -d '\r[:space:]')
+          git checkout -q "refs/tags/$VERSION"
+          curl -fsSL https://raw.githubusercontent.com/BigWigsMods/packager/v2/release.sh -o "$RUNNER_TEMP/release.sh"
+          bash "$RUNNER_TEMP/release.sh" -a "$wago_id"

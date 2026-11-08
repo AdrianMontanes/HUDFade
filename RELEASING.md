@@ -22,6 +22,8 @@ CurseForge app only offers to people who opted in.
 
 - Repo secrets (Settings > Secrets and variables > Actions): `CF_API_KEY`, `WAGO_API_TOKEN`, `WOWI_API_TOKEN`.
 - Project IDs in `HUDFade.toc`: `## X-Curse-Project-ID`, `## X-Wago-ID`, `## X-WoWI-ID`.
+- A version released before the Wago project existed can be sent there with the Upload to Wago workflow (Actions
+  tab > Upload to Wago > Run workflow). It uploads to Wago only.
 
 ## Libraries
 
