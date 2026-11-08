@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/icon-dark.png">
-  <img src=".github/icon-light.png" alt="HUD Fade logo" height="96">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/AdrianMontanes/HUDFade/main/.github/icon-dark.png">
+  <img src="https://raw.githubusercontent.com/AdrianMontanes/HUDFade/main/.github/icon-light.png" alt="HUD Fade logo" height="96">
 </picture>
 
 # HUD Fade
@@ -13,10 +13,10 @@ Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
 [![CurseForge](https://img.shields.io/badge/CurseForge-HUD%20Fade-F16436?logo=curseforge&logoColor=white)](https://www.curseforge.com/wow/addons/hud-fade)
 [![Latest release](https://img.shields.io/github/v/release/AdrianMontanes/HUDFade?label=release&color=F7752A)](https://github.com/AdrianMontanes/HUDFade/releases/latest)
 [![WoW Forever and Retail](https://img.shields.io/badge/WoW-Forever%20%7C%20Retail-148EFF)](#install)
-[![MIT license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/AdrianMontanes/HUDFade/blob/main/LICENSE)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-29ABE0?logo=kofi&logoColor=FF5E5B)](https://ko-fi.com/44dri44n)
 
-<img src=".github/media/hudfade-fade.webp" alt="The whole UI, EllesmereUI included, fading out with one key">
+<img src="https://raw.githubusercontent.com/AdrianMontanes/HUDFade/main/.github/media/hudfade-fade.webp" alt="The whole UI, EllesmereUI included, fading out with one key">
 
 </div>
 
@@ -24,7 +24,7 @@ Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
 
 Most fade addons set each frame's opacity one by one, and UI addons like EllesmereUI do the same for their own mouseover rules, so the two fight: flicker, bars popping back, art showing through. HUD Fade fades the one layer every frame sits on instead, so your UI addons keep working underneath. It also handles what lives outside that layer: 3D portraits, names, chat bubbles, nameplates, damage numbers and the target circle.
 
-![Your UI on the left, the same view with HUD Fade on the right](.github/media/hudfade-before-after.jpg)
+![Your UI on the left, the same view with HUD Fade on the right](https://raw.githubusercontent.com/AdrianMontanes/HUDFade/main/.github/media/hudfade-before-after.jpg)
 
 ## Features
 
