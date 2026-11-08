@@ -58,9 +58,6 @@ No setup per addon and no reload. Keys for hide/show, peek, screenshot and on/of
 
 ## Install
 
-> [!NOTE]
-> The CurseForge page is still waiting for CurseForge's review, which usually takes a day or two. Until then, download the zip from [Releases](https://github.com/AdrianMontanes/HUDFade/releases/latest). Once it's approved, addon managers that install from CurseForge, like WowUp, will find it too.
-
 - **CurseForge:** install it from the [HUD Fade page](https://www.curseforge.com/wow/addons/hud-fade), or search for HUD Fade in the CurseForge app.
 - **By hand:** download the zip from [Releases](https://github.com/AdrianMontanes/HUDFade/releases/latest) and unzip it into `World of Warcraft\_forever_\Interface\AddOns` (or `_retail_` for Retail), so you end up with an `AddOns\HUDFade` folder.
 
