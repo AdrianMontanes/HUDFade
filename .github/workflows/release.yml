@@ -1,6 +1,6 @@
 # Builds the addon zip and uploads it to GitHub Releases, CurseForge, Wago and WoWInterface.
-# Runs when a version tag (like 1.1.0) is pushed, or when a push to main changes HUDFade.toc to a version
-# that has no tag yet: then it tags that commit itself first. A site whose token secret is missing is skipped.
+# Runs when a push to main changes HUDFade.toc to a version without a GitHub release yet (it tags that
+# commit itself if needed), or when a version tag is pushed by hand. A site with no token secret is skipped.
 name: Release
 
 on:
@@ -27,25 +27,41 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0 # full history and tags, for the changelog and the check below
+          fetch-depth: 0 # full history and tags, for the changelog and the checks below
 
-      # A tag pushed with this job's token doesn't start another run, so this run does the release.
-      - name: Tag a new version
-        id: tag
+      - name: Find a version to release
+        id: version
         if: github.ref_type == 'branch'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version=$(sed -n 's/^## Version:[[:space:]]*//p' HUDFade.toc | tr -d '\r[:space:]')
-          if [ -z "$version" ] || git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
-            echo "Version '$version' already has a tag, so there is nothing to release."
+          if [ -z "$version" ]; then
+            echo "No version in HUDFade.toc."
             echo "release=false" >> "$GITHUB_OUTPUT"
-          else
+            exit 0
+          fi
+          if ! git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
             git tag "$version"
             git push origin "refs/tags/$version"
-            echo "release=true" >> "$GITHUB_OUTPUT"
+          elif gh api "repos/$GITHUB_REPOSITORY/releases/tags/$version" >/dev/null 2>&1; then
+            echo "Version $version is already released."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          git checkout -q "refs/tags/$version"
+          echo "release=true" >> "$GITHUB_OUTPUT"
 
       - run: sudo apt-get update && sudo apt-get install -y subversion # the libraries in .pkgmeta come from svn
-        if: github.ref_type == 'tag' || steps.tag.outputs.release == 'true'
+        if: github.ref_type == 'tag' || steps.version.outputs.release == 'true'
 
       - uses: BigWigsMods/packager@v2
-        if: github.ref_type == 'tag' || steps.tag.outputs.release == 'true'
+        if: github.ref_type == 'tag'
+
+      # On a branch push the packager skips a tagged commit, expecting a run for the tag push, but a tag pushed
+      # with this job's token starts no run. So it runs here as it would for that tag push.
+      - name: Package the tagged version
+        if: steps.version.outputs.release == 'true'
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/BigWigsMods/packager/v2/release.sh -o "$RUNNER_TEMP/release.sh"
+          GITHUB_EVENT_NAME=workflow_dispatch bash "$RUNNER_TEMP/release.sh"

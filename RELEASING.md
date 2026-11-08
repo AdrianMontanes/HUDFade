@@ -4,8 +4,8 @@ Releases are automatic. `.github/workflows/release.yml` uses the
 [BigWigs packager](https://github.com/BigWigsMods/packager) to build `HUDFade-<version>.zip` and upload it to
 GitHub Releases, CurseForge, Wago and WoWInterface. A site is skipped if its token secret is missing.
 
-It runs when a push to `main` changes `HUDFade.toc` to a version that has no tag yet (it tags that commit
-itself), or when a version tag is pushed by hand.
+It runs when a push to `main` changes `HUDFade.toc` to a version that has no release yet (it tags that commit
+itself if needed), or when a version tag is pushed by hand.
 
 ## Steps
 
