@@ -281,6 +281,24 @@ LibStub = setmetatable({}, {
 	__call = function(_, lib) return lib == "LibDBIcon-1.0" and icon or broker end,
 })
 
+-- The game tooltip, which DynamicCam's Keep Tooltip makes ignore the UI's opacity
+GameTooltip = newFrame()
+GameTooltip.parent = UIParent
+GameTooltip.shown = false
+GameTooltip.ignoring = false
+function GameTooltip:IsIgnoringParentAlpha() return self.ignoring end
+function GameTooltip:HookScript(n, fn)
+	local old = self.scripts[n]
+	self.scripts[n] = function(...)
+		if old then old(...) end
+		fn(...)
+	end
+end
+function GameTooltip:Show()
+	self.shown = true
+	if self.scripts.OnShow then self.scripts.OnShow(self) end
+end
+
 local ns = {}
 local function load(file) assert(loadfile(arg[1] .. "/" .. file))("HUDFade", ns) end
 load("Core.lua")
@@ -688,12 +706,13 @@ step(0.5)
 dcEnter(0.3)
 step(1)
 check("DynamicCam: its dim applies while the HUD is up", near(UIParent.alpha, 0.3))
+check("DynamicCam: portraits dim with it", near(model.malpha, 0.3))
 check("DynamicCam: why says it dims the HUD",
 	table.concat(HUDFade.Explain(), "\n"):find("dims it to 30%", 1, true) ~= nil)
 mail:Hide()
 dcLeave()
 step(0.5)
-check("DynamicCam: the HUD is fully back after its situation", UIParent.alpha == 1)
+check("DynamicCam: the HUD is fully back after its situation", UIParent.alpha == 1 and model.malpha == 1)
 step(7)
 check("DynamicCam: and idle hides it as usual", UIParent.alpha == 0)
 mail:Show()
@@ -711,9 +730,17 @@ step(1)
 HUDFade.Hide()
 step(2)
 check("DynamicCam: the hide key takes the UI below its dim", UIParent.alpha == 0 and model.malpha == 0)
+GameTooltip.ignoring = true
+GameTooltip:Show()
+check("DynamicCam: a tooltip it keeps stays closed while the HUD is hidden", GameTooltip.shown == false)
 HUDFade.Show()
 step(0.5)
-check("DynamicCam: showing again comes back to its dim, not above it", near(UIParent.alpha, 0.3))
+check("DynamicCam: showing again comes back to its dim, not above it",
+	near(UIParent.alpha, 0.3) and near(model.malpha, 0.3))
+GameTooltip:Show()
+check("DynamicCam: and its tooltip opens as usual", GameTooltip.shown == true)
+GameTooltip:Hide()
+GameTooltip.ignoring = false
 HUDFade.Hide()
 step(2)
 mail:Hide()
@@ -1083,7 +1110,7 @@ CreateFrame = function(kind, name, parent, template)
 end
 local pages = {}
 for _, f in ipairs(frames) do
-	if f.scripts.OnShow then pages[#pages + 1] = f end
+	if f.scripts.OnShow and f ~= GameTooltip then pages[#pages + 1] = f end
 end
 local ok, err = pcall(function()
 	for _, f in ipairs(pages) do f.scripts.OnShow(f) end

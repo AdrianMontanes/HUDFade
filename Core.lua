@@ -234,6 +234,30 @@ local function restoreAllCVars()
 end
 
 ---------------------------------------------------------------------------
+-- Sharing the UI with DynamicCam
+---------------------------------------------------------------------------
+-- DynamicCam can fade the UI in a situation (at a mailbox, on a mount). While it does, it keeps its opacity in
+-- UIParent.ludius_intendedUIParentAlpha, and a hook of its own sets that back whenever anyone else changes it.
+-- Afterwards it returns the UI to UIParent.ludius_alphaBeforeFadeOut. Its other addons do the same.
+-- We share the UI with it: the lower of the two opacities wins, and when it is done the UI returns to ours.
+local ludius = { mine = nil, theirs = nil } -- what we last wrote to its opacity, and its own one
+local function theirAlpha()
+	local hold = UIParent.ludius_intendedUIParentAlpha
+	if type(hold) ~= "number" then
+		ludius.mine, ludius.theirs = nil, nil
+		return nil
+	end
+	if hold ~= ludius.mine then ludius.theirs = hold end
+	return ludius.theirs or hold
+end
+
+-- The opacity UIParent ends up with when we want a.
+local function shared(a)
+	local theirs = theirAlpha()
+	return theirs and math.min(a, theirs) or a
+end
+
+---------------------------------------------------------------------------
 -- 3D models ignore their parent's alpha, so they are faded directly with SetModelAlpha.
 ---------------------------------------------------------------------------
 local MODEL_TYPES = { Model = true, PlayerModel = true, DressUpModel = true, CinematicModel = true, TabardModel = true }
@@ -388,21 +412,34 @@ end
 
 -- An addon that sets its portrait's alpha while the HUD is faded (ElvUI does whenever its unit frame's alpha
 -- changes) would show it until our next pass, so it blinks. Take that as the model's own alpha and fade it at once.
+local modelLevel = 1 -- the opacity models were last faded to
 local function modelAlphaSet(m, a)
-	if settingModel or state.current >= 0.999 or baseAlpha[m] == nil then return end
+	if settingModel or modelLevel >= 0.999 or baseAlpha[m] == nil then return end
 	a = readable(a)
 	if type(a) ~= "number" then return end
 	baseAlpha[m] = a
-	fadeModel(m, state.current)
+	fadeModel(m, modelLevel)
 end
 
 -- Models caught by hookModels, on top of the ones the scans found.
 local seenModels = setmetatable({}, { __mode = "k" })
 
-local function applyModels(a)
-	applyLoners(a)
+-- Models follow the UI's opacity, DynamicCam's dim included: the game doesn't apply it to them, so a portrait
+-- would stay solid while the rest of the UI is dimmed.
+local function fadeModelsTo(a)
+	modelLevel = a
 	for _, m in ipairs(models) do fadeModel(m, a) end
 	for m in pairs(seenModels) do fadeModel(m, a) end
+end
+
+local function syncModels()
+	local a = shared(state.current)
+	if math.abs(a - modelLevel) > 0.001 then fadeModelsTo(a) end
+end
+
+local function applyModels(a)
+	applyLoners(a)
+	fadeModelsTo(shared(a))
 end
 
 -- The background scan can take a while in a big UI, and a portrait created on first use (EllesmereUI's target
@@ -411,7 +448,7 @@ end
 local function noteModel(m)
 	if seenModels[m] or not underUIParent(m) then return end
 	seenModels[m] = true
-	if state.current < 0.999 then fadeModel(m, state.current) end
+	if modelLevel < 0.999 then fadeModel(m, modelLevel) end
 end
 
 local function hookModels()
@@ -517,27 +554,6 @@ end
 ---------------------------------------------------------------------------
 -- The fade
 ---------------------------------------------------------------------------
--- DynamicCam can fade the UI in a situation (at a mailbox, on a mount). While it does, it keeps its opacity in
--- UIParent.ludius_intendedUIParentAlpha, and a hook of its own sets that back whenever anyone else changes it.
--- Afterwards it returns the UI to UIParent.ludius_alphaBeforeFadeOut. Its other addons do the same.
--- We share the UI with it: the lower of the two opacities wins, and when it is done the UI returns to ours.
-local ludius = { mine = nil, theirs = nil } -- what we last wrote to its opacity, and its own one
-local function theirAlpha()
-	local hold = UIParent.ludius_intendedUIParentAlpha
-	if type(hold) ~= "number" then
-		ludius.mine, ludius.theirs = nil, nil
-		return nil
-	end
-	if hold ~= ludius.mine then ludius.theirs = hold end
-	return ludius.theirs or hold
-end
-
--- The opacity UIParent ends up with when we want a.
-local function shared(a)
-	local theirs = theirAlpha()
-	return theirs and math.min(a, theirs) or a
-end
-
 local writing = false
 local function setUIAlpha(a)
 	if theirAlpha() then
@@ -561,6 +577,15 @@ local function guardUIAlpha()
 	if writing or not DB then return end
 	local a = ask(UIParent, "GetAlpha")
 	if type(a) == "number" and a > shared(state.current) + 0.01 then setUIAlpha(state.current) end
+	syncModels()
+end
+
+-- A tooltip that ignores the UI's opacity (DynamicCam's Keep Tooltip makes it) would show over a hidden HUD, and the
+-- game's own fade-out after you hover something outruns our fade. Keep it closed while the HUD is fully hidden.
+local function closeTooltip(tip)
+	if shared(state.current) < 0.01 and ask(tip, "IsShown") and ask(tip, "IsIgnoringParentAlpha") == true then
+		pcall(tip.Hide, tip)
+	end
 end
 
 local applyFailed = false
@@ -791,6 +816,9 @@ local function update(instant)
 			applyModels(state.current)
 			applyPlates(state.current) -- plates that got new parts or were reset by their addon
 		end
+		if GameTooltip then closeTooltip(GameTooltip) end
+	elseif not driver:IsShown() then
+		syncModels() -- DynamicCam's dim starting or ending
 	end
 end
 HUDFade.Update = update
@@ -1436,6 +1464,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		pcall(hookModels)
 		-- Hooked at login, after every addon has loaded, so ours runs after DynamicCam's own hook.
 		if hooksecurefunc then pcall(hooksecurefunc, UIParent, "SetAlpha", function() pcall(guardUIAlpha) end) end
+		if GameTooltip and GameTooltip.HookScript then
+			pcall(GameTooltip.HookScript, GameTooltip, "OnShow", function(tip) pcall(closeTooltip, tip) end)
+		end
 		state.inCombat = InCombatLockdown() and true or false
 		state.lastInput = now()
 		hookMinimap()
