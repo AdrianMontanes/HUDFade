@@ -43,7 +43,11 @@ C_CVar = {
 local function stubMethod() return function() end end
 
 -- Models share one method table, like the game's widget method tables, so a hook there sees every model.
-local modelMethods = setmetatable({ SetUnit = function() end }, { __index = stubMethod })
+local modelMethods = setmetatable({
+	SetUnit = function() end,
+	SetModelAlpha = function(self, a) self.malpha = a end,
+	GetModelAlpha = function(self) return self.malpha or 1 end,
+}, { __index = stubMethod })
 
 local frames = {}
 local function newFrame(kind)
@@ -109,6 +113,12 @@ function hooksecurefunc(t, name, fn)
 		return r
 	end)
 end
+
+-- DynamicCam's hook, which loads before HUD Fade: while it fades the UI, it puts its own opacity back.
+hooksecurefunc(UIParent, "SetAlpha", function(self, a)
+	local held = rawget(self, "ludius_intendedUIParentAlpha")
+	if held ~= nil and held ~= a then self:SetAlpha(held) end
+end)
 
 function CreateFrame(kind, name, parent)
 	local f = newFrame(kind)
@@ -648,6 +658,72 @@ check("and the UI is back after the dialogue", UIParent.alpha == 1)
 step(5)
 check("until the idle time", UIParent.alpha == 0)
 
+-- DynamicCam fading the UI in a situation, here at a mailbox: it eases UIParent, holding each step with its hook
+local function dcEase(to)
+	local from, peak = UIParent.alpha, 0
+	if from == to then return peak end
+	for i = 1, 5 do
+		local x = from + (to - from) * i / 5
+		UIParent.ludius_intendedUIParentAlpha = x ~= 1 and x or nil
+		UIParent:SetAlpha(x)
+		peak = math.max(peak, UIParent.alpha)
+		step(0.1)
+		peak = math.max(peak, UIParent.alpha)
+	end
+	return peak
+end
+local function dcEnter(opacity)
+	if rawget(UIParent, "ludius_alphaBeforeFadeOut") == nil then UIParent.ludius_alphaBeforeFadeOut = UIParent.alpha end
+	dcEase(opacity)
+end
+local function dcLeave() -- returns the highest opacity the UI showed on the way
+	local peak = dcEase(rawget(UIParent, "ludius_alphaBeforeFadeOut"))
+	UIParent.ludius_alphaBeforeFadeOut, UIParent.ludius_intendedUIParentAlpha = nil, nil
+	return peak
+end
+local function near(a, b) return math.abs(a - b) < 0.01 end
+
+local mail = CreateFrame("Frame", "MailFrame")
+step(0.5)
+dcEnter(0.3)
+step(1)
+check("DynamicCam: its dim applies while the HUD is up", near(UIParent.alpha, 0.3))
+check("DynamicCam: why says it dims the HUD",
+	table.concat(HUDFade.Explain(), "\n"):find("dims it to 30%", 1, true) ~= nil)
+mail:Hide()
+dcLeave()
+step(0.5)
+check("DynamicCam: the HUD is fully back after its situation", UIParent.alpha == 1)
+step(7)
+check("DynamicCam: and idle hides it as usual", UIParent.alpha == 0)
+mail:Show()
+dcEnter(0.3) -- DynamicCam reacting first remembers the hidden UI as where to return
+step(1)
+check("DynamicCam: mailbox opened while hidden comes up to its dim", near(UIParent.alpha, 0.3))
+mail:Hide()
+dcLeave()
+step(0.2)
+check("DynamicCam: and the HUD is back after, not left hidden", UIParent.alpha == 1)
+mail:Show()
+step(0.5)
+dcEnter(0.3)
+step(1)
+HUDFade.Hide()
+step(2)
+check("DynamicCam: the hide key takes the UI below its dim", UIParent.alpha == 0 and model.malpha == 0)
+HUDFade.Show()
+step(0.5)
+check("DynamicCam: showing again comes back to its dim, not above it", near(UIParent.alpha, 0.3))
+HUDFade.Hide()
+step(2)
+mail:Hide()
+local peak = dcLeave()
+check("DynamicCam: no flash when its situation ends while hidden", peak < 0.01 and UIParent.alpha == 0)
+HUDFade.Show()
+step(0.5)
+check("DynamicCam: the key brings the HUD back after", UIParent.alpha == 1)
+step(7)
+
 -- Mouse moving off: the mouse keeps the HUD up, but only keys bring it back once idle
 HUDFadeDB.mouseWakes = false
 step(7)
@@ -797,6 +873,17 @@ check("a model outside the UI is left alone", loose.malpha == 1)
 HUDFade.Show()
 step(0.5)
 check("and restored when the HUD comes back", given.malpha == 1)
+
+-- A portrait whose addon sets its alpha while the HUD is hidden (ElvUI, whenever its unit frame's alpha changes)
+HUDFade.Hide()
+step(1.5)
+local elvPortrait = CreateFrame("PlayerModel", nil, UIParent)
+elvPortrait:SetUnit("player")
+elvPortrait:SetModelAlpha(0.8)
+check("a portrait its addon resets while hidden is faded again at once, without a blink", elvPortrait.malpha == 0)
+HUDFade.Show()
+step(0.5)
+check("and comes back at the alpha its addon gave it", elvPortrait.malpha == 0.8)
 
 -- Pixel shift
 local function atRest() return select(1, uiOffset()) == 0 and select(2, uiOffset()) == 0 end

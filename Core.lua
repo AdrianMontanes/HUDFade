@@ -362,11 +362,18 @@ local function applyLoners(a)
 	end
 end
 
+local settingModel = false -- true while we set a model's alpha, so the SetModelAlpha hook skips our own writes
+local function setModelAlpha(m, a)
+	settingModel = true
+	pcall(m.SetModelAlpha, m, a)
+	settingModel = false
+end
+
 local function fadeModel(m, a)
 	if a >= 0.999 then
 		local base = baseAlpha[m]
 		if base then
-			pcall(m.SetModelAlpha, m, base)
+			setModelAlpha(m, base)
 			baseAlpha[m] = nil
 		end
 	else
@@ -375,8 +382,18 @@ local function fadeModel(m, a)
 			local own = ask(m, "GetModelAlpha")
 			baseAlpha[m] = type(own) == "number" and own or 1
 		end
-		pcall(m.SetModelAlpha, m, baseAlpha[m] * a)
+		setModelAlpha(m, baseAlpha[m] * a)
 	end
+end
+
+-- An addon that sets its portrait's alpha while the HUD is faded (ElvUI does whenever its unit frame's alpha
+-- changes) would show it until our next pass, so it blinks. Take that as the model's own alpha and fade it at once.
+local function modelAlphaSet(m, a)
+	if settingModel or state.current >= 0.999 or baseAlpha[m] == nil then return end
+	a = readable(a)
+	if type(a) ~= "number" then return end
+	baseAlpha[m] = a
+	fadeModel(m, state.current)
 end
 
 -- Models caught by hookModels, on top of the ones the scans found.
@@ -410,6 +427,9 @@ local function hookModels()
 				if type(methods[name]) == "function" then
 					pcall(hooksecurefunc, methods, name, function(m) pcall(noteModel, m) end)
 				end
+			end
+			if type(methods.SetModelAlpha) == "function" then
+				pcall(hooksecurefunc, methods, "SetModelAlpha", function(m, a) pcall(modelAlphaSet, m, a) end)
 			end
 		end
 		if ok and type(f) == "table" then pcall(f.Hide, f) end
@@ -497,10 +517,56 @@ end
 ---------------------------------------------------------------------------
 -- The fade
 ---------------------------------------------------------------------------
+-- DynamicCam can fade the UI in a situation (at a mailbox, on a mount). While it does, it keeps its opacity in
+-- UIParent.ludius_intendedUIParentAlpha, and a hook of its own sets that back whenever anyone else changes it.
+-- Afterwards it returns the UI to UIParent.ludius_alphaBeforeFadeOut. Its other addons do the same.
+-- We share the UI with it: the lower of the two opacities wins, and when it is done the UI returns to ours.
+local ludius = { mine = nil, theirs = nil } -- what we last wrote to its opacity, and its own one
+local function theirAlpha()
+	local hold = UIParent.ludius_intendedUIParentAlpha
+	if type(hold) ~= "number" then
+		ludius.mine, ludius.theirs = nil, nil
+		return nil
+	end
+	if hold ~= ludius.mine then ludius.theirs = hold end
+	return ludius.theirs or hold
+end
+
+-- The opacity UIParent ends up with when we want a.
+local function shared(a)
+	local theirs = theirAlpha()
+	return theirs and math.min(a, theirs) or a
+end
+
+local writing = false
+local function setUIAlpha(a)
+	if theirAlpha() then
+		a = shared(a)
+		ludius.mine = a
+		UIParent.ludius_intendedUIParentAlpha = a -- so its hook keeps ours instead of undoing it
+	end
+	writing = true
+	local ok, err = pcall(UIParent.SetAlpha, UIParent, a)
+	writing = false
+	return ok, err
+end
+
+-- Where DynamicCam returns the UI when its situation ends: what we want now, not what it saw when it started.
+local function handBack(a)
+	if type(UIParent.ludius_alphaBeforeFadeOut) == "number" then UIParent.ludius_alphaBeforeFadeOut = a end
+end
+
+-- Another addon raising the UI above ours while we fade or hide it: put ours back at once, before it can show.
+local function guardUIAlpha()
+	if writing or not DB then return end
+	local a = ask(UIParent, "GetAlpha")
+	if type(a) == "number" and a > shared(state.current) + 0.01 then setUIAlpha(state.current) end
+end
+
 local applyFailed = false
 local function apply(a)
 	state.current = a
-	local ok, err = pcall(UIParent.SetAlpha, UIParent, a)
+	local ok, err = setUIAlpha(a)
 	if not ok and not applyFailed then
 		applyFailed = true
 		say("the game refused to change the UI's opacity (" .. tostring(err) .. ").")
@@ -698,6 +764,7 @@ local function update(instant)
 	end
 	if not DB.enabled then
 		if state.target < 0.999 or state.current < 0.999 or state.cvarsHidden then setTarget(1, true) end
+		handBack(1)
 		return
 	end
 	if DB.showWindows then typing(t) end
@@ -714,10 +781,11 @@ local function update(instant)
 	local show = base or reason or (not idle and (t - state.lastWanted) < GRACE)
 	if show and state.target < 0.999 and hidesUI(window) then instant = true end
 	setTarget(show and 1 or DB.hiddenAlpha, instant)
+	handBack(state.target)
 	-- While hidden: reapply our alpha if something changed it, and fade models that just appeared.
 	if state.target < 0.999 and not driver:IsShown() then
 		local a = ask(UIParent, "GetAlpha")
-		if type(a) == "number" and math.abs(a - state.target) > 0.01 then
+		if type(a) == "number" and math.abs(a - shared(state.target)) > 0.01 then
 			apply(state.target)
 		else
 			applyModels(state.current)
@@ -836,6 +904,11 @@ function HUDFade.Explain(skipTyping)
 	end
 	if #causes == 0 then causes[1] = "Something just ended, it hides in a moment" end
 	listLines(lines, "HUD visible due to:", causes)
+	local theirs = theirAlpha()
+	if theirs and theirs < 0.999 then
+		lines[#lines + 1] = string.format("DynamicCam or a similar addon dims it to %d%% for now.",
+			math.floor(theirs * 100 + 0.5))
+	end
 	return lines
 end
 
@@ -1361,6 +1434,8 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		restoreAllCVars()
 		pcall(scanModels)
 		pcall(hookModels)
+		-- Hooked at login, after every addon has loaded, so ours runs after DynamicCam's own hook.
+		if hooksecurefunc then pcall(hooksecurefunc, UIParent, "SetAlpha", function() pcall(guardUIAlpha) end) end
 		state.inCombat = InCombatLockdown() and true or false
 		state.lastInput = now()
 		hookMinimap()

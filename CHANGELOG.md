@@ -6,6 +6,8 @@
 - The new friends list (the Social window) and any other game window HUD Fade didn't know by name now count as windows too.
 - Pixel shift steps aside, and the HUD stays visible, while you move frames with ElvUI's movers or unlocked Bartender4 or Dominos bars, as it already did for Edit Mode and EllesmereUI.
 - Controllers: running with the movement stick or pressing jump now counts as activity, so the HUD no longer hides while you play with a controller. The camera stick counts only with Camera movement ticked, like the mouse.
+- DynamicCam: when one of its situations dims the UI (Fade Out UI), your Hide UI key and idle hiding still hide the HUD fully, and showing it comes back to DynamicCam's dim. When the situation ends, the UI goes to what HUD Fade wants instead of flashing back for a second. `/hudfade why` mentions the dim.
+- 3D portraits whose addon resets their opacity while the HUD is hidden (ElvUI does) no longer blink back for a moment.
 
 ## 1.2.0
 

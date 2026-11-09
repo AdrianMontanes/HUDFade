@@ -65,7 +65,9 @@ read_globals = {
 	"SetOverrideBinding",
 	"Settings",
 	"UIPanelWindows",
-	"UIParent",
+	-- DynamicCam's fields on UIParent, which we share its UI fade through
+	UIParent = { other_fields = true, fields = { ludius_intendedUIParentAlpha = { read_only = false },
+		ludius_alphaBeforeFadeOut = { read_only = false } } },
 	"UISpecialFrames",
 	"UnitExists",
 	"UnitIsDead",
