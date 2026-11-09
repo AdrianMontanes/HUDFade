@@ -302,6 +302,7 @@ end
 local ns = {}
 local function load(file) assert(loadfile(arg[1] .. "/" .. file))("HUDFade", ns) end
 load("Core.lua")
+load("Elements.lua")
 load("Options.lua")
 load("MinimapButton.lua")
 
@@ -1069,9 +1070,9 @@ SlashCmdList.HUDFADE("reset")
 -- Presets
 check("defaults are the Everything preset", HUDFade.CurrentPreset() == 1 and HUDFade.PRESETS[1].name == "Everything")
 HUDFade.ApplyPreset(2)
-check("Blizzard: names and the circle stay, nameplates and minimap go",
+check("Blizzard: names and the circle stay, nameplates go",
 	HUDFadeDB.hideNames == false and HUDFadeDB.hideOutline == false and HUDFadeDB.hideNameplates == true
-	and HUDFadeDB.hideMinimap == true and HUDFade.CurrentPreset() == 2)
+	and HUDFade.CurrentPreset() == 2)
 HUDFade.Show()
 step(0.5)
 HUDFade.Hide()
@@ -1092,6 +1093,7 @@ for _, f in ipairs(frames) do rawset(f, "CreateFontString", stubObject) end
 local realCreate = CreateFrame
 local templates = {}
 local presetMenu
+local dropdowns = {}
 local copyBoxes = {}
 CreateFrame = function(kind, name, parent, template)
 	if template then templates[#templates + 1] = template end
@@ -1099,7 +1101,8 @@ CreateFrame = function(kind, name, parent, template)
 	local f = realCreate(kind, name, parent)
 	rawset(f, "CreateFontString", stubObject)
 	if template == "WowStyle1DropdownTemplate" then
-		presetMenu = f
+		presetMenu = presetMenu or f -- the main page's comes first
+		dropdowns[#dropdowns + 1] = f
 		rawset(f, "SetupMenu", function(self, gen) self.gen = gen end)
 	end
 	if template == "InputBoxTemplate" then
@@ -1115,7 +1118,7 @@ end
 local ok, err = pcall(function()
 	for _, f in ipairs(pages) do f.scripts.OnShow(f) end
 end)
-check("settings pages build without errors (" .. tostring(err) .. ")", ok and #pages == 2)
+check("settings pages build without errors (" .. tostring(err) .. ")", ok and #pages == 3)
 check("the main page scrolls (falls back to the older scroll template)",
 	table.concat(templates, " "):find("UIPanelScrollFrameTemplate") ~= nil)
 
@@ -1133,6 +1136,28 @@ if #radios == 2 then radios[2].setSel() end
 check("choosing one in the menu applies it",
 	HUDFade.CurrentPreset() == 2 and HUDFadeDB.hideNames == false and radios[2].isSel() == true)
 SlashCmdList.HUDFADE("reset")
+
+-- The Elements page: a menu per element
+local function radiosOf(dd)
+	local list = {}
+	dd.gen(dd, {
+		CreateRadio = function(_, text, isSel, setSel) list[#list + 1] = { text = text, isSel = isSel, setSel = setSel } end,
+	})
+	return list
+end
+local barMenu, noticeMenu
+for _, dd in ipairs(dropdowns) do
+	local r = dd.gen and radiosOf(dd) or {}
+	if not barMenu and #r == 3 and r[2].text == "Shown on mouseover" then barMenu = r end
+	if not noticeMenu and #r == 2 and r[2].text == "Always visible" then noticeMenu = r end
+end
+check("element menus offer Hidden, Shown on mouseover and Always visible",
+	barMenu and barMenu[1].text == "Hidden" and barMenu[1].isSel() == true and barMenu[3].text == "Always visible")
+check("notifications offer only Hidden and Always visible", noticeMenu ~= nil)
+if barMenu then barMenu[2].setSel() end
+check("choosing one saves it for that element", HUDFadeDB.elements.bars == "hover" and barMenu[2].isSel() == true)
+SlashCmdList.HUDFADE("reset")
+check("reset puts every element back to Hidden", next(HUDFadeDB.elements) == nil)
 
 -- Help and feedback addresses
 local pageBox = copyBoxes[1]
@@ -1263,6 +1288,196 @@ step(1)
 HUDFade.Hide()
 step(0.5)
 check("a frame the game forbids is left alone", forbidden.alpha == 1 and name.alpha < 1)
+
+-- Elements: parts of the HUD lifted out of its fade, always or while the mouse is over them or in a fight
+plate.kids[3] = nil
+HUDFade.Show()
+step(1)
+local E = HUDFade.Elements
+local function elementFrame(frameName, parent)
+	local f = CreateFrame("Frame", frameName, parent or UIParent)
+	f.ignoring = false
+	function f:IsIgnoringParentAlpha() return self.ignoring end
+	function f:SetIgnoreParentAlpha(on) self.ignoring = on end
+	function f:IsMouseOver() return self.over == true end
+	return f
+end
+local chat = elementFrame("ChatFrame1")
+local chatTab = elementFrame("ChatFrame1Tab", chat) -- inside the chat frame, so it goes with it
+local bar = elementFrame("MultiBarBottomLeft")
+local barModel = newFrame("PlayerModel") -- a 3D model inside the bar
+barModel.parent = bar
+barModel.malpha = 1
+barModel:SetUnit("player")
+local euiBar, euiChat = elementFrame("EABBar_Bar2"), elementFrame()
+local euiElements = EllesmereUI._unlockRegisteredElements
+euiElements.Bar2 = { group = "Action Bars", getFrame = function() return euiBar end }
+euiElements.ECHAT_MainChat = { group = "Chat", getFrame = function() return euiChat end }
+-- EllesmereUI draws chat on a panel beside the chat frame, and places its tabs and border by other frames
+local chatPanel, dock = elementFrame(), elementFrame("GeneralDockManager")
+local tabStrip, panelBorder, barGlow = elementFrame(), elementFrame(), elementFrame()
+local function placeBy(f, rel)
+	function f:GetNumPoints() return 1 end
+	function f:GetPoint() return "TOPLEFT", rel, "TOPLEFT", 0, 0 end
+end
+placeBy(tabStrip, dock)
+placeBy(panelBorder, chatPanel)
+placeBy(barGlow, bar)
+EllesmereUI._chatCFD = function(cf) return cf == chat and { bg = chatPanel } or {} end
+function UIParent:GetChildren() return chat, bar, euiBar, euiChat, chatPanel, dock, tabStrip, panelBorder, barGlow end
+E.Refresh()
+
+E.SetMode("chat", "show")
+HUDFade.Hide()
+check("an always visible element is lifted out before the fade starts",
+	chat.ignoring == true and chat.alpha == 1 and euiChat.ignoring == true)
+check("a frame inside it is left to follow it", chatTab.ignoring == false)
+check("EllesmereUI's chat panel stays too", chatPanel.ignoring == true)
+check("and so do its tabs and border, placed beside it", tabStrip.ignoring == true and panelBorder.ignoring == true)
+check("but not a frame placed by another element", barGlow.ignoring == false)
+check("other elements fade with the HUD", bar.ignoring == false and euiBar.ignoring == false)
+step(1.5)
+check("it stays while the rest of the HUD is hidden", UIParent.alpha == 0 and chat.ignoring == true and chat.alpha == 1)
+local apart = table.concat(HUDFade.Explain(), " ")
+check("/hudfade why lists it", apart:find("Chat (always visible)", 1, true) ~= nil)
+HUDFade.Show()
+step(0.1)
+check("while the HUD fades back in it stays lifted",
+	chat.ignoring == true and UIParent.alpha > 0 and UIParent.alpha < 1)
+step(0.3)
+check("once the HUD is back it follows the HUD again",
+	chat.ignoring == false and chat.alpha == 1 and UIParent.alpha == 1)
+
+E.SetMode("chat", "hide")
+E.SetMode("bars", "hover")
+HUDFade.Hide()
+step(1.5)
+check("a mouseover element is hidden until the mouse is over it",
+	bar.ignoring == false and UIParent.alpha == 0 and barModel.malpha == 0)
+bar.over = true
+step(0.1)
+check("with the mouse over its spot it fades in", bar.ignoring == true and bar.alpha > 0 and bar.alpha < 1)
+check("only the bar under the mouse comes back", euiBar.ignoring == false)
+step(0.2)
+check("to its own look, 3D models inside it too", bar.alpha == 1 and barModel.malpha == 1)
+local button = newFrame()
+button.parent = bar
+GameTooltip.owner = button
+function GameTooltip:GetOwner() return self.owner end
+function GameTooltip:SetIgnoreParentAlpha(on) self.ignoring = on end
+GameTooltip:Show()
+step(0.2)
+check("a tooltip for a button in it shows too", GameTooltip.shown == true and GameTooltip.ignoring == true)
+GameTooltip:Hide()
+GameTooltip.scripts.OnHide(GameTooltip)
+check("and goes back to normal when it closes", GameTooltip.ignoring == false)
+GameTooltip.ignoring = true -- DynamicCam's Keep Tooltip
+GameTooltip:Show()
+check("a tooltip that already ignores the UI's opacity stays open over it too", GameTooltip.shown == true)
+GameTooltip:Hide()
+GameTooltip.ignoring = false
+GameTooltip.owner = nil
+bar.over = false
+euiBar.over = true
+step(0.5)
+check("moving to another bar brings that one back", euiBar.ignoring == true and euiBar.alpha == 1)
+check("while the first stays a moment after the mouse leaves", bar.ignoring == true and bar.alpha == 1)
+step(1.0)
+check("then fades out", bar.ignoring == true and bar.alpha < 1)
+step(1.0)
+check("and goes back to following the HUD, at its own opacity",
+	bar.ignoring == false and bar.alpha == 1 and UIParent.alpha == 0 and barModel.malpha == 0)
+check("the bar under the mouse stays", euiBar.ignoring == true and euiBar.alpha == 1)
+euiBar.over = false
+step(3)
+check("until the mouse leaves it too", euiBar.ignoring == false and euiBar.alpha == 1)
+HUDFadeDB.oneBarAtATime = false
+bar.over = true
+step(0.5)
+check("with One bar at a time unticked, every bar comes back together",
+	bar.ignoring == true and euiBar.ignoring == true)
+bar.over = false
+step(3)
+check("and goes together", bar.ignoring == false and euiBar.ignoring == false)
+HUDFadeDB.oneBarAtATime = true
+
+-- In combat: untick an element and a fight brings back only the ticked ones
+E.SetMode("bars", "hide")
+E.SetInCombat("chat", false)
+check("unticking one makes fights bring back only some elements", E.PartialCombat() == true)
+fire("PLAYER_REGEN_DISABLED")
+lockdown = true
+check("the HUD stays hidden but the ticked elements come back at once",
+	UIParent.alpha == 0 and bar.ignoring == true and bar.alpha == 1 and chat.ignoring == false)
+check("nameplates come back too while ticked", cvars.nameplateShowEnemies == "1" and name.alpha == 1)
+apart = table.concat(HUDFade.Explain(), " ")
+check("/hudfade why says why", apart:find("only the elements ticked under In combat", 1, true) ~= nil)
+E.SetInCombat("nameplates", false)
+check("unticked, they stay hidden", name.alpha == 0)
+lockdown = false
+fire("PLAYER_REGEN_ENABLED")
+step(0.5)
+check("a moment after the fight it is still like that", bar.ignoring == true and UIParent.alpha == 0)
+step(2.5)
+check("then the elements fade out again", bar.ignoring == false and bar.alpha == 1 and UIParent.alpha == 0)
+E.SetInCombat("chat", true)
+check("with every element ticked, fights bring back the entire HUD again", E.PartialCombat() == false)
+fire("PLAYER_REGEN_DISABLED")
+lockdown = true
+check("the HUD comes back, but unticked nameplates stay hidden", UIParent.alpha == 1 and name.alpha == 0)
+lockdown = false
+fire("PLAYER_REGEN_ENABLED")
+HUDFade.Show()
+step(0.5)
+check("after the fight the nameplates follow the HUD again", name.alpha == 1)
+E.SetInCombat("nameplates", true)
+
+-- The minimap is switched off while hidden, so its row shows and hides it
+Minimap.ignoring = false
+function Minimap:IsIgnoringParentAlpha() return self.ignoring end
+function Minimap:SetIgnoreParentAlpha(on) self.ignoring = on end
+function Minimap:IsMouseOver() return self.over == true end
+E.SetMode("minimap", "show")
+E.Refresh()
+HUDFade.Hide()
+step(1.5)
+check("an always visible minimap stays on and lifted", Minimap.shown == true and Minimap.ignoring == true)
+HUDFade.Show()
+step(0.5)
+E.SetMode("minimap", "hover")
+HUDFade.Hide()
+step(1.5)
+check("on mouseover it is switched off while hidden", Minimap.shown == false)
+Minimap.over = true
+step(0.1)
+check("and comes back with the mouse over its spot", Minimap.shown == true and Minimap.ignoring == true)
+Minimap.over = false
+step(1.5)
+check("and goes again once the mouse leaves", Minimap.shown == false and Minimap.ignoring == false)
+E.SetMode("minimap", "hide")
+
+-- A HUD-free screenshot leaves everything out
+E.SetMode("chat", "show")
+step(0.5)
+check("chat kept while hidden", chat.ignoring == true)
+HUDFade.CleanScreenshot()
+check("a HUD-free screenshot takes it too", chat.ignoring == false)
+step(0.3)
+fire("SCREENSHOT_SUCCEEDED")
+step(0.5)
+check("and it comes back after", chat.ignoring == true and chat.alpha == 1)
+E.SetMode("chat", "hide")
+HUDFade.Show()
+step(1)
+
+-- 1.3.0 turned the Minimap box under "also hide" into the Minimap element
+local saved = HUDFadeDB
+HUDFadeDB = { hideMinimap = false }
+fire("ADDON_LOADED", "HUDFade")
+check("an unticked Minimap box becomes an always visible minimap",
+	HUDFadeDB.elements.minimap == "show" and HUDFadeDB.hideMinimap == nil)
+HUDFadeDB = saved
+fire("ADDON_LOADED", "HUDFade")
 
 -- A change the game refuses in combat is made once combat ends
 HUDFade.Show()

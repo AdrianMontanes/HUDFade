@@ -2,7 +2,7 @@
 ## Title: HUD Fade
 ## Notes: Fade or auto-hide your entire UI at once, Blizzard's and addon UIs alike (ElvUI, EllesmereUI, Bartender4, Dominos...). Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
 ## Author: Adrian
-## Version: 1.2.1
+## Version: 1.3.0
 ## X-License: MIT
 ## X-Curse-Project-ID: 1788415
 ## X-Wago-ID: QNl4ZaNe
@@ -18,5 +18,6 @@ Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 
 Core.lua
+Elements.lua
 Options.lua
 MinimapButton.lua

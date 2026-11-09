@@ -37,10 +37,10 @@ local DEFAULTS = {
 	mouseClicks = true,    -- a click ends idle hiding (it always counts while the HUD is visible)
 	activeCamera = false,  -- turning the camera counts as activity for the idle timer
 	activeAutorun = false, -- auto-run, follow and flight paths count as activity for the idle timer
-	hideMinimap = true,    -- minimap icons ignore UIParent's alpha, so the map is hidden instead
 	replaceAltZ = true,    -- the game's Hide UI key (Alt+Z) runs our toggle instead
 	cleanPrintScreen = false, -- the game's screenshot key leaves the HUD out
 	minimapButton = true,
+	oneBarAtATime = true,  -- on mouseover, only the action bar under the mouse comes back
 	pixelShift = false,    -- burn-in protection, see Pixel shift below
 	shiftPixels = 2,       -- screen pixels
 	shiftMinutes = 3,      -- minutes between moves
@@ -166,7 +166,7 @@ end
 
 local function hideMinimap()
 	local m = Minimap
-	if not (m and DB.hideMinimap) or not canTouch(m) then return end
+	if not (m and ns.elements.HidesMinimap()) or not canTouch(m) then return end
 	if ask(m, "IsShown") then
 		minimapBusy = true
 		if pcall(m.Hide, m) then minimapHiddenByUs = true end
@@ -361,12 +361,19 @@ function HUDFade.DescribeMouseFrame()
 		x = ask(x, "GetParent")
 	end
 	local ign = ask(f, "IsIgnoringParentAlpha")
-	return table.concat(chain, " < ") .. ((ign == true) and " (ignores the UI's opacity)" or "")
+	local row = ns.elements.RowFor(f)
+	local apart = ign == true and not ns.elements.Owns(f)
+	return table.concat(chain, " < ") .. (apart and " (ignores the UI's opacity)" or "")
+		.. (row and (", part of " .. row.label .. " on the Elements page") or "")
 end
 
 local function applyLoners(a)
+	local el = ns.elements
 	for _, f in ipairs(loners) do
-		if a >= 0.999 then
+		-- Elements we lifted out of the fade ourselves, and frames that follow the UI's opacity again, are skipped.
+		local own = el.Owns(f) or ask(f, "IsIgnoringParentAlpha") ~= true
+		local fa = not own and el.LevelFor(f) or a
+		if own or fa >= 0.999 then
 			if lonerBase[f] then
 				pcall(f.SetAlpha, f, lonerBase[f])
 				lonerBase[f], lonerWritten[f] = nil, nil
@@ -379,7 +386,7 @@ local function applyLoners(a)
 			end
 			-- Only fade it if we know what to put back afterwards.
 			if lonerBase[f] then
-				local want = lonerBase[f] * a
+				local want = lonerBase[f] * fa
 				if pcall(f.SetAlpha, f, want) then lonerWritten[f] = want end
 			end
 		end
@@ -393,7 +400,9 @@ local function setModelAlpha(m, a)
 	settingModel = false
 end
 
+-- A model inside an element shown apart from the HUD (Elements.lua) follows that element instead.
 local function fadeModel(m, a)
+	a = ns.elements.LevelFor(m) or a
 	if a >= 0.999 then
 		local base = baseAlpha[m]
 		if base then
@@ -414,7 +423,9 @@ end
 -- changes) would show it until our next pass, so it blinks. Take that as the model's own alpha and fade it at once.
 local modelLevel = 1 -- the opacity models were last faded to
 local function modelAlphaSet(m, a)
-	if settingModel or modelLevel >= 0.999 or baseAlpha[m] == nil then return end
+	if settingModel or baseAlpha[m] == nil then return end
+	local lv = ns.elements.LevelFor(m) or modelLevel
+	if lv >= 0.999 then return end
 	a = readable(a)
 	if type(a) ~= "number" then return end
 	baseAlpha[m] = a
@@ -485,6 +496,8 @@ local platesFaded = setmetatable({}, { __mode = "k" }) -- nameplate -> { frame i
 -- 1 with the HUD fully shown, 0 at the hidden opacity, so they are gone right when the fade ends.
 local function plateAlpha(a)
 	if not DB.hideNameplates then return 1 end
+	-- A fight alone is showing the HUD (or part of it): the nameplates follow their In combat box.
+	if state.combatShow then return ns.elements.InCombat("nameplates") and 1 or 0 end
 	local low = DB.hiddenAlpha or 0
 	if a >= 0.999 or low >= 0.999 then return 1 end
 	return math.max(0, math.min(1, (a - low) / (1 - low)))
@@ -583,6 +596,7 @@ end
 -- A tooltip that ignores the UI's opacity (DynamicCam's Keep Tooltip makes it) would show over a hidden HUD, and the
 -- game's own fade-out after you hover something outruns our fade. Keep it closed while the HUD is fully hidden.
 local function closeTooltip(tip)
+	if ns.elements.KeepsTooltip(tip) then return end -- over an element shown apart from the HUD
 	if shared(state.current) < 0.01 and ask(tip, "IsShown") and ask(tip, "IsIgnoringParentAlpha") == true then
 		pcall(tip.Hide, tip)
 	end
@@ -631,6 +645,8 @@ local function setTarget(a, instant)
 		if state.cvarsHidden then showGameText() end
 	end
 	state.target = a
+	-- Elements that stay are lifted out before the fade starts, so they never dip.
+	ns.elements.Decide(a, state.combatShow, instant, state.shot)
 	if instant then
 		apply(a)
 		driver:Hide()
@@ -780,14 +796,24 @@ local function hidesUI(window)
 	return type(setup) == "table" and setup.hideui == true
 end
 
+-- Only a fight among the reasons to show the HUD.
+local function onlyCombat(r)
+	for k in pairs(r) do
+		if k ~= "combat" then return false end
+	end
+	return r.combat == true
+end
+
 local function update(instant)
 	if not DB then return end
 	local t = now()
 	if state.shot then
+		state.combatShow = false
 		setTarget(0, true)
 		return
 	end
 	if not DB.enabled then
+		state.combatShow = false
 		if state.target < 0.999 or state.current < 0.999 or state.cvarsHidden then setTarget(1, true) end
 		handBack(1)
 		return
@@ -800,10 +826,17 @@ local function update(instant)
 	state.window = window
 	local idle = isIdle(t)
 	local base = not state.hudOff and not idle
-	local reason = next(currentReasons(idle, window)) ~= nil
-	if reason then state.lastWanted = t end
+	local active = currentReasons(idle, window)
+	local reason = next(active) ~= nil
+	if reason then
+		state.lastWanted = t
+		state.combatOnly = onlyCombat(active)
+	end
 	-- Short grace after a reason ends so the HUD doesn't blink between pulls. Idle and the hide key act at once.
 	local show = base or reason or (not idle and (t - state.lastWanted) < GRACE)
+	-- A fight alone: if some elements are unticked for combat, only the ticked ones come back (Elements.lua).
+	state.combatShow = show and not base and state.combatOnly or false
+	if state.combatShow and ns.elements.PartialCombat() then show = false end
 	if show and state.target < 0.999 and hidesUI(window) then instant = true end
 	setTarget(show and 1 or DB.hiddenAlpha, instant)
 	handBack(state.target)
@@ -819,23 +852,22 @@ local function update(instant)
 		if GameTooltip then closeTooltip(GameTooltip) end
 	elseif not driver:IsShown() then
 		syncModels() -- DynamicCam's dim starting or ending
+		applyPlates(state.current) -- nameplates kept hidden in a fight, or back after it
 	end
 end
 HUDFade.Update = update
 
--- Presets for the "also hide" options. The active one is derived from the settings, so a change by hand shows
--- as Custom. Both hide the minimap, as the game's own Hide UI does.
+-- Presets for what else hides in the game world. The active one is derived from the settings, so a change by
+-- hand shows as Custom.
 local PRESETS = {
 	{
 		name = "Everything",
-		values = { hideNames = true, hideNameplates = true, hideMinimap = true, hideOutline = true, hideDamage = true },
+		values = { hideNames = true, hideNameplates = true, hideOutline = true, hideDamage = true },
 	},
 	{
 		-- Same as the game's Hide UI (Alt+Z): world names, damage numbers and the target circle stay.
 		name = "Blizzard",
-		values = {
-			hideNames = false, hideNameplates = true, hideMinimap = true, hideOutline = false, hideDamage = false,
-		},
+		values = { hideNames = false, hideNameplates = true, hideOutline = false, hideDamage = false },
 	},
 }
 HUDFade.PRESETS = PRESETS
@@ -902,6 +934,11 @@ function HUDFade.Explain(skipTyping)
 		if state.shot then why[#why + 1] = "Taking a screenshot" end
 		if #why == 0 then why[1] = "Something just ended, so it is hiding again" end
 		listLines(lines, "HUD hidden due to:", why)
+		if state.combatShow then
+			lines[#lines + 1] = "In combat: only the elements ticked under In combat (/hudfade elements) come back."
+		end
+		local apart = ns.elements.Describe()
+		if #apart > 0 then listLines(lines, "Shown anyway:", apart) end
 		return lines
 	end
 
@@ -1410,6 +1447,12 @@ function HUDFade.ShiftStatus()
 	return text .. string.format(", next move in %d s.", math.max(0, shift.nextAt - now()))
 end
 
+-- Shared with Elements.lua, which loads next.
+ns.internal = {
+	ask = ask, now = now, state = state, showMinimap = showMinimap, hideMinimap = hideMinimap,
+	refade = function() applyModels(state.current) end,
+}
+
 ---------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------
@@ -1453,6 +1496,11 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		if DB.hideNames ~= nil and DB.hideDamage == nil then DB.hideDamage = DB.hideNames end
 		copyDefaults(DEFAULTS, DB)
 		DB.restore = DB.restore or {}
+		if type(DB.elements) ~= "table" then DB.elements = {} end
+		if type(DB.elementCombat) ~= "table" then DB.elementCombat = {} end
+		-- The Minimap box under "also hide" became the Minimap element in 1.3.0: unticked meant keep it.
+		if DB.hideMinimap == false and DB.elements.minimap == nil then DB.elements.minimap = "show" end
+		DB.hideMinimap = nil
 		-- Leftovers of the removed pointer option (its CVars come back through restoreAllCVars).
 		DB.hideCursor, DB.hideCursorSteer, DB.mouseReported, DB.log = nil, nil, nil, nil
 		DB.welcomed = nil -- the old chat welcome's flag: everyone sees the welcome window once

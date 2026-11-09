@@ -1,5 +1,14 @@
 # HUD Fade
 
+## 1.3.0
+
+- New **Elements** page in the settings (or `/hudfade elements`): choose, part by part, what happens to the HUD while it is hidden. Each part (action bars, menu and bags, XP bars, cooldown manager, cast bar, player, target, party and raid, boss frames, buffs, chat, minimap, quest tracker, damage meters, boss mod timers) has a State: **Hidden** with the rest, **Shown on mouseover**, or **Always visible**. It works with the game's own UI, EllesmereUI, ElvUI, Bartender4 and Dominos.
+- **Shown on mouseover**: a hidden part fades in while your mouse is over its spot, even after you hide the HUD with your Hide UI key, and its tooltips show too. Action bars come back one at a time, only the bar under the mouse, or all together with One at a time unticked.
+- **Notifications** that hide with the HUD can stay instead: zone names, raid warnings and boss emotes, errors and quest progress, toasts and banners, the breath bar, loss of control and talking heads.
+- **In combat** column: untick a part and a fight that starts while the HUD is hidden brings back only the ticked parts, while the rest stays hidden. Nameplates have their own box.
+- Names, nameplates, the target circle and damage numbers moved to the Elements page, under Game world. The main page keeps the preset menu and a button to the Elements page.
+- The Minimap box under "also hide" is now the Minimap row on the Elements page. If you had it unticked, the minimap stays always visible as before.
+
 ## 1.2.1
 
 - Immersion's quest and gossip window now counts as a window, so the HUD comes back and the dialogue stays on screen. It used to fade away with the HUD. With Immersion's own Hide interface option on, the UI stays hidden while you talk, as Immersion intends.

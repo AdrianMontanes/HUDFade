@@ -8,7 +8,11 @@ local panel = CreateFrame("Frame")
 panel.name = "HUD Fade"
 panel:Hide()
 
--- A second page, listed under HUD Fade in the game's settings.
+-- More pages, listed under HUD Fade in the game's settings.
+local elementsPanel = CreateFrame("Frame")
+elementsPanel.name = "Elements"
+elementsPanel:Hide()
+
 local shiftPanel = CreateFrame("Frame")
 shiftPanel.name = "Burn-in protection"
 shiftPanel:Hide()
@@ -243,7 +247,7 @@ end
 local PRESET_TIP = "Everything: names, nameplates, the target circle and damage numbers all go with the HUD. "
 	.. "Blizzard: as with the game's own Hide UI (Alt+Z), names, chat bubbles, the target circle and damage "
 	.. "numbers stay; nameplates go. Either way you keep the fade, idle hiding and the rest. "
-	.. "Change a box below and it shows as Custom."
+	.. "Change one on the Elements page and it shows as Custom."
 
 local function presetMenu(y, x)
 	x = x or 20
@@ -288,11 +292,192 @@ local function presetMenu(y, x)
 	widgets[#widgets + 1] = w
 end
 
+-- A menu of choices: get() returns the chosen one, set(v) stores it. texts: what each choice is called.
+local function choiceMenu(choices, texts, get, set, y, x, width, title, tip)
+	local w
+	local function choose(v)
+		set(v)
+		refreshAll()
+	end
+	local ok, dd = pcall(CreateFrame, "DropdownButton", nil, canvas, "WowStyle1DropdownTemplate")
+	if ok and dd and dd.SetupMenu then
+		dd:SetPoint("TOPLEFT", x, y)
+		dd:SetWidth(width)
+		dd:SetupMenu(function(_, root)
+			for _, v in ipairs(choices) do
+				root:CreateRadio(texts[v], function() return get() == v end, function() choose(v) end)
+			end
+		end)
+		w = dd
+		w.refresh = function() if dd.GenerateMenu then dd:GenerateMenu() end end
+	else
+		-- No dropdown template in this client: a button that steps through the choices.
+		w = CreateFrame("Button", nil, canvas, "UIPanelButtonTemplate")
+		w:SetPoint("TOPLEFT", x, y)
+		w:SetSize(width, 22)
+		w:SetScript("OnClick", function()
+			local cur = get()
+			for i, v in ipairs(choices) do
+				if v == cur then
+					choose(choices[i % #choices + 1])
+					break
+				end
+			end
+		end)
+		w.refresh = function() w:SetText(texts[get()]) end
+	end
+	local hook = w.HookScript or w.SetScript
+	hook(w, "OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(title, 1, 1, 1)
+		GameTooltip:AddLine(type(tip) == "function" and tip() or tip, nil, nil, nil, true)
+		GameTooltip:Show()
+	end)
+	hook(w, "OnLeave", function() GameTooltip:Hide() end)
+	w.setActive = function(on)
+		if w.SetEnabled then w:SetEnabled(on) end
+	end
+	widgets[#widgets + 1] = w
+	return w
+end
+
+-- A box in the Elements page's In combat column. usable(): whether it means anything with the other settings.
+local function combatBox(id, label, y, x, usable)
+	local E = HUDFade.Elements
+	local cb = CreateFrame("CheckButton", nil, canvas, "UICheckButtonTemplate")
+	cb:SetPoint("TOPLEFT", x, y)
+	cb:SetSize(26, 26)
+	cb:SetScript("OnClick", function(self)
+		E.SetInCombat(id, self:GetChecked() and true or false)
+		refreshAll()
+	end)
+	cb:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(label .. ": in combat", 1, 1, 1)
+		GameTooltip:AddLine("Ticked: it comes back when a fight brings the HUD back. Unticked: it stays hidden in fights, "
+			.. "and a fight brings back only the ticked elements, not the entire HUD.", nil, nil, nil, true)
+		if not db().showCombat then
+			GameTooltip:AddLine("Needs Combat ticked under Bring it back on, on the main page.", 1, 0.5, 0.25, true)
+		end
+		GameTooltip:Show()
+	end)
+	cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
+	cb.refresh = function()
+		cb:SetChecked(E.InCombat(id) or (id ~= "nameplates" and E.Mode(id) == "show"))
+	end
+	cb.setActive = function(on)
+		if on and db().showCombat and usable() then cb:Enable() else cb:Disable() end
+	end
+	widgets[#widgets + 1] = cb
+	return cb
+end
+
+local MODE_TEXT = { hide = "Hidden", hover = "Shown on mouseover", show = "Always visible" }
+local MODE_TIP = "Hidden: it fades out with the rest of the HUD.\nShown on mouseover: it comes back while your mouse "
+	.. "is over its spot, and goes again a moment after you move away. Moving the mouse brings back the entire HUD "
+	.. "after an idle hide (unless Mouse moving is off), so this is for after your Hide UI key.\nAlways visible: it "
+	.. "stays while the rest of the HUD is hidden."
+local NOTIFY_TIP = "Hidden: it fades out with the rest of the HUD.\nAlways visible: it still shows while the HUD is "
+	.. "hidden. It only shows for a moment, so it is safe for OLED screens."
+local WORLD_TEXT = { hide = "Hidden", keep = "Always visible" }
+
+-- The Elements page: what each part of the HUD does while the rest is hidden.
+local function buildElements()
+	local E = HUDFade.Elements
+	local MENU_X, MENU_W, BOX_X = 250, 190, 466
+	canvas = scrollPage(elementsPanel, 1200)
+	local content = canvas
+	pageTitle("Elements")
+	note("State: what each part of your HUD does while the HUD is hidden. Hidden with the rest, shown while your "
+		.. "mouse is over it, or always visible. Works with the game's UI, EllesmereUI, ElvUI, Bartender4 and "
+		.. "Dominos. Anything not listed here hides with the HUD.", -38)
+	note("In combat: what a fight brings back while the HUD is hidden. Untick some to keep them hidden in fights: "
+		.. "then only the ticked ones come back, and anything not listed here stays hidden too.", -80)
+	local y = -122
+	local function column(text, point, x)
+		local fs = canvas:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		fs:SetPoint(point, canvas, "TOPLEFT", x, y)
+		fs:SetText(text)
+		dimmable[#dimmable + 1] = fs
+	end
+	column("State", "TOPLEFT", MENU_X + 4)
+	column("In combat", "TOP", BOX_X + 13) -- centred over the boxes
+	y = y - 18
+	for _, section in ipairs(E.SECTIONS) do
+		header(section.name, y)
+		y = y - 22
+		for _, row in ipairs(section.rows) do
+			local name = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+			name:SetPoint("TOPLEFT", 24, y - 6)
+			name:SetText(row.label)
+			local id = row.id
+			choiceMenu(row.modes, MODE_TEXT, function() return E.Mode(id) end, function(v) E.SetMode(id, v) end,
+				y, MENU_X, MENU_W, row.label, row.tip .. "\n\n" .. (section.notify and NOTIFY_TIP or MODE_TIP))
+			combatBox(id, row.label, y + 2, BOX_X, function() return E.Mode(id) ~= "show" end)
+			local dim = {}
+			dim.refresh = function() end
+			dim.setActive = function(on) name:SetAlpha(on and 1 or 0.5) end
+			if row.each then
+				local apart = checkbox("oneBarAtATime", "One at a time", "On mouseover, ticked: only the bar under "
+					.. "your mouse comes back. Unticked: every bar comes back together when your mouse is over any of "
+					.. "them.", y, 0)
+				apart:ClearAllPoints()
+				apart:SetPoint("LEFT", name, "RIGHT", 8, 0)
+				local setActive = apart.setActive
+				apart.setActive = function(on) setActive(on and E.Mode(id) == "hover") end
+			end
+			widgets[#widgets + 1] = dim
+			y = y - 28
+		end
+		y = y - 8
+	end
+
+	header("Game world", y)
+	y = y - 22
+	presetMenu(y, 24)
+	y = y - 32
+	local WORLD = {
+		{ key = "hideNames", label = "Names and chat bubbles",
+			tip = "The floating names and chat bubbles above characters are part of the game world, not the UI, so "
+				.. "they are switched off while the HUD is hidden and back on after. Your target's own name is the "
+				.. "exception: the game always shows it." },
+		{ key = "hideNameplates", label = "Nameplates", combat = "nameplates",
+			tip = "Includes EllesmereUI's name-only plates over other players. They fade out and back in with the "
+				.. "HUD, in combat too." },
+		{ key = "hideOutline", label = "Target circle",
+			tip = "The circle under your target is switched off while the HUD is hidden and back on after. So is "
+				.. "the highlight around your own character, if you use one." },
+		{ key = "hideDamage", label = "Damage numbers",
+			tip = "The damage and healing numbers over your targets are part of the game world, not the UI, so they "
+				.. "are switched off while the HUD is hidden and back on after. Your own scrolling combat text is "
+				.. "part of the UI and fades with it." },
+	}
+	for _, w in ipairs(WORLD) do
+		local name = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+		name:SetPoint("TOPLEFT", 24, y - 6)
+		name:SetText(w.label)
+		local key = w.key
+		choiceMenu({ "hide", "keep" }, WORLD_TEXT, function() return db()[key] and "hide" or "keep" end,
+			function(v)
+				db()[key] = (v == "hide")
+				presetChanged()
+				HUDFade.Update()
+			end, y, MENU_X, MENU_W, w.label, w.tip)
+		if w.combat then combatBox(w.combat, w.label, y + 2, BOX_X, function() return db()[key] end) end
+		local dim = {}
+		dim.refresh = function() end
+		dim.setActive = function(on) name:SetAlpha(on and 1 or 0.5) end
+		widgets[#widgets + 1] = dim
+		y = y - 28
+	end
+	content:SetHeight(-y + 24)
+end
+
 local built = false
 local function build()
 	if built then return end
 	built = true
-	canvas = scrollPage(panel, 846)
+	canvas = scrollPage(panel, 792)
 	pageTitle("HUD Fade")
 	note("Fade your entire World of Warcraft UI, including addon UIs, all at once. Made for immersion, OLED burn-in "
 		.. "care and HUD-free screenshots and recordings. Bind keys under Key Bindings > AddOns > HUD Fade.", -38)
@@ -321,88 +506,77 @@ local function build()
 
 	header("While HUD is hidden, also hide", -206)
 	presetMenu(-226)
-	checkbox("hideNames", "Names and chat bubbles",
-		"The floating names and chat bubbles above characters are part of the game world, not the UI, so they are "
-		.. "switched off while the HUD is hidden and back on after. Your target's own name is the exception: "
-		.. "the game always shows it.",
-		-258, 16, presetChanged)
-	checkbox("hideNameplates", "Nameplates",
-		"Includes EllesmereUI's name-only plates over other players. They fade out and back in with the HUD, "
-		.. "in combat too.",
-		-258, 320, presetChanged)
-	checkbox("hideMinimap", "Minimap",
-		"The game draws minimap icons and your arrow at full strength no matter how faded the UI is, "
-		.. "so the minimap is switched off instead.",
-		-284, 16, presetChanged)
-	checkbox("hideOutline", "Target circle",
-		"The circle under your target is switched off while the HUD is hidden and back on after. "
-		.. "So is the highlight around your own character, if you use one.",
-		-284, 320, presetChanged)
-	checkbox("hideDamage", "Damage numbers",
-		"The damage and healing numbers over your targets are part of the game world, not the UI, so they are "
-		.. "switched off while the HUD is hidden and back on after. Your own scrolling combat text is part of "
-		.. "the UI and fades with it.",
-		-310, 16, presetChanged)
+	local open = CreateFrame("Button", nil, canvas, "UIPanelButtonTemplate")
+	open:SetPoint("TOPLEFT", 340, -226)
+	open:SetSize(150, 22)
+	open:SetText("Elements...")
+	open:SetScript("OnClick", function() HUDFade.OpenOptions("elements") end)
+	open.refresh = function() end
+	open.setActive = function(on) open:SetEnabled(on) end
+	widgets[#widgets + 1] = open
+	note("Keep chat or the minimap visible, show bars on mouseover and choose what comes back in a fight, part by "
+		.. "part, on the Elements page.", -256)
 
-	header("Idle", -350)
-	slider("idleSeconds", "Hide when idle", 0, 120, 5, -370, 16, idleText, nil,
+	header("Idle", -296)
+	slider("idleSeconds", "Hide when idle", 0, 120, 5, -316, 16, idleText, nil,
 		IDLE_TIP .. ", and so do the boxes below if ticked.")
-	slider("awayMinutes", "Always hide when AFK", nil, nil, nil, -370, 320, awayText, AWAY_STOPS, AWAY_TIP)
-	note("Also counts as input:", -420)
+	slider("awayMinutes", "Always hide when AFK", nil, nil, nil, -316, 320, awayText, AWAY_STOPS, AWAY_TIP)
+	note("Also counts as input:", -366)
 	checkbox("mouseWakes", "Mouse moving",
 		"After the HUD hides for being idle, moving the mouse brings it back. Off: a bumped mouse or coming back "
 		.. "from alt-tab leaves it hidden, and keys (and clicks, if ticked) bring it back. While the HUD is "
 		.. "visible, moving the mouse always keeps it visible.",
-		-436)
+		-382)
 	checkbox("mouseClicks", "Mouse clicks",
 		"After the HUD hides for being idle, a mouse click brings it back, even without moving the mouse. "
 		.. "Holding a button to move the camera doesn't count here, see Camera movement. While the HUD is "
 		.. "visible, clicking always keeps it visible.",
-		-436, 320)
+		-382, 320)
 	checkbox("activeCamera", "Camera movement",
 		"On: moving the camera with the mouse or a controller's camera stick keeps the HUD visible and brings "
 		.. "it back. Off: you can look around and the HUD stays hidden.",
-		-462)
+		-408)
 	checkbox("activeAutorun", "Auto-run or follow",
 		"On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides "
 		.. "while your character keeps moving. Holding a movement key or the controller's movement stick always "
 		.. "counts as input.",
-		-462, 320)
+		-408, 320)
 
-	header("While HUD is hidden, bring it back on", -502)
+	header("While HUD is hidden, bring it back on", -448)
 	checkbox("showCombat", "Combat",
 		"Combat brings the HUD back at once, even while you are idle. If you hide it during a fight, "
-		.. "it stays hidden until that fight ends. Off: fights stay HUD-free too, handy for recordings.",
-		-522)
+		.. "it stays hidden until that fight ends. Off: fights stay HUD-free too, handy for recordings. "
+		.. "On the Elements page you can choose which parts come back.",
+		-468)
 	checkbox("showTarget", "Target",
 		"Picking a target brings the HUD back while you are playing. Once you have been idle for your idle time, "
 		.. "it hides even with a target. After you hide it with your Hide UI key, a target leaves it hidden.",
-		-522, 320)
+		-468, 320)
 	checkbox("showCasting", "Casting",
 		"Casting or channeling brings the HUD back while you are playing. After you hide it with your Hide UI "
-		.. "key, casting leaves it hidden.", -548)
+		.. "key, casting leaves it hidden.", -494)
 	checkbox("showDead", "Death",
 		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. "
 		.. "As a ghost everything works as usual.",
-		-548, 320)
+		-494, 320)
 	checkbox("showWindows", "Windows, popups, bags or typing",
 		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, "
 		.. "EllesmereUI unlock mode, ElvUI movers, unlocked Bartender4 or Dominos bars). Opening one and typing "
 		.. "also count as input, so after you close it or send a message the HUD stays for your idle time. A "
 		.. "window or chat box left open keeps the HUD only until Always hide when AFK.",
-		-574)
+		-520)
 
-	header("Fade", -614)
-	slider("fadeOut", "Fade out", 0, 3, 0.1, -634, 16, "%.1f s")
-	slider("fadeIn", "Fade in", 0, 1, 0.05, -634, 320, "%.2f s")
-	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -684, 16, "%d%%", 100,
+	header("Fade", -560)
+	slider("fadeOut", "Fade out", 0, 3, 0.1, -580, 16, "%.1f s")
+	slider("fadeIn", "Fade in", 0, 1, 0.05, -580, 320, "%.2f s")
+	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -630, 16, "%d%%", 100,
 		"How much of the HUD stays visible while hidden: 0% is fully gone (true black on OLED), "
 		.. "higher leaves it faintly visible.")
 
-	header("Help and feedback", -738, true)
-	note("Click an address and press Ctrl+C to copy it.", -758)
-	copyBox("Addon page", "https://www.curseforge.com/wow/addons/hud-fade", -780)
-	copyBox("Report a problem", "https://github.com/AdrianMontanes/HUDFade/issues", -808)
+	header("Help and feedback", -684, true)
+	note("Click an address and press Ctrl+C to copy it.", -704)
+	copyBox("Addon page", "https://www.curseforge.com/wow/addons/hud-fade", -726)
+	copyBox("Report a problem", "https://github.com/AdrianMontanes/HUDFade/issues", -754)
 
 	-- Burn-in protection page
 	canvas = shiftPanel
@@ -419,6 +593,7 @@ local function build()
 		.. "edge never goes past it. Nothing is saved: each login starts from your own layout. Many OLED monitors "
 		.. "also shift the entire picture on their own; using both is fine. Type /hudfade shift now to see a move "
 		.. "straight away.", -230)
+	buildElements()
 	canvas = panel
 end
 
@@ -438,29 +613,37 @@ local function onShow()
 	refreshAll()
 end
 panel:SetScript("OnShow", onShow)
+elementsPanel:SetScript("OnShow", onShow)
 shiftPanel:SetScript("OnShow", onShow)
 
-local category
+local category, elementsCategory
 local function register()
 	if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
 		category = Settings.RegisterCanvasLayoutCategory(panel, "HUD Fade")
 		if Settings.RegisterCanvasLayoutSubcategory then
+			elementsCategory = Settings.RegisterCanvasLayoutSubcategory(category, elementsPanel, "Elements")
 			Settings.RegisterCanvasLayoutSubcategory(category, shiftPanel, "Burn-in protection")
 		end
 		Settings.RegisterAddOnCategory(category)
 	elseif InterfaceOptions_AddCategory then
 		InterfaceOptions_AddCategory(panel)
+		elementsPanel.parent = panel.name
+		InterfaceOptions_AddCategory(elementsPanel)
 		shiftPanel.parent = panel.name
 		InterfaceOptions_AddCategory(shiftPanel)
 	end
 end
 
-function HUDFade.OpenOptions()
+-- page: "elements" for the Elements page, or nil for the main one.
+function HUDFade.OpenOptions(page)
+	local sub = page == "elements"
 	if category and Settings and Settings.OpenToCategory then
-		Settings.OpenToCategory(category:GetID())
+		local target = sub and elementsCategory or category
+		if not pcall(Settings.OpenToCategory, target:GetID()) then Settings.OpenToCategory(category:GetID()) end
 	elseif InterfaceOptionsFrame_OpenToCategory then
-		InterfaceOptionsFrame_OpenToCategory(panel)
-		InterfaceOptionsFrame_OpenToCategory(panel)
+		local target = sub and elementsPanel or panel
+		InterfaceOptionsFrame_OpenToCategory(target)
+		InterfaceOptionsFrame_OpenToCategory(target)
 	end
 end
 
@@ -646,6 +829,7 @@ end)
 ---------------------------------------------------------------------------
 local HELP = {
 	"/hudfade - open the settings",
+	"/hudfade elements - the Elements page: what each part of the HUD does while it is hidden",
 	"/hudfade welcome - the welcome window: the main choices and keys",
 	"/hudfade toggle | show | hide - hide or show the HUD",
 	"/hudfade on | off - turn the entire addon on or off",
@@ -663,6 +847,8 @@ SlashCmdList.HUDFADE = function(msg)
 	local cmd = (msg or ""):lower():match("^%s*(%S*)")
 	if cmd == "" or cmd == "options" or cmd == "config" or cmd == "settings" then
 		HUDFade.OpenOptions()
+	elseif cmd == "elements" then
+		HUDFade.OpenOptions("elements")
 	elseif cmd == "welcome" or cmd == "setup" then
 		HUDFade.ShowWelcome()
 	elseif cmd == "toggle" then
@@ -707,6 +893,8 @@ SlashCmdList.HUDFADE = function(msg)
 		for k, v in pairs(HUDFade.DEFAULTS) do
 			if k ~= "welcomeShown" then d[k] = v end
 		end
+		wipe(d.elements)
+		wipe(d.elementCombat)
 		HUDFade.ApplyOverrides(true)
 		HUDFade.UpdateMinimapButton()
 		HUDFade.Update()

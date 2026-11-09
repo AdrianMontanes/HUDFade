@@ -26,6 +26,7 @@ globals = {
 
 -- WoW API and frames the addon reads
 read_globals = {
+	"AlertFrame",
 	"BackdropTemplateMixin",
 	"C_CVar",
 	"C_GamePad",
