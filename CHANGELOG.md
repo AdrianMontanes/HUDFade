@@ -1,5 +1,12 @@
 # HUD Fade
 
+## 1.2.1
+
+- Immersion's quest and gossip window now counts as a window, so the HUD comes back and the dialogue stays on screen. It used to fade away with the HUD. With Immersion's own Hide interface option on, the UI stays hidden while you talk, as Immersion intends.
+- The new friends list (the Social window) and any other game window HUD Fade didn't know by name now count as windows too.
+- Pixel shift steps aside, and the HUD stays visible, while you move frames with ElvUI's movers or unlocked Bartender4 or Dominos bars, as it already did for Edit Mode and EllesmereUI.
+- Controllers: running with the movement stick or pressing jump now counts as activity, so the HUD no longer hides while you play with a controller. The camera stick counts only with Camera movement ticked, like the mouse.
+
 ## 1.2.0
 
 - New **welcome window** on your first login with HUD Fade (and once for everyone updating): choose how long before the HUD hides when idle and when you're AFK, what else to hide, HUD-free Print Screen and pixel shift, and see which keys do what (keys are set in the game's Key Bindings, under AddOns). Open it again any time with `/hudfade welcome`. It replaces the chat message on first login.

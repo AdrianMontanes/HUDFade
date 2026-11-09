@@ -562,12 +562,14 @@ local WINDOWS = {
 	"TradeFrame", "AuctionHouseFrame", "AuctionFrame", "BankFrame", "GuildBankFrame", "ClassTrainerFrame",
 	"FriendsFrame", "PVEFrame", "CollectionsJournal", "EncounterJournal", "AchievementFrame", "ProfessionsFrame",
 	"TradeSkillFrame", "MacroFrame", "KeyBindingFrame", "ReadyCheckFrame", "LFGDungeonReadyPopup", "TaxiFrame",
-	"FlightMapFrame", "ItemTextFrame", "BarberShopFrame",
+	"FlightMapFrame", "ItemTextFrame", "BarberShopFrame", "SocialUIFrame",
 	"StaticPopup1", "StaticPopup2", "StaticPopup3", "StaticPopup4",
 	"ContainerFrameCombinedBags", "ContainerFrame1", "ContainerFrame2", "ContainerFrame3", "ContainerFrame4",
 	"ContainerFrame5", "ContainerFrame6",
 	-- EllesmereUI
 	"EUI_MainBagFrame", "EUI_BagsWindowFrame", "EUI_ReagentBagFrame",
+	-- Immersion's quest and gossip window, which ignores the UI's opacity
+	"ImmersionFrame",
 }
 
 local function shown(name)
@@ -577,13 +579,27 @@ local function shown(name)
 	return ask(f, "IsVisible") == true
 end
 
--- Edit Mode or EllesmereUI's unlock mode: returns which one is open, or nil.
+-- Edit Mode or a UI addon's own mode for moving frames: returns which one is open, or nil.
+local LAYOUT_MODES = {
+	["Edit Mode"] = true, ["EllesmereUI unlock mode"] = true, ["ElvUI movers"] = true,
+	["Bartender4 unlocked"] = true, ["Dominos unlocked"] = true,
+}
+
 local function arranging()
 	if EditModeManagerFrame and ask(EditModeManagerFrame, "IsShown") == true then return "Edit Mode" end
 	local eui = _G.EllesmereUI
 	if type(eui) == "table" and type(eui.IsUnlockModeActive) == "function" then
 		local ok, on = pcall(eui.IsUnlockModeActive, eui)
 		if ok and readable(on) == true then return "EllesmereUI unlock mode" end
+	end
+	local elv = type(_G.ElvUI) == "table" and _G.ElvUI[1] -- ElvUI is { E, L, V, P, G }
+	if type(elv) == "table" and elv.ConfigurationMode == true then return "ElvUI movers" end
+	local bt = _G.Bartender4
+	if type(bt) == "table" and bt.Locked == false then return "Bartender4 unlocked" end
+	local dom = _G.Dominos
+	if type(dom) == "table" and type(dom.Locked) == "function" then
+		local ok, locked = pcall(dom.Locked, dom)
+		if ok and locked == false then return "Dominos unlocked" end
 	end
 	return nil
 end
@@ -600,6 +616,11 @@ local function windowOpen()
 	if UISpecialFrames then -- every window that closes with Escape, including other addons'
 		for _, name in ipairs(UISpecialFrames) do
 			if shown(name) then return name end
+		end
+	end
+	if UIPanelWindows then -- every window the game places itself, including ones newer than the list above
+		for name in pairs(UIPanelWindows) do
+			if type(name) == "string" and shown(name) then return name end
 		end
 	end
 	return nil
@@ -661,6 +682,13 @@ local function typing(t)
 	state.typingIn, state.typed = box, text
 end
 
+-- Immersion can hide the rest of the UI while you talk (its "Hide interface" option), fading UIParent out over
+-- 0.2 s. Showing the HUD at once, while that fade still runs, leaves the last word to Immersion.
+local function hidesUI(window)
+	local setup = window == "ImmersionFrame" and _G.ImmersionSetup
+	return type(setup) == "table" and setup.hideui == true
+end
+
 local function update(instant)
 	if not DB then return end
 	local t = now()
@@ -684,6 +712,7 @@ local function update(instant)
 	if reason then state.lastWanted = t end
 	-- Short grace after a reason ends so the HUD doesn't blink between pulls. Idle and the hide key act at once.
 	local show = base or reason or (not idle and (t - state.lastWanted) < GRACE)
+	if show and state.target < 0.999 and hidesUI(window) then instant = true end
 	setTarget(show and 1 or DB.hiddenAlpha, instant)
 	-- While hidden: reapply our alpha if something changed it, and fade models that just appeared.
 	if state.target < 0.999 and not driver:IsShown() then
@@ -743,7 +772,7 @@ local REASON_TEXT = {
 local function windowText(v)
 	if v == "typing" then return "Typing" end
 	if v == "holding something on the cursor" then return "Holding something on the cursor" end
-	if v == "Edit Mode" or v == "EllesmereUI unlock mode" then return v end
+	if LAYOUT_MODES[v] then return v end
 	return "Window open (" .. tostring(v) .. ")"
 end
 
@@ -902,6 +931,40 @@ local function mouseUp(button)
 	local t = pressedAt[button]
 	pressedAt[button] = nil
 	if t and now() - t < CLICK_TIME then click() end
+end
+
+---------------------------------------------------------------------------
+-- Controllers (for the idle timer): the movement stick counts like a held movement key, and a button bound to a
+-- movement action (jump) like that key. The camera stick only counts with activeCamera, like the mouse.
+-- Read a few times a second, so no gamepad input is ever taken from the game.
+---------------------------------------------------------------------------
+local PAD_DEAD = 0.2 -- how far a stick must be pushed to count, out of 1
+
+local function pollPad()
+	local pad = C_GamePad
+	if not (pad and pad.GetDeviceMappedState and is(pad.IsEnabled)) then return end
+	local ok, s = pcall(pad.GetDeviceMappedState)
+	if not (ok and type(s) == "table") then return end
+	local moved, turned = false, false
+	if type(s.sticks) == "table" and pad.StickIndexToConfigName then
+		for i, stick in ipairs(s.sticks) do
+			local len = type(stick) == "table" and readable(stick.len)
+			if type(len) == "number" and len > PAD_DEAD then
+				local okName, name = pcall(pad.StickIndexToConfigName, i - 1) -- it counts from 0
+				if okName and name == "Movement" then moved = true end
+				if okName and name == "Camera" then turned = true end
+			end
+		end
+	end
+	if type(s.buttons) == "table" and pad.ButtonIndexToBinding then
+		for i, down in ipairs(s.buttons) do
+			if readable(down) == true then
+				local okKey, key = pcall(pad.ButtonIndexToBinding, i - 1)
+				if okKey and isMoveKey(key) then moved = true end
+			end
+		end
+	end
+	if moved or (turned and DB.activeCamera) then input() end
 end
 
 ---------------------------------------------------------------------------
@@ -1306,6 +1369,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		applyOverrides(true)
 		C_Timer.NewTicker(0.1, function()
 			pollMouse()
+			pollPad()
 			update()
 			syncShift()
 			scanStep()

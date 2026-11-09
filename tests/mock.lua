@@ -164,7 +164,10 @@ C_Timer = {
 	NewTicker = function(_, fn) ticker = fn end,
 }
 
-local BINDINGS = { W = "MOVEFORWARD", D = "TURNRIGHT", NUMLOCK = "TOGGLEAUTORUN", TAB = "TARGETNEARESTENEMY" }
+local BINDINGS = {
+	W = "MOVEFORWARD", D = "TURNRIGHT", NUMLOCK = "TOGGLEAUTORUN", TAB = "TARGETNEARESTENEMY",
+	PAD1 = "JUMP", PAD2 = "INTERACTTARGET",
+}
 function GetBindingKey(command)
 	if command == "TOGGLEUI" then return "ALT-Z" end
 	for key, action in pairs(BINDINGS) do
@@ -468,6 +471,53 @@ HUDFadeDB.activeCamera = false
 step(7)
 check("idle again", UIParent.alpha == 0)
 
+-- A controller: the movement stick and a jump button count, the camera stick only with Camera movement
+local padSticks = { { x = 0, y = 0, len = 0 }, { x = 0, y = 0, len = 0 } }
+local padButtons = { false, false }
+local padOn = true
+C_GamePad = {
+	IsEnabled = function() return padOn end,
+	GetDeviceMappedState = function() return { sticks = padSticks, buttons = padButtons } end,
+	StickIndexToConfigName = function(i) return ({ [0] = "Movement", [1] = "Camera" })[i] end,
+	ButtonIndexToBinding = function(i) return ({ [0] = "PAD1", [1] = "PAD2" })[i] end,
+}
+padSticks[1].len = 0.8
+fire("PLAYER_STARTED_MOVING")
+step(0.5)
+check("pushing the movement stick brings the HUD back", UIParent.alpha == 1)
+step(8)
+check("and keeps it up while you run with it", UIParent.alpha == 1)
+padSticks[1].len = 0
+fire("PLAYER_STOPPED_MOVING")
+step(7)
+check("idle once you let go", UIParent.alpha == 0)
+padSticks[2].len = 1
+step(0.5)
+check("the camera stick alone leaves it hidden", UIParent.alpha == 0)
+HUDFadeDB.activeCamera = true
+step(0.5)
+check("unless Camera movement is on", UIParent.alpha == 1)
+HUDFadeDB.activeCamera = false
+padSticks[2].len = 0
+step(7)
+padButtons[2] = true
+step(0.5)
+check("a button for an action, not movement, leaves it hidden", UIParent.alpha == 0)
+padButtons[2] = false
+padButtons[1] = true
+step(0.5)
+check("the jump button brings it back", UIParent.alpha == 1)
+padButtons[1] = false
+padSticks[1].len = 0.1
+step(7)
+check("a stick resting a little off center doesn't count", UIParent.alpha == 0)
+padSticks[1].len = 0.8
+padOn = false
+step(0.5)
+check("with the game's controller support off, the controller is not read", UIParent.alpha == 0)
+padSticks[1].len = 0
+padOn = true
+
 -- A quick click counts as input; holding a button to move the camera does not
 fire("GLOBAL_MOUSE_DOWN", "LeftButton")
 step(0.1)
@@ -568,6 +618,35 @@ check("a window that opens while you are away leaves it hidden", UIParent.alpha 
 map:Hide()
 HUDFadeDB.awayMinutes = 10
 step(0.5)
+
+-- Windows the list doesn't name: any the game's window manager places, and Immersion's dialogue
+UIPanelWindows = { NewBlizzardFrame = { area = "left" }, NotLoadedFrame = { area = "center" } }
+local panel = CreateFrame("Frame", "NewBlizzardFrame")
+step(0.5)
+check("a window the game places itself brings the HUD back", UIParent.alpha == 1)
+panel:Hide()
+step(7)
+check("hidden again after it closes", UIParent.alpha == 0)
+local immersion = CreateFrame("Frame", "ImmersionFrame", UIParent)
+step(0.5)
+check("Immersion's dialogue counts as a window", UIParent.alpha == 1)
+immersion:Hide()
+step(7)
+check("hidden again after the dialogue", UIParent.alpha == 0)
+ImmersionSetup = { hideui = true }
+immersion:Show()
+UIParent:SetAlpha(0) -- Immersion's own fade of the UI, still running
+step(0.1)
+UIParent:SetAlpha(0) -- its last step
+step(1)
+check("with Immersion's Hide interface on, its own fade keeps the UI hidden while you talk", UIParent.alpha == 0)
+immersion:Hide()
+UIParent:SetAlpha(1) -- Immersion fading the UI back in
+ImmersionSetup = nil
+step(2)
+check("and the UI is back after the dialogue", UIParent.alpha == 1)
+step(5)
+check("until the idle time", UIParent.alpha == 0)
 
 -- Mouse moving off: the mouse keeps the HUD up, but only keys bring it back once idle
 HUDFadeDB.mouseWakes = false
@@ -777,6 +856,23 @@ function EllesmereUI:IsUnlockModeActive() return self._unlockModeSessionActive =
 step(1.1)
 check("back in place while EllesmereUI's unlock mode is open", select(1, uiOffset()) == 0 and select(1, uiInset()) == 0)
 EllesmereUI._unlockModeSessionActive = false
+shiftUntil(shifted)
+ElvUI = { { ConfigurationMode = true } }
+step(1.1)
+check("back in place while ElvUI's movers are out", select(1, uiOffset()) == 0 and select(1, uiInset()) == 0)
+check("/hudfade why names ElvUI's movers", table.concat(HUDFade.Explain(), " "):find("ElvUI movers", 1, true) ~= nil)
+ElvUI[1].ConfigurationMode = false
+shiftUntil(shifted)
+Bartender4 = { Locked = false }
+step(1.1)
+check("back in place while Bartender4's bars are unlocked", select(1, uiOffset()) == 0 and select(1, uiInset()) == 0)
+Bartender4.Locked = true
+shiftUntil(shifted)
+Dominos = { locked = false }
+function Dominos:Locked() return self.locked end
+step(1.1)
+check("back in place while Dominos' bars are unlocked", select(1, uiOffset()) == 0 and select(1, uiInset()) == 0)
+Dominos.locked = true
 shiftUntil(shifted)
 
 -- EllesmereUI places an anchored element (its cast bar under the player frame) counting from the screen corner

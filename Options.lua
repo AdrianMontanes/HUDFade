@@ -360,12 +360,13 @@ local function build()
 		.. "visible, clicking always keeps it visible.",
 		-436, 320)
 	checkbox("activeCamera", "Camera movement",
-		"On: moving the camera with the mouse keeps the HUD visible and brings it back. "
-		.. "Off: you can look around and the HUD stays hidden.",
+		"On: moving the camera with the mouse or a controller's camera stick keeps the HUD visible and brings "
+		.. "it back. Off: you can look around and the HUD stays hidden.",
 		-462)
 	checkbox("activeAutorun", "Auto-run or follow",
 		"On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides "
-		.. "while your character keeps moving. Holding a movement key always counts as input.",
+		.. "while your character keeps moving. Holding a movement key or the controller's movement stick always "
+		.. "counts as input.",
 		-462, 320)
 
 	header("While HUD is hidden, bring it back on", -502)
@@ -386,9 +387,9 @@ local function build()
 		-548, 320)
 	checkbox("showWindows", "Windows, popups, bags or typing",
 		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, "
-		.. "EllesmereUI unlock mode). Opening one and typing also count as input, so after you close it or send a "
-		.. "message the HUD stays for your idle time. A window or chat box left open keeps the HUD only until "
-		.. "Always hide when AFK.",
+		.. "EllesmereUI unlock mode, ElvUI movers, unlocked Bartender4 or Dominos bars). Opening one and typing "
+		.. "also count as input, so after you close it or send a message the HUD stays for your idle time. A "
+		.. "window or chat box left open keeps the HUD only until Always hide when AFK.",
 		-574)
 
 	header("Fade", -614)
@@ -409,7 +410,7 @@ local function build()
 	note("Pixel shift moves the entire interface a pixel or two every few minutes, around a small circle, so the "
 		.. "same pixels never show the same shapes for hours. Blizzard UI, EllesmereUI and every other addon move "
 		.. "together, so your layout stays exactly as it is and nothing is saved. It never moves during combat "
-		.. "and steps aside while Edit Mode or EllesmereUI's unlock mode is open.", -40)
+		.. "and steps aside while you arrange frames in Edit Mode or a UI addon's own mover.", -40)
 	header("Pixel shift", -110)
 	checkbox("pixelShift", "Pixel shift (burn-in protection)", nil, -130, 16, shiftChanged)
 	slider("shiftPixels", "Distance", 1, 4, 1, -170, 16, function(v) return string.format("%d px", v) end)

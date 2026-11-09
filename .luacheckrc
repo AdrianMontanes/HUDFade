@@ -28,6 +28,7 @@ globals = {
 read_globals = {
 	"BackdropTemplateMixin",
 	"C_CVar",
+	"C_GamePad",
 	"C_NamePlate",
 	"C_Timer",
 	"ClearOverrideBindings",
@@ -63,6 +64,7 @@ read_globals = {
 	"SetCVar",
 	"SetOverrideBinding",
 	"Settings",
+	"UIPanelWindows",
 	"UIParent",
 	"UISpecialFrames",
 	"UnitExists",
