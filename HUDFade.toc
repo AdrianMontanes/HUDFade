@@ -1,6 +1,6 @@
 ## Interface: 120000, 120001, 120005, 120007, 120100, 120105, 16001
 ## Title: HUD Fade
-## Notes: Fade your entire World of Warcraft UI, including addon UIs, all at once. Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
+## Notes: Fade or auto-hide your entire UI at once, Blizzard's and addon UIs alike (ElvUI, EllesmereUI, Bartender4, Dominos...). Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
 ## Author: Adrian
 ## Version: 1.2.1
 ## X-License: MIT

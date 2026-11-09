@@ -7,7 +7,8 @@
 
 # HUD Fade
 
-Fade your entire World of Warcraft UI, including addon UIs, all at once.<br>
+Fade or auto-hide your entire World of Warcraft UI at once.<br>
+Works with Blizzard's UI and addon UIs alike (ElvUI, EllesmereUI, Bartender4, Dominos, Details!, Plater...).<br>
 Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
 
 [![CurseForge](https://img.shields.io/badge/CurseForge-HUD%20Fade-F16436?logo=curseforge&logoColor=white)](https://www.curseforge.com/wow/addons/hud-fade)
@@ -16,13 +17,13 @@ Made for immersion, OLED burn-in care and HUD-free screenshots and recordings.
 [![MIT license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/AdrianMontanes/HUDFade/blob/main/LICENSE)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support-29ABE0?logo=kofi&logoColor=FF5E5B)](https://ko-fi.com/44dri44n)
 
-<img src="https://raw.githubusercontent.com/AdrianMontanes/HUDFade/main/.github/media/hudfade-fade.webp" alt="The entire UI, EllesmereUI included, fading out with one key">
+<img src="https://raw.githubusercontent.com/AdrianMontanes/HUDFade/main/.github/media/hudfade-fade.webp" alt="The entire UI, addon UIs included, fading out with one key">
 
 </div>
 
 ## Why HUD Fade
 
-Most fade addons set each frame's opacity one by one, and UI addons like EllesmereUI do the same for their own mouseover rules, so the two fight: flicker, bars popping back, art showing through. HUD Fade fades the one layer every frame sits on instead, so your UI addons keep working underneath. It also handles what lives outside that layer: 3D portraits, names, chat bubbles, nameplates, damage numbers and the target circle.
+Most fade addons set each frame's opacity one by one, and UI addons do the same for their own mouseover rules, so the two fight: flicker, bars popping back, art showing through. HUD Fade fades the one layer every frame sits on instead, so your UI addons keep working underneath. It also handles what lives outside that layer: 3D portraits, names, chat bubbles, nameplates, damage numbers and the target circle.
 
 ![Your UI on the left, the same view with HUD Fade on the right](https://raw.githubusercontent.com/AdrianMontanes/HUDFade/main/.github/media/hudfade-before-after.jpg)
 
