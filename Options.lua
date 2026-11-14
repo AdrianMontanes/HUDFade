@@ -202,6 +202,19 @@ local AWAY_STOPS = { 2, 5, 10, 15, 20, 30, 45, 60 }
 local AWAY_TIP = "After this long with no input, the HUD hides even over an open window or chat box, and even with "
 	.. "Hide when idle set to Never. Combat still brings it back."
 
+local PAN_TIP = "When idle: after Hide when idle. When AFK: after Always hide when AFK. Then, while the HUD is hidden, "
+	.. "the camera turns slowly around your character, so the game world doesn't sit still on your screen either. "
+	.. "Any key, click or mouse movement stops it at once, and it waits for that time again before turning.\n\n"
+	.. "A Camera pan key (Key Bindings > AddOns) or /hudfade pan turns it any time, and that keeps turning while you "
+	.. "play until you press the key again."
+local PAN_CHOICES = { "off", "idle", "away" }
+local PAN_TEXT = { off = "Off", idle = "When idle", away = "When AFK" }
+local PAN_SPEED_TIP = "How fast the camera turns, both on its own and when you start it with your Camera pan key."
+local PAN_STOPS = { 600, 360, 240, 180, 120, 90, 60 } -- seconds for one turn, slow to fast
+local function panText(v)
+	return v % 60 == 0 and string.format("one turn every %d min", v / 60) or string.format("one turn every %d s", v)
+end
+
 local SHIFT_TIP = "Moves the entire interface a pixel or two every few minutes, so nothing sits on the same pixels "
 	.. "for hours. Everything moves together, so your layout stays as it is. Distance and timing are on the "
 	.. "Burn-in protection page under HUD Fade."
@@ -341,6 +354,22 @@ local function choiceMenu(choices, texts, get, set, y, x, width, title, tip)
 	return w
 end
 
+-- The camera pan menu with its label (the main page and the Burn-in protection page).
+local function panMenu(y, x)
+	local title = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	title:SetPoint("TOPLEFT", x + 4, y - 6)
+	title:SetText("Camera pan")
+	local menu = choiceMenu(PAN_CHOICES, PAN_TEXT, function() return db().panWhen end, function(v)
+		db().panWhen = v
+		HUDFade.Update()
+	end, y, x + 94, 170, "Camera pan", PAN_TIP)
+	local setActive = menu.setActive
+	menu.setActive = function(on)
+		setActive(on)
+		title:SetAlpha(on and 1 or 0.5)
+	end
+end
+
 -- A box in the Elements page's In combat column. usable(): whether it means anything with the other settings.
 local function combatBox(id, label, y, x, usable)
 	local E = HUDFade.Elements
@@ -477,7 +506,7 @@ local built = false
 local function build()
 	if built then return end
 	built = true
-	canvas = scrollPage(panel, 792)
+	canvas = scrollPage(panel, 834)
 	pageTitle("HUD Fade")
 	note("Fade your entire World of Warcraft UI, including addon UIs, all at once. Made for immersion, OLED burn-in "
 		.. "care and HUD-free screenshots and recordings. Bind keys under Key Bindings > AddOns > HUD Fade.", -38)
@@ -521,62 +550,64 @@ local function build()
 	slider("idleSeconds", "Hide when idle", 0, 120, 5, -316, 16, idleText, nil,
 		IDLE_TIP .. ", and so do the boxes below if ticked.")
 	slider("awayMinutes", "Always hide when AFK", nil, nil, nil, -316, 320, awayText, AWAY_STOPS, AWAY_TIP)
-	note("Also counts as input:", -366)
+	panMenu(-358, 16)
+	slider("panSeconds", "Pan speed", nil, nil, nil, -354, 320, panText, PAN_STOPS, PAN_SPEED_TIP)
+	note("Also counts as input:", -408)
 	checkbox("mouseWakes", "Mouse moving",
 		"After the HUD hides for being idle, moving the mouse brings it back. Off: a bumped mouse or coming back "
 		.. "from alt-tab leaves it hidden, and keys (and clicks, if ticked) bring it back. While the HUD is "
 		.. "visible, moving the mouse always keeps it visible.",
-		-382)
+		-424)
 	checkbox("mouseClicks", "Mouse clicks",
 		"After the HUD hides for being idle, a mouse click brings it back, even without moving the mouse. "
 		.. "Holding a button to move the camera doesn't count here, see Camera movement. While the HUD is "
 		.. "visible, clicking always keeps it visible.",
-		-382, 320)
+		-424, 320)
 	checkbox("activeCamera", "Camera movement",
 		"On: moving the camera with the mouse or a controller's camera stick keeps the HUD visible and brings "
 		.. "it back. Off: you can look around and the HUD stays hidden.",
-		-408)
+		-450)
 	checkbox("activeAutorun", "Auto-run or follow",
 		"On: auto-run, follow and flight paths keep the HUD visible. Off: they count as idle, so the HUD hides "
 		.. "while your character keeps moving. Holding a movement key or the controller's movement stick always "
 		.. "counts as input.",
-		-408, 320)
+		-450, 320)
 
-	header("While HUD is hidden, bring it back on", -448)
+	header("While HUD is hidden, bring it back on", -490)
 	checkbox("showCombat", "Combat",
 		"Combat brings the HUD back at once, even while you are idle. If you hide it during a fight, "
 		.. "it stays hidden until that fight ends. Off: fights stay HUD-free too, handy for recordings. "
 		.. "On the Elements page you can choose which parts come back.",
-		-468)
+		-510)
 	checkbox("showTarget", "Target",
 		"Picking a target brings the HUD back while you are playing. Once you have been idle for your idle time, "
 		.. "it hides even with a target. After you hide it with your Hide UI key, a target leaves it hidden.",
-		-468, 320)
+		-510, 320)
 	checkbox("showCasting", "Casting",
 		"Casting or channeling brings the HUD back while you are playing. After you hide it with your Hide UI "
-		.. "key, casting leaves it hidden.", -494)
+		.. "key, casting leaves it hidden.", -536)
 	checkbox("showDead", "Death",
 		"The HUD comes back the moment you die, then hides again after your idle time, even if you stay dead. "
 		.. "As a ghost everything works as usual.",
-		-494, 320)
+		-536, 320)
 	checkbox("showWindows", "Windows, popups, bags or typing",
 		"Any window you open, a popup, your bags, typing in chat, or arranging your frames (Edit Mode, "
 		.. "EllesmereUI unlock mode, ElvUI movers, unlocked Bartender4 or Dominos bars). Opening one and typing "
 		.. "also count as input, so after you close it or send a message the HUD stays for your idle time. A "
 		.. "window or chat box left open keeps the HUD only until Always hide when AFK.",
-		-520)
+		-562)
 
-	header("Fade", -560)
-	slider("fadeOut", "Fade out", 0, 3, 0.1, -580, 16, "%.1f s")
-	slider("fadeIn", "Fade in", 0, 1, 0.05, -580, 320, "%.2f s")
-	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -630, 16, "%d%%", 100,
+	header("Fade", -602)
+	slider("fadeOut", "Fade out", 0, 3, 0.1, -622, 16, "%.1f s")
+	slider("fadeIn", "Fade in", 0, 1, 0.05, -622, 320, "%.2f s")
+	slider("hiddenAlpha", "Hidden opacity", 0, 50, 5, -672, 16, "%d%%", 100,
 		"How much of the HUD stays visible while hidden: 0% is fully gone (true black on OLED), "
 		.. "higher leaves it faintly visible.")
 
-	header("Help and feedback", -684, true)
-	note("Click an address and press Ctrl+C to copy it.", -704)
-	copyBox("Addon page", "https://www.curseforge.com/wow/addons/hud-fade", -726)
-	copyBox("Report a problem", "https://github.com/AdrianMontanes/HUDFade/issues", -754)
+	header("Help and feedback", -726, true)
+	note("Click an address and press Ctrl+C to copy it.", -746)
+	copyBox("Addon page", "https://www.curseforge.com/wow/addons/hud-fade", -768)
+	copyBox("Report a problem", "https://github.com/AdrianMontanes/HUDFade/issues", -796)
 
 	-- Burn-in protection page
 	canvas = shiftPanel
@@ -593,6 +624,15 @@ local function build()
 		.. "edge never goes past it. Nothing is saved: each login starts from your own layout. Many OLED monitors "
 		.. "also shift the entire picture on their own; using both is fine. Type /hudfade shift now to see a move "
 		.. "straight away.", -230)
+	header("Camera pan", -300)
+	panMenu(-320, 16)
+	slider("panSeconds", "Speed", nil, nil, nil, -316, 320, panText, PAN_STOPS, PAN_SPEED_TIP)
+	note("While the HUD is hidden for being idle or AFK (you choose which), the camera turns slowly around your "
+		.. "character, so the game world doesn't sit still on the same pixels either. Any key, click or mouse movement "
+		.. "stops it at once, and it waits for the idle or AFK time again before turning. It waits out combat, "
+		.. "cinematics and vehicles, and leaves the camera to DynamicCam or ElvUI's AFK screen while they turn it.\n\n"
+		.. "For a cinematic look, start it any time with a Camera pan key (Key Bindings > AddOns > HUD Fade) or "
+		.. "/hudfade pan. Started that way, it keeps turning while you play until you press the key again.", -366)
 	buildElements()
 	canvas = panel
 end
@@ -836,6 +876,7 @@ local HELP = {
 	"/hudfade shot - screenshot without the HUD",
 	"/hudfade minimap - show or hide the minimap button",
 	"/hudfade shift [on | off | now] - pixel shift status, switch it, or move now to see it",
+	"/hudfade pan - start or stop the camera pan (it keeps turning while you play)",
 	"/hudfade why - what is keeping the HUD visible right now",
 	"/hudfade what - name the UI element under the mouse (for reporting something that stays visible)",
 	"/hudfade reset - back to default settings",
@@ -886,6 +927,14 @@ SlashCmdList.HUDFADE = function(msg)
 			HUDFade.ShiftNow()
 		end
 		say(HUDFade.ShiftStatus())
+	elseif cmd == "pan" then
+		local turning = HUDFade.TogglePan()
+		if turning then
+			say("camera pan on. It keeps turning while you play until you type /hudfade pan again or press your Camera "
+				.. "pan key.")
+		elseif turning == false then
+			say("camera pan off.")
+		end
 	elseif cmd == "what" then
 		say("under the mouse: " .. HUDFade.DescribeMouseFrame())
 	elseif cmd == "reset" then

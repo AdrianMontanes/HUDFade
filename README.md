@@ -36,11 +36,12 @@ Most fade addons set each frame's opacity one by one, and UI addons do the same 
 - **Hold to peek** at the HUD while it's hidden.
 - **Minimap button:** left-click for settings, right-click to turn HUD Fade on or off, shift-click for a clean screenshot.
 - **Pixel shift:** moves the entire UI a pixel or two every few minutes to spread OLED wear. Optional, never in combat.
+- **Camera pan:** while the HUD is hidden for being idle or AFK, the camera turns slowly around your character, so the game world doesn't sit still on your screen either. Or start it with a key for a cinematic look while you play. Optional.
 - **Dim instead of hide:** hidden opacity from 0% (true black) up to 50%.
 - **Choose what stays:** keep chat, the minimap or any other part visible, show bars when your mouse is over them, and pick what comes back in a fight. Zone names, raid warnings, toasts and the breath bar can stay too.
 - **Your call on the world:** hide names, nameplates and damage numbers too, or leave them like the game's own Hide UI does.
 
-No setup per addon and no reload. Keys for hide/show, peek, screenshot and on/off are in the game's Key Bindings, under AddOns.
+No setup per addon and no reload. Keys for hide/show, peek, screenshot, camera pan and on/off are in the game's Key Bindings, under AddOns.
 
 ## Commands
 
@@ -54,6 +55,7 @@ No setup per addon and no reload. Keys for hide/show, peek, screenshot and on/of
 | `/hudfade shot` | Take a screenshot without the HUD |
 | `/hudfade minimap` | Show or hide the minimap button |
 | `/hudfade shift` | Pixel shift status (also `on`, `off`, and `now` to see a move) |
+| `/hudfade pan` | Start or stop the camera pan (it keeps turning while you play) |
 | `/hudfade why` | Say what is keeping the HUD visible |
 | `/hudfade what` | Name the UI element under the mouse |
 | `/hudfade reset` | Go back to the default settings |

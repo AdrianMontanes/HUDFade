@@ -1,5 +1,12 @@
 # HUD Fade
 
+## 1.4.0
+
+- New **Camera pan** (off by default, under Idle and on the Burn-in protection page): while the HUD is hidden for being idle or AFK (you choose which), the camera turns slowly around your character, so the game world doesn't sit still on your screen either. Any key, click, mouse or controller movement stops it at once, and it waits for the idle or AFK time again before turning.
+- Pick its speed, from one turn every 10 minutes to one a minute.
+- For a cinematic look, start it any time with a key (Key Bindings > AddOns > HUD Fade) or `/hudfade pan`. Started this way, it keeps turning while you move, fight or use the UI, until you press the key again.
+- The automatic pan waits during combat. Both wait during cinematics and vehicles, and leave the camera to DynamicCam's rotation or ElvUI's AFK screen while they turn it.
+
 ## 1.3.0
 
 - New **Elements** page in the settings (or `/hudfade elements`): choose, part by part, what happens to the HUD while it is hidden. Each part (action bars, menu and bags, XP bars, cooldown manager, cast bar, player, target, party and raid, boss frames, buffs, chat, minimap, quest tracker, damage meters, boss mod timers) has a State: **Hidden** with the rest, **Shown on mouseover**, or **Always visible**. It works with the game's own UI, EllesmereUI, ElvUI, Bartender4 and Dominos.

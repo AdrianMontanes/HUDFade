@@ -15,6 +15,7 @@ BINDING_NAME_HUDFADE_TOGGLE = "Hide / show the HUD"
 BINDING_NAME_HUDFADE_PEEK = "Show the HUD while held"
 BINDING_NAME_HUDFADE_SCREENSHOT = "Take a screenshot without the HUD"
 BINDING_NAME_HUDFADE_ENABLE = "Turn HUD Fade on / off"
+BINDING_NAME_HUDFADE_PAN = "Start / stop the camera pan"
 
 local DEFAULTS = {
 	enabled = true,        -- master switch
@@ -44,6 +45,8 @@ local DEFAULTS = {
 	pixelShift = false,    -- burn-in protection, see Pixel shift below
 	shiftPixels = 2,       -- screen pixels
 	shiftMinutes = 3,      -- minutes between moves
+	panWhen = "off",       -- "idle" or "away": turn the camera slowly then, see Camera pan below
+	panSeconds = 180,      -- seconds for one full turn
 	welcomeShown = false,  -- the welcome window has been closed once
 }
 HUDFade.DEFAULTS = DEFAULTS
@@ -804,18 +807,22 @@ local function onlyCombat(r)
 	return r.combat == true
 end
 
+local syncPan -- Camera pan, below
+
 local function update(instant)
 	if not DB then return end
 	local t = now()
 	if state.shot then
 		state.combatShow = false
 		setTarget(0, true)
+		syncPan(t)
 		return
 	end
 	if not DB.enabled then
 		state.combatShow = false
 		if state.target < 0.999 or state.current < 0.999 or state.cvarsHidden then setTarget(1, true) end
 		handBack(1)
+		syncPan(t)
 		return
 	end
 	if DB.showWindows then typing(t) end
@@ -854,6 +861,7 @@ local function update(instant)
 		syncModels() -- DynamicCam's dim starting or ending
 		applyPlates(state.current) -- nameplates kept hidden in a fight, or back after it
 	end
+	syncPan(t)
 end
 HUDFade.Update = update
 
@@ -978,6 +986,152 @@ function HUDFade.Explain(skipTyping)
 end
 
 ---------------------------------------------------------------------------
+-- Camera pan: once you are idle or away (panWhen), the camera turns slowly around your character while the HUD is
+-- hidden, so the game world doesn't sit still on screen either. It is the game's own camera turn, the one AFK screens
+-- use. Any key, click, mouse or controller movement stops it at once, and it waits that time again before turning.
+-- Started by hand (a key or /hudfade pan) it keeps turning while you play, until stopped the same way.
+---------------------------------------------------------------------------
+local pan = {
+	on = false,
+	speed = nil,      -- what we passed to MoveViewRightStart
+	manual = false,   -- started by hand
+	mine = false,     -- true while we call the camera functions, so our hooks skip our own calls
+	touched = 0,      -- last input of any kind, keys and mouse moves the idle timer ignores included
+	stoppedAt = nil,  -- when input last stopped the automatic pan
+	others = {},      -- "left"/"right" -> true while another addon or a key binding turns the camera that way
+}
+
+local function camera(fn, ...)
+	if type(fn) ~= "function" then return false end
+	pan.mine = true
+	local ok = pcall(fn, ...)
+	pan.mine = false
+	return ok
+end
+
+local function stopPan()
+	if not pan.on then return end
+	pan.on, pan.speed = false, nil
+	camera(MoveViewRightStop)
+end
+
+local function touched()
+	pan.touched = now()
+	if pan.manual or not pan.on then return end
+	pan.stoppedAt = pan.touched
+	stopPan()
+end
+
+-- Each direction is one turn at one speed, like a held key: a later start replaces the speed, and any stop ends it.
+-- Another addon (DynamicCam's rotation, an AFK screen) or a key binding turning the camera wins until it stops.
+local function otherStart(dir)
+	if pan.mine then return end
+	pan.others[dir] = true
+	if not pan.on then return end
+	if dir == "right" then pan.on, pan.speed = false, nil else stopPan() end
+end
+
+local function otherStop(dir)
+	if pan.mine then return end
+	pan.others[dir] = nil
+	if dir == "right" then pan.on, pan.speed = false, nil end -- that stopped ours too
+end
+
+local function hookCamera()
+	if not hooksecurefunc then return end
+	for dir, names in pairs({ left = { "MoveViewLeftStart", "MoveViewLeftStop" },
+		right = { "MoveViewRightStart", "MoveViewRightStop" } }) do
+		if type(_G[names[1]]) == "function" then
+			-- A start at speed 0 is a stop.
+			pcall(hooksecurefunc, names[1], function(speed)
+				if speed == 0 then otherStop(dir) else otherStart(dir) end
+			end)
+		end
+		if type(_G[names[2]]) == "function" then
+			pcall(hooksecurefunc, names[2], function() otherStop(dir) end)
+		end
+	end
+end
+
+-- ElvUI's AFK screen turns the camera through its own copy of the function, which our hooks don't see.
+local function elvuiAFK()
+	local E = type(_G.ElvUI) == "table" and _G.ElvUI[1]
+	if type(E) ~= "table" or type(E.GetModule) ~= "function" then return false end
+	local ok, afk = pcall(E.GetModule, E, "AFK", true)
+	return ok and type(afk) == "table" and afk.isAFK == true
+end
+
+-- Whether the camera is free for us: no cinematic or vehicle, and nobody else turning it. A pan started by hand
+-- keeps turning in a fight; the automatic one waits.
+local function cameraFree(inFights)
+	if not inFights and (state.inCombat or InCombatLockdown()) then return false end
+	if is(UnitInVehicle, "player") then return false end
+	if ask(_G.CinematicFrame, "IsShown") or ask(_G.MovieFrame, "IsShown") then return false end
+	return next(pan.others) == nil and not elvuiAFK()
+end
+
+local IDLE_ENOUGH = { idle = isIdle, away = isAway } -- panWhen -> whether you have been idle long enough
+
+-- How long without any input at all before the automatic pan turns.
+local function panDelay()
+	local away = (tonumber(DB.awayMinutes) or 10) * 60
+	local idle = tonumber(DB.idleSeconds) or 0
+	if DB.panWhen == "idle" and idle > 0 then return math.min(idle, away) end
+	return away
+end
+
+local function wantPan(t)
+	if not DB.enabled then return false end
+	if pan.manual then return cameraFree(true) end
+	local enough = IDLE_ENOUGH[DB.panWhen]
+	if not enough or state.target >= 0.999 or not enough(t) then return false end
+	return t - pan.touched >= panDelay() and cameraFree(false)
+end
+
+-- The game's turn speed is a share of the cameraYawMoveSpeed CVar, in degrees per second.
+local function panSpeed()
+	local ok, yaw = pcall(getCVar, "cameraYawMoveSpeed")
+	yaw = ok and tonumber(yaw) or 180
+	if yaw <= 0 then yaw = 180 end
+	return 360 / math.max(tonumber(DB.panSeconds) or 180, 10) / yaw
+end
+
+syncPan = function(t)
+	if not DB.enabled then pan.manual = false end
+	if not wantPan(t) then
+		stopPan()
+		return
+	end
+	local speed = panSpeed()
+	if pan.on and pan.speed == speed then return end
+	if camera(MoveViewRightStart, speed) then pan.on, pan.speed = true, speed end
+end
+
+-- The Camera pan key and /hudfade pan: start a pan by hand, or stop any pan. Returns true if the camera turns now,
+-- false if it stopped, nil if it can't turn. The key press counts as input, and our key listener may see it before
+-- the binding runs: then it has just stopped the automatic pan, and the press means stop.
+function HUDFade.TogglePan()
+	if not DB.enabled then
+		say("is turned off. Turn it on in /hudfade options, with your on/off key, or with /hudfade on.")
+		return nil
+	end
+	local t = now()
+	if pan.manual or pan.on or pan.stoppedAt == t then
+		pan.manual = false
+		stopPan()
+		return false
+	end
+	pan.manual = true
+	syncPan(t)
+	if not pan.on then
+		pan.manual = false
+		say("can't turn the camera right now: a cinematic or a vehicle, or another addon is turning it.")
+		return nil
+	end
+	return true
+end
+
+---------------------------------------------------------------------------
 -- Input (for the idle timer)
 ---------------------------------------------------------------------------
 local function input()
@@ -998,6 +1152,7 @@ local function isMoveKey(key)
 end
 
 local function onKey(_, key)
+	touched()
 	if isMoveKey(key) then
 		if key ~= GetBindingKey("TOGGLEAUTORUN") then held[key] = true end
 		input()
@@ -1031,11 +1186,13 @@ local function pollMouse()
 		-- Mouselook: the cursor jump on release is not real movement. Both buttons means running; turning the
 		-- camera only counts with activeCamera.
 		lastX, lastY, dragAt = x, y, t
+		touched()
 		if (left and right) or DB.activeCamera then input() end
 	elseif t - dragAt < 0.3 then
 		lastX, lastY = x, y
 	elseif math.abs(x - lastX) > 2 or math.abs(y - lastY) > 2 then
 		lastX, lastY = x, y
+		touched()
 		-- Always counts while visible; after idle hiding only with mouseWakes (so alt-tabbing back can't wake it).
 		if DB.mouseWakes or not isIdle(t) then input() end
 	end
@@ -1059,6 +1216,7 @@ local function click()
 	if DB.mouseClicks or not isIdle(now()) then input() end
 end
 local function mouseDown(button)
+	touched()
 	if button == "LeftButton" or button == "RightButton" then
 		pressedAt[button] = now()
 	else
@@ -1083,11 +1241,12 @@ local function pollPad()
 	if not (pad and pad.GetDeviceMappedState and is(pad.IsEnabled)) then return end
 	local ok, s = pcall(pad.GetDeviceMappedState)
 	if not (ok and type(s) == "table") then return end
-	local moved, turned = false, false
+	local moved, turned, any = false, false, false
 	if type(s.sticks) == "table" and pad.StickIndexToConfigName then
 		for i, stick in ipairs(s.sticks) do
 			local len = type(stick) == "table" and readable(stick.len)
 			if type(len) == "number" and len > PAD_DEAD then
+				any = true
 				local okName, name = pcall(pad.StickIndexToConfigName, i - 1) -- it counts from 0
 				if okName and name == "Movement" then moved = true end
 				if okName and name == "Camera" then turned = true end
@@ -1097,11 +1256,13 @@ local function pollPad()
 	if type(s.buttons) == "table" and pad.ButtonIndexToBinding then
 		for i, down in ipairs(s.buttons) do
 			if readable(down) == true then
+				any = true
 				local okKey, key = pcall(pad.ButtonIndexToBinding, i - 1)
 				if okKey and isMoveKey(key) then moved = true end
 			end
 		end
 	end
+	if any then touched() end
 	if moved or (turned and DB.activeCamera) then input() end
 end
 
@@ -1460,6 +1621,7 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_LOGOUT")
+events:RegisterEvent("PLAYER_LEAVING_WORLD")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_TARGET_CHANGED")
@@ -1510,6 +1672,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		restoreAllCVars()
 		pcall(scanModels)
 		pcall(hookModels)
+		pcall(hookCamera)
 		-- Hooked at login, after every addon has loaded, so ours runs after DynamicCam's own hook.
 		if hooksecurefunc then pcall(hooksecurefunc, UIParent, "SetAlpha", function() pcall(guardUIAlpha) end) end
 		if GameTooltip and GameTooltip.HookScript then
@@ -1517,6 +1680,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		end
 		state.inCombat = InCombatLockdown() and true or false
 		state.lastInput = now()
+		pan.touched = now()
 		hookMinimap()
 		state.hudOff = DB.startHidden
 		if not listenToKeys() then state.pendingKeys = true end
@@ -1532,6 +1696,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
 	elseif event == "PLAYER_LOGOUT" then
 		restoreAllCVars()
 		restoreShift()
+	elseif event == "PLAYER_LEAVING_WORLD" then
+		pan.manual = false -- loading screens and logout
+		stopPan()
 	elseif event == "PLAYER_REGEN_DISABLED" then
 		-- Fires just before combat lockdown: the last chance to turn nameplates back on. While the HUD stays
 		-- hidden they are faded out, and they fade in with it.

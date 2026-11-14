@@ -11,4 +11,7 @@
 	<Binding name="HUDFADE_ENABLE" category="ADDONS">
 		HUDFade.ToggleEnabled()
 	</Binding>
+	<Binding name="HUDFADE_PAN" category="ADDONS">
+		HUDFade.TogglePan()
+	</Binding>
 </Bindings>

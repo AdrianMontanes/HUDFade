@@ -106,6 +106,7 @@ Minimap = newFrame()
 Minimap.parent = UIParent
 
 function hooksecurefunc(t, name, fn)
+	if type(t) == "string" then t, name, fn = _G, t, name end
 	local orig = t[name]
 	rawset(t, name, function(...)
 		local r = orig(...)
@@ -196,6 +197,15 @@ function IsMouselooking() return mouselook end
 function IsShiftKeyDown() return shiftDown end
 function UnitExists() return target end
 function UnitIsDead() return dead end
+local inVehicle = false
+function UnitInVehicle() return inVehicle end
+
+-- The camera turns one way at a time per direction, at a speed until stopped, like a held key.
+local turning = {}
+function MoveViewLeftStart(speed) turning.left = speed or 1 end
+function MoveViewLeftStop() turning.left = nil end
+function MoveViewRightStart(speed) turning.right = speed or 1 end
+function MoveViewRightStop() turning.right = nil end
 
 -- HUD Fade no longer hides the pointer: these must stay untouched.
 function MouselookStart() mouselookStarted = true end
@@ -1568,5 +1578,224 @@ check("/hudfade welcome opens it again", welcome.shown == true)
 welcome:Hide()
 SlashCmdList.HUDFADE("reset")
 check("reset doesn't bring it back at the next login", HUDFadeDB.welcomeShown == true)
+
+-- Camera pan: once idle or away, the camera turns slowly while the HUD is hidden, until any input at all
+lockdown, target, dead, typingIn, mouselook, inVehicle = false, false, false, nil, false, false
+buttons.LeftButton, buttons.RightButton = nil, nil
+HUDFade.Show()
+HUDFadeDB.awayMinutes = 2
+step(130)
+check("the camera pan is off by default", UIParent.alpha == 0 and turning.right == nil)
+HUDFadeDB.panWhen = "away"
+moveMouse()
+step(119)
+check("When AFK waits for the away time, not the idle time", UIParent.alpha == 0 and turning.right == nil)
+step(2)
+local panSpeed = 360 / 180 / 180 -- one turn in 3 min, as a share of cameraYawMoveSpeed
+check("then the camera turns, one turn every 3 minutes", turning.right ~= nil
+	and math.abs(turning.right - panSpeed) < 1e-9 and turning.left == nil)
+HUDFadeDB.panSeconds = 60
+step(0.1)
+check("a new speed applies at once", turning.right ~= nil and math.abs(turning.right - 360 / 60 / 180) < 1e-9)
+HUDFadeDB.panSeconds = 180
+moveMouse()
+step(0.1)
+check("moving the mouse stops it at once", turning.right == nil)
+step(0.2)
+check("and brings the HUD back", UIParent.alpha == 1)
+
+HUDFadeDB.mouseWakes = false
+step(121)
+check("turning again after the next away time", turning.right ~= nil and UIParent.alpha == 0)
+moveMouse()
+step(0.1)
+check("with Mouse moving off, the mouse still stops the camera, and the HUD stays hidden",
+	turning.right == nil and UIParent.alpha == 0)
+step(60)
+check("it waits a full away time from that touch before turning again", turning.right == nil)
+step(61)
+check("then turns again", turning.right ~= nil)
+keyDown("F")
+keyUp("F")
+check("any key stops it at once, not just movement keys", turning.right == nil and UIParent.alpha == 0)
+step(121)
+fire("GLOBAL_MOUSE_DOWN", "RightButton")
+check("so does pressing a mouse button", turning.right == nil)
+fire("GLOBAL_MOUSE_UP", "RightButton")
+step(121)
+padButtons[2] = true
+step(0.1)
+padButtons[2] = false
+check("and any controller button", turning.right == nil)
+HUDFadeDB.mouseWakes = true
+
+mouselook = true
+step(125)
+check("no turning while mouselook is on (an always-mouselook addon)", turning.right == nil)
+mouselook = false
+step(121)
+check("turning", turning.right ~= nil)
+lockdown = true
+fire("PLAYER_REGEN_DISABLED")
+check("a fight stops it at once", turning.right == nil)
+step(1)
+check("and it stays still during the fight, even with the HUD hidden", turning.right == nil)
+lockdown = false
+fire("PLAYER_REGEN_ENABLED")
+step(0.2)
+check("after the fight, still away: it turns again", turning.right ~= nil)
+inVehicle = true
+step(0.1)
+check("not in a vehicle", turning.right == nil)
+inVehicle = false
+step(0.1)
+
+-- Others turning the camera: DynamicCam's rotation, a key bound to turning the view, an AFK screen
+MoveViewLeftStart(0.05)
+check("another addon turning the other way: ours stops and theirs keeps going",
+	turning.right == nil and turning.left == 0.05)
+step(1)
+check("and ours waits while theirs turns", turning.right == nil)
+MoveViewLeftStop()
+step(0.1)
+check("ours comes back once they stop", turning.right ~= nil)
+MoveViewRightStart(0.05)
+step(1)
+check("another addon turning our way: theirs is kept", turning.right == 0.05)
+MoveViewRightStop()
+step(0.1)
+check("ours comes back once they stop", turning.right ~= nil and math.abs(turning.right - panSpeed) < 1e-9)
+MoveViewLeftStart(0.05)
+MoveViewLeftStart(0)
+step(0.1)
+check("a start at speed 0 counts as their stop", turning.right ~= nil)
+local elvAFK = { isAFK = true }
+ElvUI = { { GetModule = function(_, module) return module == "AFK" and elvAFK or nil end } }
+step(0.1)
+check("ElvUI's AFK screen, which turns the camera itself, takes over", turning.right == nil)
+elvAFK.isAFK = false
+step(0.1)
+check("ours comes back when it closes", turning.right ~= nil)
+ElvUI = nil
+
+HUDFadeDB.panWhen = "off"
+step(0.1)
+check("Off stops the camera", turning.right == nil)
+HUDFadeDB.panWhen = "away"
+step(0.1)
+SlashCmdList.HUDFADE("off")
+check("turning HUD Fade off stops it", turning.right == nil)
+SlashCmdList.HUDFADE("on")
+step(0.1)
+check("turning it on counts as input, so it waits for the next away time", turning.right == nil)
+step(121)
+fire("PLAYER_LEAVING_WORLD")
+check("a loading screen stops it", turning.right == nil)
+step(0.1)
+moveMouse()
+step(0.3)
+check("the HUD is back", UIParent.alpha == 1 and turning.right == nil)
+
+-- When idle: the same after the idle time
+HUDFadeDB.panWhen = "idle"
+step(29)
+check("When idle waits for the idle time", turning.right == nil)
+step(2)
+check("then turns while the HUD is hidden", turning.right ~= nil and UIParent.alpha == 0)
+moveMouse()
+step(0.1)
+check("and the mouse stops it", turning.right == nil)
+HUDFadeDB.idleSeconds = 0
+HUDFadeDB.mouseWakes = false
+step(35)
+check("with Hide when idle set to Never, it waits for the away time instead", turning.right == nil)
+step(90)
+check("and turns then", turning.right ~= nil)
+HUDFadeDB.idleSeconds, HUDFadeDB.mouseWakes = 30, true
+moveMouse()
+step(0.3)
+HUDFadeDB.panWhen = "off"
+
+-- A pan started by hand, with the Camera pan key or /hudfade pan, keeps turning while you play
+check("the key has a name in Key Bindings", BINDING_NAME_HUDFADE_PAN ~= nil)
+check("the HUD is visible and the camera still", UIParent.alpha == 1 and turning.right == nil)
+keyDown("K")
+HUDFade.TogglePan()
+keyUp("K")
+check("the Camera pan key turns the camera right away, with the HUD up", turning.right ~= nil and UIParent.alpha == 1)
+moveMouse()
+step(0.1)
+keyDown("W")
+step(1)
+keyUp("W")
+fire("GLOBAL_MOUSE_DOWN", "LeftButton")
+fire("GLOBAL_MOUSE_UP", "LeftButton")
+check("and it keeps turning while you move, click and use keys", turning.right ~= nil)
+lockdown = true
+fire("PLAYER_REGEN_DISABLED")
+step(1)
+check("in a fight too", turning.right ~= nil)
+lockdown = false
+fire("PLAYER_REGEN_ENABLED")
+MoveViewRightStart(0.05)
+MoveViewRightStop()
+step(0.1)
+check("after another addon turned the camera for a moment, it picks up again", turning.right ~= nil)
+keyDown("K")
+HUDFade.TogglePan()
+keyUp("K")
+step(0.1)
+check("the key again stops it", turning.right == nil)
+step(5)
+check("and it stays stopped", turning.right == nil)
+HUDFade.TogglePan()
+keyDown("K")
+keyUp("K")
+check("it works when the binding runs before our key listener sees the press", turning.right ~= nil)
+HUDFade.TogglePan()
+keyDown("K")
+keyUp("K")
+check("both ways round", turning.right == nil)
+
+HUDFadeDB.panWhen = "away"
+moveMouse()
+step(121)
+check("the automatic pan is turning", turning.right ~= nil)
+keyDown("K")
+HUDFade.TogglePan()
+keyUp("K")
+step(0.1)
+check("the Camera pan key stops it instead of starting one", turning.right == nil)
+step(121)
+HUDFade.TogglePan()
+keyDown("K")
+keyUp("K")
+step(0.1)
+check("also when the binding runs first", turning.right == nil)
+HUDFadeDB.panWhen = "off"
+moveMouse()
+step(0.3)
+
+SlashCmdList.HUDFADE("pan")
+check("/hudfade pan starts it", turning.right ~= nil)
+step(10)
+check("and it keeps going", turning.right ~= nil)
+SlashCmdList.HUDFADE("pan")
+check("/hudfade pan again stops it", turning.right == nil)
+SlashCmdList.HUDFADE("pan")
+fire("PLAYER_LEAVING_WORLD")
+step(1)
+check("a loading screen ends one started by hand", turning.right == nil)
+HUDFade.TogglePan()
+SlashCmdList.HUDFADE("off")
+step(0.1)
+SlashCmdList.HUDFADE("on")
+step(1)
+check("so does turning HUD Fade off", turning.right == nil)
+SlashCmdList.HUDFADE("off")
+check("while off, the key does nothing", HUDFade.TogglePan() == nil and turning.right == nil)
+SlashCmdList.HUDFADE("on")
+SlashCmdList.HUDFADE("reset")
+check("reset turns the camera pan off", HUDFadeDB.panWhen == "off" and HUDFadeDB.panSeconds == 180)
 
 os.exit(failed and 1 or 0)

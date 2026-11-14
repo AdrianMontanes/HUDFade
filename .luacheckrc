@@ -21,6 +21,7 @@ globals = {
 	"BINDING_NAME_HUDFADE_PEEK",
 	"BINDING_NAME_HUDFADE_SCREENSHOT",
 	"BINDING_NAME_HUDFADE_ENABLE",
+	"BINDING_NAME_HUDFADE_PAN",
 	"SlashCmdList",
 }
 
@@ -60,6 +61,8 @@ read_globals = {
 	"IsShiftKeyDown",
 	"LibStub",
 	"Minimap",
+	"MoveViewRightStart",
+	"MoveViewRightStop",
 	"PixelUtil",
 	"Screenshot",
 	"SetCVar",
@@ -71,6 +74,7 @@ read_globals = {
 		ludius_alphaBeforeFadeOut = { read_only = false } } },
 	"UISpecialFrames",
 	"UnitExists",
+	"UnitInVehicle",
 	"UnitIsDead",
 	"wipe",
 }
