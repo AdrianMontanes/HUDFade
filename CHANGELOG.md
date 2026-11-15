@@ -1,5 +1,10 @@
 # HUD Fade
 
+## 1.5.0
+
+- **Camera pan** is now on by default, set to **When AFK**: once the HUD hides because you're AFK, the camera turns slowly around your character until you're back. If yours was on Off, it moves to When AFK once and a line in chat says so. To keep it off, pick Off again under Camera pan in `/hudfade`. When idle stays as it is.
+- The welcome window has the Camera pan menu and its speed, and lists your Camera pan key.
+
 ## 1.4.1
 
 - Text and pictures that an addon keeps apart from the UI's opacity now hide with the HUD too. Everchat's chat tabs (General, Combat Log) and their unread glow stayed on screen while the chat itself hid. Any addon that does the same is covered, not only Everchat.

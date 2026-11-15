@@ -36,7 +36,7 @@ Most fade addons set each frame's opacity one by one, and UI addons do the same 
 - **Hold to peek** at the HUD while it's hidden.
 - **Minimap button:** left-click for settings, right-click to turn HUD Fade on or off, shift-click for a clean screenshot.
 - **Pixel shift:** moves the entire UI a pixel or two every few minutes to spread OLED wear. Optional, never in combat.
-- **Camera pan:** while the HUD is hidden for being idle or AFK, the camera turns slowly around your character, so the game world doesn't sit still on your screen either. Or start it with a key for a cinematic look while you play. Optional.
+- **Camera pan:** when you're AFK, the camera turns slowly around your character with the HUD hidden, so the game world doesn't sit still on your screen either. It can start when idle instead, or with a key for a cinematic look while you play, or stay off.
 - **Dim instead of hide:** hidden opacity from 0% (true black) up to 50%.
 - **Choose what stays:** keep chat, the minimap or any other part visible, show bars when your mouse is over them, and pick what comes back in a fight. Zone names, raid warnings, toasts and the breath bar can stay too.
 - **Your call on the world:** hide names, nameplates and damage numbers too, or leave them like the game's own Hide UI does.

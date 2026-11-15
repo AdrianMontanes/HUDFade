@@ -45,7 +45,7 @@ local DEFAULTS = {
 	pixelShift = false,    -- burn-in protection, see Pixel shift below
 	shiftPixels = 2,       -- screen pixels
 	shiftMinutes = 3,      -- minutes between moves
-	panWhen = "off",       -- "idle" or "away": turn the camera slowly then, see Camera pan below
+	panWhen = "away",      -- "off", "idle" or "away": when the camera turns slowly, see Camera pan below
 	panSeconds = 180,      -- seconds for one full turn
 	welcomeShown = false,  -- the welcome window has been closed once
 }
@@ -1837,6 +1837,15 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		DB = HUDFadeDB
 		-- Damage numbers are new in 1.1.0: follow the names, so a saved preset stays as it was.
 		if DB.hideNames ~= nil and DB.hideDamage == nil then DB.hideDamage = DB.hideNames end
+		-- Camera pan When AFK is the default since 1.5.0. Off, the 1.4 default, was saved for everyone who had 1.4
+		-- without them picking it, so it moves over once. Players past the welcome window hear about it in chat.
+		if not DB.panAwayDefault then
+			DB.panAwayDefault = true
+			if DB.panWhen == nil or DB.panWhen == "off" then
+				DB.panWhen = "away"
+				DB.panNews = DB.welcomeShown or nil
+			end
+		end
 		copyDefaults(DEFAULTS, DB)
 		DB.restore = DB.restore or {}
 		if type(DB.elements) ~= "table" then DB.elements = {} end

@@ -354,15 +354,15 @@ local function choiceMenu(choices, texts, get, set, y, x, width, title, tip)
 	return w
 end
 
--- The camera pan menu with its label (the main page and the Burn-in protection page).
-local function panMenu(y, x)
+-- The camera pan menu with its label (the main page, the Burn-in protection page and the welcome window).
+local function panMenu(y, x, width)
 	local title = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
 	title:SetPoint("TOPLEFT", x + 4, y - 6)
 	title:SetText("Camera pan")
 	local menu = choiceMenu(PAN_CHOICES, PAN_TEXT, function() return db().panWhen end, function(v)
 		db().panWhen = v
 		HUDFade.Update()
-	end, y, x + 94, 170, "Camera pan", PAN_TIP)
+	end, y, x + 94, width or 170, "Camera pan", PAN_TIP)
 	local setActive = menu.setActive
 	menu.setActive = function(on)
 		setActive(on)
@@ -725,14 +725,20 @@ local function keyRow(label, keysFor, x, y, width)
 	widgets[#widgets + 1] = row
 end
 
--- What brings the HUD back after idle hiding depends on the mouse choices in the settings.
+-- What brings the HUD back after idle hiding depends on the mouse choices in the settings. The end follows Camera pan.
 local function wakeText()
 	local d = db()
-	return "With no mouse, movement keys or typing for this long, the HUD fades out on its own. "
+	local text = "With no mouse, movement keys or typing for this long, the HUD fades out on its own. "
 		.. (d.mouseWakes and "Moving the mouse brings it back."
 		or d.mouseClicks and "A click or a movement key brings it back."
 		or "A movement key or typing brings it back.")
-		.. " When you're AFK, it hides even over open windows and chat."
+		.. " When you're AFK, it hides even over open windows and chat"
+	if d.panWhen == "away" then
+		return text .. ", and the camera turns slowly around your character until you're back."
+	elseif d.panWhen == "idle" then
+		return text .. ". While it is hidden, the camera turns slowly around your character until you're back."
+	end
+	return text .. "."
 end
 
 local function welcomeText()
@@ -742,8 +748,8 @@ local function welcomeText()
 	return how .. " Here are a few choices to start with. You can change these and more at any time with /hudfade."
 end
 
--- The keys note ends 370 px down, then a 14 px gap, the 22 px buttons and 14 px to the bottom edge.
-local WELCOME_HEIGHT = 420
+-- The keys note ends 440 px down, then a 14 px gap, the 22 px buttons and 14 px to the bottom edge.
+local WELCOME_HEIGHT = 490
 
 local function buildWelcome()
 	if welcome then return end
@@ -790,29 +796,33 @@ local function buildWelcome()
 	header("Idle", -74)
 	slider("idleSeconds", "Hide when idle", 0, 120, 5, -88, L, idleText, nil, IDLE_TIP .. ".")
 	slider("awayMinutes", "Always hide when AFK", nil, nil, nil, -88, R, awayText, AWAY_STOPS, AWAY_TIP)
-	local idleNote = note("", -136, L, 508)
+	panMenu(-130, L, 150)
+	slider("panSeconds", "Pan speed", nil, nil, nil, -126, R, panText, PAN_STOPS, PAN_SPEED_TIP)
+	-- Three lines long while the camera pan is on.
+	local idleNote = note("", -174, L, 508)
 	idleNote.refresh = function() idleNote:SetText(wakeText()) end
 	idleNote.setActive = function(on) idleNote:SetAlpha(on and 1 or 0.5) end
 	widgets[#widgets + 1] = idleNote
-	header("While the HUD is hidden, also hide", -174)
-	presetMenu(-192, L)
-	note("Everything also hides names and nameplates. Blizzard works like the game's own Hide UI.", -220, L, 508)
-	header("Screenshots and OLED", -246)
+	header("While the HUD is hidden, also hide", -226)
+	presetMenu(-244, L)
+	note("Everything also hides names and nameplates. Blizzard works like the game's own Hide UI.", -272, L, 508)
+	header("Screenshots and OLED", -298)
 	-- A check box's square sits 6 px in from its frame.
 	checkbox("cleanPrintScreen", function() return "HUD-free screenshots (" .. keyName("SCREENSHOT") .. ")" end,
-		PRINT_TIP, -264, L - 6, function()
+		PRINT_TIP, -316, L - 6, function()
 			HUDFade.ApplyOverrides()
 			refreshAll()
 		end)
-	checkbox("pixelShift", "Pixel shift (burn-in protection)", SHIFT_TIP, -264, R - 6, shiftChanged)
-	header("Keys", -304)
+	checkbox("pixelShift", "Pixel shift (burn-in protection)", SHIFT_TIP, -316, R - 6, shiftChanged)
+	header("Keys", -356)
 	keyRow("Hide / show", function() return keysOf(db().replaceAltZ and "TOGGLEUI", "HUDFADE_TOGGLE") end,
-		L, -322, W)
-	keyRow("Peek (hold)", function() return keysOf("HUDFADE_PEEK") end, R, -322, W)
+		L, -374, W)
+	keyRow("Peek (hold)", function() return keysOf("HUDFADE_PEEK") end, R, -374, W)
 	keyRow("HUD-free screenshot",
-		function() return keysOf(db().cleanPrintScreen and "SCREENSHOT", "HUDFADE_SCREENSHOT") end, L, -340, W)
-	keyRow("HUD Fade on / off", function() return keysOf("HUDFADE_ENABLE") end, R, -340, W)
-	note("Set or change these in the game's Key Bindings, under AddOns > HUD Fade.", -358, L, 508)
+		function() return keysOf(db().cleanPrintScreen and "SCREENSHOT", "HUDFADE_SCREENSHOT") end, L, -392, W)
+	keyRow("HUD Fade on / off", function() return keysOf("HUDFADE_ENABLE") end, R, -392, W)
+	keyRow("Camera pan (start / stop)", function() return keysOf("HUDFADE_PAN") end, L, -410, W)
+	note("Set or change these in the game's Key Bindings, under AddOns > HUD Fade.", -428, L, 508)
 	canvas = panel
 
 	local done = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
@@ -840,12 +850,18 @@ function HUDFade.ShowWelcome()
 	welcome:Show()
 end
 
--- A moment after the first loading screen, and never in combat.
+-- A moment after the first loading screen, and never in combat. Players who closed it before get news in chat.
 local function welcomeWhenReady()
 	local d = db()
-	if d.welcomeShown or not d.enabled then return end
+	if not d.enabled or (d.welcomeShown and not d.panNews) then return end
 	if InCombatLockdown() then
 		C_Timer.After(5, welcomeWhenReady)
+		return
+	end
+	if d.welcomeShown then
+		d.panNews = nil
+		say("now turns the camera slowly around your character while you're AFK and the HUD is hidden. To change "
+			.. "this or turn it off, see Camera pan in /hudfade.")
 		return
 	end
 	HUDFade.ShowWelcome()

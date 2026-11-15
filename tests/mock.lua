@@ -1672,6 +1672,16 @@ check("keys bound in Key Bindings show up", shown("SHIFT-P"))
 BINDINGS.PRINTSCREEN, BINDINGS["SHIFT-P"], HUDFadeDB.cleanPrintScreen = nil, nil, false
 check("the idle line says the mouse brings it back", shown("Moving the mouse brings it back."))
 check("both idle timers are there", shown("Hide when idle: ") and shown("Always hide when AFK: "))
+check("so are the camera pan and its speed", shown("Camera pan") and shown("Pan speed: ")
+	and shown("one turn every 3 min"))
+check("the idle line says the camera turns once you're AFK",
+	shown("chat, and the camera turns slowly around your character until you're back."))
+check("and the Camera pan key is listed", shown("Camera pan (start / stop)"))
+HUDFadeDB.panWhen = "idle"
+SlashCmdList.HUDFADE("welcome")
+check("with When idle, it says the camera turns while the HUD is hidden",
+	shown("While it is hidden, the camera turns slowly around your character"))
+HUDFadeDB.panWhen = "away"
 HUDFadeDB.mouseWakes = false
 SlashCmdList.HUDFADE("welcome")
 check("with mouse moving off, it says a click does", shown("A click or a movement key brings it back."))
@@ -1696,10 +1706,12 @@ check("reset doesn't bring it back at the next login", HUDFadeDB.welcomeShown ==
 -- Camera pan: once idle or away, the camera turns slowly while the HUD is hidden, until any input at all
 lockdown, target, dead, typingIn, mouselook, inVehicle = false, false, false, nil, false, false
 buttons.LeftButton, buttons.RightButton = nil, nil
+check("When AFK is the default", HUDFadeDB.panWhen == "away")
+HUDFadeDB.panWhen = "off"
 HUDFade.Show()
 HUDFadeDB.awayMinutes = 2
 step(130)
-check("the camera pan is off by default", UIParent.alpha == 0 and turning.right == nil)
+check("Off leaves the camera alone", UIParent.alpha == 0 and turning.right == nil)
 HUDFadeDB.panWhen = "away"
 moveMouse()
 step(119)
@@ -1910,6 +1922,36 @@ SlashCmdList.HUDFADE("off")
 check("while off, the key does nothing", HUDFade.TogglePan() == nil and turning.right == nil)
 SlashCmdList.HUDFADE("on")
 SlashCmdList.HUDFADE("reset")
-check("reset turns the camera pan off", HUDFadeDB.panWhen == "off" and HUDFadeDB.panSeconds == 180)
+check("reset puts the camera pan back to When AFK", HUDFadeDB.panWhen == "away" and HUDFadeDB.panSeconds == 180)
+
+-- 1.5.0 made When AFK the camera pan's default: Off saved by 1.4 moves over once, with a line in chat
+HUDFadeDB = {}
+fire("ADDON_LOADED", "HUDFade")
+check("a new install gets When AFK, and the welcome window rather than a chat line",
+	HUDFadeDB.panWhen == "away" and HUDFadeDB.panNews == nil)
+HUDFadeDB = { welcomeShown = true, panWhen = "idle" }
+fire("ADDON_LOADED", "HUDFade")
+check("When idle picked in 1.4 stays", HUDFadeDB.panWhen == "idle" and HUDFadeDB.panNews == nil)
+HUDFadeDB = { welcomeShown = true }
+fire("ADDON_LOADED", "HUDFade")
+check("updating from 1.3 gets When AFK, and the news", HUDFadeDB.panWhen == "away" and HUDFadeDB.panNews == true)
+HUDFadeDB = { welcomeShown = true, panWhen = "off" }
+fire("ADDON_LOADED", "HUDFade")
+check("Off saved by 1.4 becomes When AFK, and the news", HUDFadeDB.panWhen == "away" and HUDFadeDB.panNews == true)
+
+load("Options.lua") -- the next session, so the welcome check runs again
+local news = {}
+print = function(s) news[#news + 1] = s end
+fire("PLAYER_ENTERING_WORLD")
+step(2.5)
+fire("PLAYER_ENTERING_WORLD")
+step(2.5)
+print = realPrint
+check("the next login says so in chat, once", #news == 1 and news[1]:find("Camera pan in /hudfade.", 1, true)
+	and HUDFadeDB.panNews == nil)
+check("instead of the welcome window", welcome.shown == false)
+HUDFadeDB.panWhen = "off"
+fire("ADDON_LOADED", "HUDFade")
+check("Off picked after that stays Off", HUDFadeDB.panWhen == "off")
 
 os.exit(failed and 1 or 0)
