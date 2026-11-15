@@ -409,6 +409,10 @@ local MODE_TIP = "Hidden: it fades out with the rest of the HUD.\nShown on mouse
 local NOTIFY_TIP = "Hidden: it fades out with the rest of the HUD.\nAlways visible: it still shows while the HUD is "
 	.. "hidden. It only shows for a moment, so it is safe for OLED screens."
 local WORLD_TEXT = { hide = "Hidden", keep = "Always visible" }
+local TOOLTIP_TEXT = { hide = "Hidden", show = "Shown" }
+local TOOLTIP_TIP = "Hidden: it stays hidden with the rest of the HUD.\nShown: it opens as usual while the HUD is "
+	.. "hidden and closes when your mouse moves off. Moving the mouse brings back the entire HUD after an idle hide "
+	.. "(unless Mouse moving is off), so this is for after your Hide UI key."
 
 -- The Elements page: what each part of the HUD does while the rest is hidden.
 local function buildElements()
@@ -440,8 +444,10 @@ local function buildElements()
 			name:SetPoint("TOPLEFT", 24, y - 6)
 			name:SetText(row.label)
 			local id = row.id
-			choiceMenu(row.modes, MODE_TEXT, function() return E.Mode(id) end, function(v) E.SetMode(id, v) end,
-				y, MENU_X, MENU_W, row.label, row.tip .. "\n\n" .. (section.notify and NOTIFY_TIP or MODE_TIP))
+			local texts, modeTip = MODE_TEXT, section.notify and NOTIFY_TIP or MODE_TIP
+			if row.tooltip then texts, modeTip = TOOLTIP_TEXT, TOOLTIP_TIP end
+			choiceMenu(row.modes, texts, function() return E.Mode(id) end, function(v) E.SetMode(id, v) end,
+				y, MENU_X, MENU_W, row.label, row.tip .. "\n\n" .. modeTip)
 			combatBox(id, row.label, y + 2, BOX_X, function() return E.Mode(id) ~= "show" end)
 			local dim = {}
 			dim.refresh = function() end

@@ -1,5 +1,11 @@
 # HUD Fade
 
+## 1.6.0
+
+- New **Mouseover tooltips** row on the Elements page, under Info: set it to **Shown** and the game's tooltip still opens while the HUD is hidden when you hover a player, a creature or an object in the world, wherever your UI places it (EllesmereUI and ElvUI included). Tooltips for parts of the HUD that are hidden stay hidden.
+- New rows for parts that show up on their own: **Loot rolls** (Need, Greed and the bonus roll), **Spell proc glows**, **Countdowns** (pull timers, battleground and arena start timers) under Notifications, and **Scores and capture bars** (battleground scores, capture bars, event progress, boss power bars) under Info.
+- All new rows start as Hidden, so nothing changes until you pick otherwise. EllesmereUI's encounter bar now goes with Scores and capture bars instead of Action bars.
+
 ## 1.5.0
 
 - **Camera pan** is now on by default, set to **When AFK**: once the HUD hides because you're AFK, the camera turns slowly around your character until you're back. If yours was on Off, it moves to When AFK once and a line in chat says so. To keep it off, pick Off again under Camera pan in `/hudfade`. When idle stays as it is.

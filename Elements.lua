@@ -138,6 +138,11 @@ local SECTIONS = {
 		{ id = "quests", label = "Quest tracker",
 			names = { "ObjectiveTrackerFrame", "QuestWatchFrame", "WatchFrame", "Questie_BaseFrame" },
 			tip = "The quest and objective tracker, Questie's included." },
+		{ id = "widgets", label = "Scores and capture bars",
+			names = { "UIWidgetTopCenterContainerFrame", "UIWidgetBelowMinimapContainerFrame", "EncounterBar",
+				"UIWidgetPowerBarContainerFrame" },
+			tip = "The game's battleground scores, capture bars, event progress and boss power bars, at the top of "
+				.. "the screen, under the minimap and above your action bars." },
 		{ id = "meters", label = "Damage and threat meters", names = METER_NAMES,
 			tip = "The game's damage meter, Details!, Recount, Skada, and EllesmereUI's damage and threat meters." },
 		{ id = "bossmods", label = "Boss mod timers",
@@ -151,12 +156,25 @@ local SECTIONS = {
 				end
 			end,
 			tip = "Deadly Boss Mods' timer bars, info frame and range check." },
+		{ id = "tooltips", label = "Mouseover tooltips", names = {}, tooltip = true,
+			tip = "The game's tooltip for the players, creatures and objects under your mouse in the game world, "
+				.. "wherever your UI places it. Tooltips for parts of the HUD that are hidden stay hidden." },
 	} },
 	{ name = "Notifications", notify = true, rows = {
 		{ id = "zone", label = "Zone names", names = { "ZoneTextFrame", "SubZoneTextFrame" },
 			tip = "The zone and area name that shows as you enter a place." },
 		{ id = "warnings", label = "Raid warnings and boss emotes", names = { "RaidWarningFrame", "RaidBossEmoteFrame" },
 			tip = "Raid warnings and boss emotes in the middle of the screen." },
+		{ id = "countdowns", label = "Countdowns", names = { "TimerTracker" },
+			more = function(add)
+				-- Each countdown is a frame of its own beside the tracker.
+				local tracker = _G.TimerTracker
+				local list = type(tracker) == "table" and tracker.timerList
+				if type(list) ~= "table" then return end
+				for _, timer in ipairs(list) do add(timer) end
+			end,
+			tip = "The big countdown numbers: pull timers started from the party or raid menu, and the start "
+				.. "timers of battlegrounds and arenas." },
 		{ id = "errors", label = "Errors and quest progress", names = { "UIErrorsFrame" },
 			tip = "The red error text (out of range, not enough mana) and the yellow quest progress lines." },
 		{ id = "toasts", label = "Toasts and banners",
@@ -165,11 +183,17 @@ local SECTIONS = {
 				for f in pairs(toasts) do add(f) end
 			end,
 			tip = "Achievement, loot and level up toasts, and banners like a boss's loot." },
+		{ id = "loot", label = "Loot rolls",
+			names = { "GroupLootContainer", "GroupLootFrame1", "GroupLootFrame2", "GroupLootFrame3", "GroupLootFrame4",
+				"BonusRollFrame" },
+			tip = "The Need, Greed and Pass windows for group loot, and the bonus roll." },
 		{ id = "breath", label = "Breath and fatigue bars",
 			names = { "MirrorTimerContainer", "MirrorTimer1", "MirrorTimer2", "MirrorTimer3" },
 			tip = "The breath bar underwater and the fatigue bar." },
 		{ id = "control", label = "Loss of control", names = { "LossOfControlFrame" },
 			tip = "The alert that shows while you are stunned, feared or silenced." },
+		{ id = "procs", label = "Spell proc glows", names = { "SpellActivationOverlayFrame" },
+			tip = "The glowing art beside your character when a proc lets you cast a spell." },
 		{ id = "talking", label = "Talking heads", names = { "TalkingHeadFrame" },
 			tip = "The box where a quest character talks to you." },
 	} },
@@ -178,7 +202,7 @@ local SECTIONS = {
 local ROWS, BY_ID = {}, {}
 for _, section in ipairs(SECTIONS) do
 	for _, row in ipairs(section.rows) do
-		row.modes = section.notify and { "hide", "show" } or { "hide", "hover", "show" }
+		row.modes = (row.tooltip or section.notify) and { "hide", "show" } or { "hide", "hover", "show" }
 		ROWS[#ROWS + 1] = row
 		BY_ID[row.id] = row
 	end
@@ -193,7 +217,7 @@ local EUI_GROUPS = {
 local EUI_KEYS = {
 	MicroBar = "menu", BagBar = "menu", QueueStatus = "menu", XPBar = "xp", RepBar = "xp", FavorBar = "xp",
 	player = "player", pet = "player", classPower = "player", boss = "boss", playerCastbar = "cast",
-	petCastbar = "cast", ERB_CastBar = "cast", EUI_ThreatMeter = "meters",
+	petCastbar = "cast", ERB_CastBar = "cast", EUI_ThreatMeter = "meters", EncounterBar = "widgets",
 }
 
 local function euiRow(key, group)
@@ -452,9 +476,51 @@ local function over(f, row)
 	return (row.instant or core.ask(f, "IsVisible") == true) and core.ask(f, "IsMouseOver") == true
 end
 
--- Called whenever the HUD's goal is set. goal: the opacity the HUD is heading for. combat: a fight alone is
--- what shows it. clean: a HUD-free screenshot, so nothing stays.
-function Elements.Decide(goal, combat, instant, clean)
+local function decideRow(row, combat, instant, ui, t)
+	local id, mode, list = row.id, Elements.Mode(row.id), roots[row.id] or {}
+	local all = mode == "show" or (combat and Elements.InCombat(id))
+	-- A row of separate bars can bring back only the bar under the mouse.
+	local each = row.each and row.each()
+	local function hovering(f) return (hoverUntil[each and f or id] or 0) > t end
+	if not all and mode == "hover" then
+		for _, f in ipairs(list) do
+			if over(f, row) then hoverUntil[each and f or id] = t + LINGER end
+		end
+	end
+	local why
+	if all then
+		why = mode == "show" and "always visible" or "in combat"
+	elseif mode == "hover" then
+		for _, f in ipairs(list) do
+			if hovering(f) then
+				why = "mouse over it"
+				break
+			end
+		end
+	end
+	if why and not rowOn[id] and id == "minimap" then core.showMinimap() end
+	rowOn[id] = why
+	for _, f in ipairs(list) do
+		if all or mode == "hover" and hovering(f) then
+			if not want[f] then
+				want[f] = true
+				quick[f] = instant or row.instant or ui >= 0.999
+			end
+			if level[f] == nil then level[f], cameFor[f] = quick[f] and 1 or ui, id end
+			if not lifted[f] then
+				liftFrame(f)
+				if lifted[f] then setLevel(f, level[f]) end
+			end
+			animator:Show()
+		elseif want[f] then
+			want[f] = nil
+			quick[f] = row.instant or instant
+			animator:Show()
+		end
+	end
+end
+
+local function decideRows(goal, combat, instant, clean)
 	if goal >= 0.999 or clean then
 		wipe(want)
 		wipe(rowOn)
@@ -477,48 +543,18 @@ function Elements.Decide(goal, combat, instant, clean)
 	end
 	local ui = uiLevel()
 	for _, row in ipairs(ROWS) do
-		local id, mode, list = row.id, Elements.Mode(row.id), roots[row.id] or {}
-		local all = mode == "show" or (combat and Elements.InCombat(id))
-		-- A row of separate bars can bring back only the bar under the mouse.
-		local each = row.each and row.each()
-		local function hovering(f) return (hoverUntil[each and f or id] or 0) > t end
-		if not all and mode == "hover" then
-			for _, f in ipairs(list) do
-				if over(f, row) then hoverUntil[each and f or id] = t + LINGER end
-			end
-		end
-		local why
-		if all then
-			why = mode == "show" and "always visible" or "in combat"
-		elseif mode == "hover" then
-			for _, f in ipairs(list) do
-				if hovering(f) then
-					why = "mouse over it"
-					break
-				end
-			end
-		end
-		if why and not rowOn[id] and id == "minimap" then core.showMinimap() end
-		rowOn[id] = why
-		for _, f in ipairs(list) do
-			if all or mode == "hover" and hovering(f) then
-				if not want[f] then
-					want[f] = true
-					quick[f] = instant or row.instant or ui >= 0.999
-				end
-				if level[f] == nil then level[f], cameFor[f] = quick[f] and 1 or ui, id end
-				if not lifted[f] then
-					liftFrame(f)
-					if lifted[f] then setLevel(f, level[f]) end
-				end
-				animator:Show()
-			elseif want[f] then
-				want[f] = nil
-				quick[f] = row.instant or instant
-				animator:Show()
-			end
-		end
+		if not row.tooltip then decideRow(row, combat, instant, ui, t) end
 	end
+end
+
+local tipLifted, tipCheck -- Tooltips, below
+
+-- Called whenever the HUD's goal is set. goal: the opacity the HUD is heading for. combat: a fight alone is
+-- what shows it. clean: a HUD-free screenshot, so nothing stays.
+function Elements.Decide(goal, combat, instant, clean)
+	decideRows(goal, combat, instant, clean)
+	-- The HUD hiding or coming back while a tooltip is open.
+	if GameTooltip and (tipLifted or core.ask(GameTooltip, "IsShown")) then pcall(tipCheck, GameTooltip) end
 end
 
 -- The opacity a frame inside a lifted row is drawn at, or nil if it follows the HUD.
@@ -535,7 +571,7 @@ end
 
 -- Frames we set to ignore the UI's opacity ourselves: Core's fade of such frames must leave them alone.
 function Elements.Owns(f)
-	return lifted[f] ~= nil
+	return lifted[f] ~= nil or tipLifted and f == GameTooltip
 end
 
 -- Whether the minimap is switched off while the HUD is hidden.
@@ -562,29 +598,60 @@ function Elements.Describe()
 	for _, row in ipairs(ROWS) do
 		if rowOn[row.id] then out[#out + 1] = row.label .. " (" .. rowOn[row.id] .. ")" end
 	end
+	if tipLifted and GameTooltip and core.ask(GameTooltip, "GetOwner") == UIParent then
+		out[#out + 1] = BY_ID.tooltips.label .. " (one is open)"
+	end
 	return out
 end
 
 ---------------------------------------------------------------------------
--- Tooltips: one for a button in a lifted row (an action button under the mouse) is lifted with it.
+-- Tooltips. One for a button in a lifted row (an action button under the mouse) is lifted with it. With Mouseover
+-- tooltips shown, so is one for something in the game world: a player, a creature, a mailbox.
 ---------------------------------------------------------------------------
-local tipLifted = false
+tipLifted = false        -- we set the tooltip to ignore the UI's opacity
+local tipTouched = false -- we changed that setting, so the game may answer with a secret from now on
 
--- Whether a tooltip belongs to a button in a lifted row, so Core's fade leaves it open.
+-- Whether tooltips for the game world open while the HUD is hidden, or on its way out or back.
+local function worldTips()
+	local st = core.state
+	if st.shot or st.target >= 0.999 and st.current >= 0.999 then return false end
+	return Elements.Mode("tooltips") == "show" or st.combatShow == true and Elements.InCombat("tooltips")
+end
+
+-- Whether a tooltip shows apart from the HUD, so Core's fade leaves it open.
 function Elements.KeepsTooltip(tip)
 	local owner = core.ask(tip, "GetOwner")
-	local lv = type(owner) == "table" and Elements.LevelFor(owner)
+	if type(owner) ~= "table" then return false end
+	-- The game gives a tooltip for something in the world to UIParent, and UI addons that move it keep that owner.
+	if owner == UIParent then return worldTips() end
+	local lv = Elements.LevelFor(owner)
 	return lv and lv > 0.5 or false
 end
 
-local function tipCheck(tip)
-	if Elements.KeepsTooltip(tip) then
-		if not tipLifted and core.ask(tip, "IsIgnoringParentAlpha") == false and core.setIgnore(tip, true) then
-			tipLifted = true
-		end
-	elseif tipLifted then
-		tipLifted = false
-		core.setIgnore(tip, false)
+local function setTip(tip, on)
+	if core.setIgnore(tip, on) then tipLifted, tipTouched = on, true end
+end
+
+-- Its own setting: another addon's (DynamicCam's Keep Tooltip), else the game's answer, else what we set last.
+local function tipApart(tip)
+	local theirs = core.said(tip)
+	if theirs ~= nil then return theirs end
+	local v = core.ask(tip, "IsIgnoringParentAlpha")
+	if v == nil and tipTouched then return tipLifted end
+	return v
+end
+
+local function tipRelease(tip)
+	if not tipLifted then return end
+	-- Another addon took it out of the UI's fade since we did: that is its setting now.
+	if core.said(tip) == true then tipLifted = false else setTip(tip, false) end
+end
+
+tipCheck = function(tip)
+	if not Elements.KeepsTooltip(tip) then
+		tipRelease(tip)
+	elseif not tipLifted and tipApart(tip) == false then
+		setTip(tip, true)
 	end
 end
 
@@ -593,12 +660,11 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()
 	if GameTooltip and GameTooltip.HookScript then
 		pcall(GameTooltip.HookScript, GameTooltip, "OnShow", function(tip) pcall(tipCheck, tip) end)
-		pcall(GameTooltip.HookScript, GameTooltip, "OnHide", function(tip)
-			if tipLifted then
-				tipLifted = false
-				core.setIgnore(tip, false)
-			end
-		end)
+		pcall(GameTooltip.HookScript, GameTooltip, "OnHide", function(tip) pcall(tipRelease, tip) end)
+		-- A new owner can take over a tooltip that is still open, like one for a hidden bar after a creature.
+		if hooksecurefunc then
+			pcall(hooksecurefunc, GameTooltip, "SetOwner", function(tip) pcall(tipCheck, tip) end)
+		end
 	end
 	if hooksecurefunc and type(AlertFrame) == "table" and type(AlertFrame.AddAlertFrame) == "function" then
 		pcall(hooksecurefunc, AlertFrame, "AddAlertFrame", function(_, frame)

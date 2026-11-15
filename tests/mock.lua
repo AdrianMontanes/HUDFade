@@ -1525,6 +1525,77 @@ step(3)
 check("and goes together", bar.ignoring == false and euiBar.ignoring == false)
 HUDFadeDB.oneBarAtATime = true
 
+-- Mouseover tooltips: one for something in the game world opens over the hidden HUD while that row is Shown
+local tipRow = E.SECTIONS[3].rows[#E.SECTIONS[3].rows]
+check("Mouseover tooltips is an element with Hidden and Shown", tipRow.id == "tooltips" and #tipRow.modes == 2)
+GameTooltip.owner = UIParent
+GameTooltip:Show()
+check("by default a tooltip for something in the world stays hidden with the HUD", GameTooltip.ignoring == false)
+GameTooltip:Hide()
+GameTooltip.scripts.OnHide(GameTooltip)
+E.SetMode("tooltips", "show")
+GameTooltip:Show()
+check("shown, it opens over the hidden HUD", GameTooltip.ignoring == true and UIParent.alpha == 0)
+step(0.5)
+check("and stays open", GameTooltip.shown == true and GameTooltip.ignoring == true)
+apart = table.concat(HUDFade.Explain(), " ")
+check("/hudfade why says one is open", apart:find("Mouseover tooltips (one is open)", 1, true) ~= nil)
+-- The game answers with a secret once an addon has changed the setting
+local tipIgnoring = GameTooltip.IsIgnoringParentAlpha
+function GameTooltip:IsIgnoringParentAlpha() return SECRET end
+GameTooltip.owner = button
+GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+check("taken over by a button on a hidden bar, it follows the HUD again", GameTooltip.ignoring == false)
+step(0.2)
+check("and stays open, hidden with the bar", GameTooltip.shown == true and GameTooltip.ignoring == false)
+GameTooltip.owner = UIParent
+GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+check("even with a secret answer, the next one for the world opens again", GameTooltip.ignoring == true)
+GameTooltip:Hide()
+GameTooltip.scripts.OnHide(GameTooltip)
+check("closing it puts it back", GameTooltip.ignoring == false)
+HUDFade.Show()
+step(0.5)
+GameTooltip:Show()
+check("while the HUD is up, it is part of the HUD as usual", GameTooltip.ignoring == false)
+HUDFade.Hide()
+check("hiding the HUD with one open keeps it open", GameTooltip.ignoring == true)
+HUDFade.CleanScreenshot()
+check("a HUD-free screenshot leaves it out", GameTooltip.ignoring == false)
+step(0.3)
+fire("SCREENSHOT_SUCCEEDED")
+step(0.5)
+check("and it is back after", GameTooltip.ignoring == true)
+E.SetMode("tooltips", "hide")
+check("set back to Hidden, it goes with the HUD at once", GameTooltip.ignoring == false)
+GameTooltip:Hide()
+GameTooltip.scripts.OnHide(GameTooltip)
+GameTooltip.IsIgnoringParentAlpha = tipIgnoring
+GameTooltip.owner = nil
+
+-- Loot rolls, countdowns and the game's score and power bars are elements too
+local lootRolls, scores = elementFrame("GroupLootContainer"), elementFrame("UIWidgetTopCenterContainerFrame")
+local countdown = elementFrame()
+TimerTracker = elementFrame("TimerTracker")
+TimerTracker.timerList = { countdown }
+local euiEncounter = elementFrame()
+euiElements.EncounterBar = { group = "Action Bars", getFrame = function() return euiEncounter end }
+E.SetMode("loot", "show")
+E.SetMode("countdowns", "show")
+E.SetMode("widgets", "show")
+E.Refresh()
+step(0.2)
+check("an always visible loot roll stays", lootRolls.ignoring == true and lootRolls.alpha == 1)
+check("so does a countdown beside its tracker", countdown.ignoring == true and TimerTracker.ignoring == true)
+check("and the score bars, EllesmereUI's encounter bar among them",
+	scores.ignoring == true and euiEncounter.ignoring == true)
+E.SetMode("loot", "hide")
+E.SetMode("countdowns", "hide")
+E.SetMode("widgets", "hide")
+step(2)
+check("hidden again, they fade with the HUD", lootRolls.ignoring == false and euiEncounter.ignoring == false)
+euiElements.EncounterBar = nil
+
 -- In combat: untick an element and a fight brings back only the ticked ones
 E.SetMode("bars", "hide")
 E.SetInCombat("chat", false)
@@ -1538,6 +1609,15 @@ apart = table.concat(HUDFade.Explain(), " ")
 check("/hudfade why says why", apart:find("only the elements ticked under In combat", 1, true) ~= nil)
 E.SetInCombat("nameplates", false)
 check("unticked, they stay hidden", name.alpha == 0)
+GameTooltip.owner = UIParent
+GameTooltip:Show()
+check("tooltips for the game world open in that fight while ticked", GameTooltip.ignoring == true)
+E.SetInCombat("tooltips", false)
+check("unticked, they stay hidden", GameTooltip.ignoring == false)
+E.SetInCombat("tooltips", true)
+GameTooltip:Hide()
+GameTooltip.scripts.OnHide(GameTooltip)
+GameTooltip.owner = nil
 lockdown = false
 fire("PLAYER_REGEN_ENABLED")
 step(0.5)

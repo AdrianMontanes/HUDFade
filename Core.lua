@@ -780,7 +780,7 @@ end
 -- game's own fade-out after you hover something outruns our fade. Keep it closed while the HUD is fully hidden.
 local function closeTooltip(tip)
 	if ns.elements.KeepsTooltip(tip) then return end -- over an element shown apart from the HUD
-	if shared(state.current) < 0.01 and ask(tip, "IsShown") and ask(tip, "IsIgnoringParentAlpha") == true then
+	if shared(state.current) < 0.01 and ask(tip, "IsShown") and ignoresUI(tip) == true then
 		pcall(tip.Hide, tip)
 	end
 end
@@ -1793,6 +1793,7 @@ ns.internal = {
 	ask = ask, now = now, state = state, showMinimap = showMinimap, hideMinimap = hideMinimap,
 	refade = function() applyModels(state.current) end,
 	setIgnore = setIgnore, rejoined = function(f) return rejoined[f] == true end,
+	said = function(o) return said[o] end,
 }
 
 ---------------------------------------------------------------------------
