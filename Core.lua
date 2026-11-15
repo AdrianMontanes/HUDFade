@@ -278,30 +278,235 @@ local function underUIParent(f)
 	return false
 end
 
--- Frames that ignore their parent's alpha (like the vehicle leave button) are faded one by one too.
-local loners = {}
-local lonerBase = setmetatable({}, { __mode = "k" })
-local lonerWritten = setmetatable({}, { __mode = "k" })
+---------------------------------------------------------------------------
+-- Parts that ignore UIParent's alpha: frames like the vehicle leave button, and textures and text like Everchat's
+-- chat tabs. Each is faded on its own. Once the HUD is fully hidden it is made to follow UIParent's alpha instead,
+-- because an alpha animation (Everchat's unread glow) overrides any alpha we set, and it gets its own setting back
+-- as the HUD returns.
+---------------------------------------------------------------------------
+local weak = { __mode = "k" }
+local loners = setmetatable({}, weak)       -- every part under UIParent seen ignoring its alpha
+local said = setmetatable({}, weak)         -- part -> what its addon last gave SetIgnoreParentAlpha
+local lonerBase = setmetatable({}, weak)    -- part -> its own alpha, while we write one
+local lonerWritten = setmetatable({}, weak) -- part -> what we last wrote
+local rejoined = setmetatable({}, weak)     -- parts we made follow UIParent's alpha while the HUD is fully hidden
+local stuck = setmetatable({}, weak)        -- parts never made to follow it, see fadePart
 
-local function sortFrame(f, ms, ls)
-	local kind = ask(f, "GetObjectType")
-	if kind and MODEL_TYPES[kind] and f.SetModelAlpha then
-		if underUIParent(f) then ms[#ms + 1] = f end
-	elseif ask(f, "IsIgnoringParentAlpha") == true and underUIParent(f) then
-		-- A secret answer is left alone: guessing wrong could leave the frame invisible.
-		ls[#ls + 1] = f
+local function addPart(o)
+	if loners[o] then return end
+	loners[o] = true
+	-- A tooltip is closed while the HUD is hidden instead, see closeTooltip.
+	if o == GameTooltip or ask(o, "GetObjectType") == "GameTooltip" then stuck[o] = true end
+end
+
+-- Since 12.0 the game can answer with a secret once an addon has set it, so what the addon told
+-- SetIgnoreParentAlpha counts first. nil: can't tell.
+local function ignoresUI(o)
+	if rejoined[o] then return true end -- our change, not its addon's
+	if said[o] ~= nil then return said[o] end
+	return ask(o, "IsIgnoringParentAlpha")
+end
+
+local selfSet = false -- true while we change a part's setting ourselves, so the hook below skips it
+local function setIgnore(o, on)
+	selfSet = true
+	local ok = pcall(o.SetIgnoreParentAlpha, o, on)
+	selfSet = false
+	return ok
+end
+
+local settingPart = false -- true while we set a part's alpha, so its SetAlpha hook skips our own writes
+local function writeAlpha(o, a)
+	settingPart = true
+	local ok = pcall(o.SetAlpha, o, a)
+	settingPart = false
+	return ok
+end
+
+-- A protected part can't be changed in combat: it stays with the UI's opacity until combat ends.
+local function giveBack(o)
+	if rejoined[o] and canTouch(o) then
+		rejoined[o] = nil
+		setIgnore(o, true)
 	end
 end
 
+local function restorePart(o)
+	giveBack(o)
+	local base = lonerBase[o]
+	if base == nil then return end
+	local cur = ask(o, "GetAlpha")
+	-- If its addon changed it since our last write, that is its alpha now.
+	if not (type(cur) == "number" and lonerWritten[o] and math.abs(cur - lonerWritten[o]) > 0.01) then
+		writeAlpha(o, base)
+	end
+	lonerBase[o], lonerWritten[o] = nil, nil
+end
+
+-- An addon setting a part's alpha while the HUD is faded (Everchat does on every step of its chat's own fade) would
+-- show it until our next pass, so it blinks. Take that as the part's own alpha and fade it at once.
+local alphaHooked = setmetatable({}, weak)
+local function partAlphaSet(o, a)
+	if settingPart or lonerBase[o] == nil then return end
+	a = readable(a)
+	if type(a) ~= "number" then return end
+	lonerBase[o] = a
+	local fa = ns.elements.LevelFor(o) or state.current
+	if fa < 0.999 and writeAlpha(o, a * fa) then lonerWritten[o] = a * fa end
+end
+
+local function hookPartAlpha(o)
+	if alphaHooked[o] or not hooksecurefunc or ask(o, "IsProtected") then return end
+	alphaHooked[o] = true
+	pcall(hooksecurefunc, o, "SetAlpha", function(p, a) pcall(partAlphaSet, p, a) end)
+end
+
+-- a: the UI's opacity. A part inside an element shown apart from the HUD (Elements.lua) follows that element instead.
+local function fadePart(o, a)
+	local el = ns.elements
+	if el.Owns(o) then return end -- an element we lifted out of the fade ourselves
+	local ignores = ignoresUI(o)
+	if ignores == nil then return end -- a secret answer: guessing wrong could leave it invisible
+	if not ignores then -- it follows the UI's opacity again, by its addon's choice
+		restorePart(o)
+		loners[o] = nil
+		return
+	end
+	said[o] = true -- the game may answer with a secret once we have changed it ourselves
+	local fa = el.LevelFor(o) or a
+	if fa >= 0.999 then
+		restorePart(o)
+		return
+	end
+	if rejoined[o] then
+		if fa < 0.01 then return end -- still fully hidden
+		giveBack(o)
+	end
+	local cur = ask(o, "GetAlpha")
+	-- Its addon changed it since our last write: use that as its own alpha from now on.
+	if type(cur) == "number" and (lonerBase[o] == nil or math.abs(cur - (lonerWritten[o] or -1)) > 0.01) then
+		lonerBase[o] = cur
+	end
+	-- Only fade it if we know what to put back afterwards.
+	if lonerBase[o] then
+		hookPartAlpha(o)
+		local want = lonerBase[o] * fa
+		if cur == want or writeAlpha(o, want) then lonerWritten[o] = want end
+	end
+	if fa < 0.01 and not stuck[o] and canTouch(o) and setIgnore(o, false) then
+		if ask(o, "IsIgnoringParentAlpha") == true then
+			stuck[o] = true -- its addon puts it straight back: only its alpha is faded from now on
+		else
+			rejoined[o] = true
+		end
+	end
+end
+
+local walking = false -- true while applyLoners goes through the parts
+local function walk(a)
+	for o in pairs(loners) do fadePart(o, a) end
+end
+
+local function applyLoners(a)
+	walking = true
+	pcall(walk, a)
+	walking = false
+end
+
+local pending, pendingQueued = {}, false
+local function settle()
+	pendingQueued = false
+	local list = pending
+	pending = {}
+	for o in pairs(list) do
+		if underUIParent(o) then
+			addPart(o)
+			if state.current < 0.999 then fadePart(o, state.current) end
+		end
+	end
+end
+
+-- An addon taking a part out of the UI's fade, or putting it back, with SetIgnoreParentAlpha.
+local function ignoreSet(o, on)
+	if selfSet or type(o) ~= "table" or MODEL_TYPES[ask(o, "GetObjectType") or ""] then return end -- see fadeModel
+	if issecretvalue and issecretvalue(on) then
+		said[o] = nil
+		return
+	end
+	said[o] = on and true or false
+	rejoined[o] = nil -- set by its addon now, not by us
+	if not loners[o] then
+		if not on then return end
+		-- Looked at again once this frame's code has run too, since addons often place a new part right after.
+		if walking or not underUIParent(o) then
+			pending[o] = true
+			if not pendingQueued then
+				pendingQueued = true
+				C_Timer.After(0, settle)
+			end
+			return
+		end
+		addPart(o)
+	end
+	if state.current < 0.999 and not walking then fadePart(o, state.current) end
+end
+
+-- Each kind of frame, texture and text shares one table of methods, so a hook there sees every part an addon takes
+-- out of the UI's fade the moment it does (the scans only see frames, and only every so often). Hooked as this
+-- file loads, before other addons build their UI at login.
+local PART_KINDS = { "Frame", "Button", "CheckButton", "StatusBar", "Slider", "EditBox", "ScrollFrame", "Cooldown",
+	"MessageFrame", "ScrollingMessageFrame", "SimpleHTML", "ColorSelect", "GameTooltip" }
+local function hookParts()
+	if not (hooksecurefunc and CreateFrame) then return end
+	local ok, probe = pcall(CreateFrame, "Frame")
+	if not (ok and type(probe) == "table") then return end
+	pcall(probe.Hide, probe)
+	local samples = { probe }
+	for _, kind in ipairs(PART_KINDS) do
+		local made, f = pcall(CreateFrame, kind, nil, probe)
+		if made then samples[#samples + 1] = f end
+	end
+	for _, make in ipairs({ "CreateTexture", "CreateFontString", "CreateLine" }) do
+		local made, r = pcall(probe[make], probe)
+		if made then samples[#samples + 1] = r end
+	end
+	local hooked = {}
+	for _, o in ipairs(samples) do
+		local mt = type(o) == "table" and getmetatable(o)
+		local methods = type(mt) == "table" and mt.__index
+		if type(methods) == "table" and not hooked[methods] and type(methods.SetIgnoreParentAlpha) == "function" then
+			hooked[methods] = true
+			pcall(hooksecurefunc, methods, "SetIgnoreParentAlpha", function(p, on) pcall(ignoreSet, p, on) end)
+		end
+	end
+end
+hookParts()
+
+local function sortFrame(f, ms)
+	local kind = ask(f, "GetObjectType")
+	if kind and MODEL_TYPES[kind] and f.SetModelAlpha then
+		if underUIParent(f) then ms[#ms + 1] = f end
+	elseif not loners[f] and ask(f, "IsIgnoringParentAlpha") == true and underUIParent(f) then
+		-- A secret answer is left alone: guessing wrong could leave the frame invisible.
+		addPart(f)
+	end
+end
+
+-- Textures and text are only looked at in the login scan, as there are many more of them than frames. Later ones are
+-- caught by the SetIgnoreParentAlpha hook. rawequal keeps a secret answer out, without the cost of ask().
+local function noteParts(...)
+	for i = 1, select("#", ...) do
+		local r = select(i, ...)
+		if rawequal(r:IsIgnoringParentAlpha(), true) and not loners[r] and underUIParent(r) then addPart(r) end
+	end
+end
+local function sortRegions(f) noteParts(f:GetRegions()) end
+
 -- Listed by name as a fallback; setting alpha on a normal child frame is harmless.
-local function addNamedLoners(ls)
+local function addNamedLoners()
 	for _, name in ipairs({ "MainMenuBarVehicleLeaveButton" }) do
 		local b = _G[name]
-		if type(b) == "table" and b.SetAlpha then
-			local dup = false
-			for _, x in ipairs(ls) do if x == b then dup = true end end
-			if not dup then ls[#ls + 1] = b end
-		end
+		if type(b) == "table" and b.SetAlpha then addPart(b) end
 	end
 end
 
@@ -309,14 +514,15 @@ end
 local function scanModels()
 	if not EnumerateFrames then return end
 	lastScan = now()
-	local ms, ls = {}, {}
+	local ms = {}
 	local f = EnumerateFrames()
 	while f do
-		pcall(sortFrame, f, ms, ls)
+		pcall(sortFrame, f, ms)
+		pcall(sortRegions, f)
 		f = EnumerateFrames(f)
 	end
-	addNamedLoners(ls)
-	models, loners = ms, ls
+	addNamedLoners()
+	models = ms
 end
 
 -- After login, rescan in small batches in the background (a full scan at hide time hitches). Target and focus
@@ -332,20 +538,20 @@ local function scanStep()
 		if now() - lastScan < SCAN_EVERY then return end
 		local ok, first = pcall(EnumerateFrames)
 		if not (ok and first) then lastScan = now() return end
-		scan.next, scan.models, scan.loners = first, {}, {}
+		scan.next, scan.models = first, {}
 	end
 	local f = scan.next
 	for _ = 1, SCAN_BATCH do
-		pcall(sortFrame, f, scan.models, scan.loners)
+		pcall(sortFrame, f, scan.models)
 		local ok, nxt = pcall(EnumerateFrames, f)
 		f = ok and nxt or nil
 		if not f then break end
 	end
 	scan.next = f
 	if not f then
-		addNamedLoners(scan.loners)
-		models, loners = scan.models, scan.loners
-		scan.models, scan.loners = nil, nil
+		addNamedLoners()
+		models = scan.models
+		scan.models = nil
 		lastScan = now()
 	end
 end
@@ -363,37 +569,11 @@ function HUDFade.DescribeMouseFrame()
 		if x == UIParent then break end
 		x = ask(x, "GetParent")
 	end
-	local ign = ask(f, "IsIgnoringParentAlpha")
+	local ign = ignoresUI(f)
 	local row = ns.elements.RowFor(f)
 	local apart = ign == true and not ns.elements.Owns(f)
 	return table.concat(chain, " < ") .. (apart and " (ignores the UI's opacity)" or "")
 		.. (row and (", part of " .. row.label .. " on the Elements page") or "")
-end
-
-local function applyLoners(a)
-	local el = ns.elements
-	for _, f in ipairs(loners) do
-		-- Elements we lifted out of the fade ourselves, and frames that follow the UI's opacity again, are skipped.
-		local own = el.Owns(f) or ask(f, "IsIgnoringParentAlpha") ~= true
-		local fa = not own and el.LevelFor(f) or a
-		if own or fa >= 0.999 then
-			if lonerBase[f] then
-				pcall(f.SetAlpha, f, lonerBase[f])
-				lonerBase[f], lonerWritten[f] = nil, nil
-			end
-		elseif ask(f, "IsVisible") then
-			local cur = ask(f, "GetAlpha")
-			-- Its owner changed it since our last write: use that as its base alpha from now on.
-			if type(cur) == "number" and (lonerBase[f] == nil or math.abs(cur - (lonerWritten[f] or -1)) > 0.01) then
-				lonerBase[f] = cur
-			end
-			-- Only fade it if we know what to put back afterwards.
-			if lonerBase[f] then
-				local want = lonerBase[f] * fa
-				if pcall(f.SetAlpha, f, want) then lonerWritten[f] = want end
-			end
-		end
-	end
 end
 
 local settingModel = false -- true while we set a model's alpha, so the SetModelAlpha hook skips our own writes
@@ -1612,6 +1792,7 @@ end
 ns.internal = {
 	ask = ask, now = now, state = state, showMinimap = showMinimap, hideMinimap = hideMinimap,
 	refade = function() applyModels(state.current) end,
+	setIgnore = setIgnore, rejoined = function(f) return rejoined[f] == true end,
 }
 
 ---------------------------------------------------------------------------
@@ -1707,6 +1888,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		update(DB.showCombat)
 	elseif event == "PLAYER_REGEN_ENABLED" then
 		state.inCombat = false
+		applyLoners(state.current) -- protected parts that couldn't get their setting back in combat
 		if state.pendingKeys and listenToKeys() then state.pendingKeys = false end
 		if state.pendingBinds then applyOverrides(true) end
 		if state.cvarsHidden then

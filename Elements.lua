@@ -391,8 +391,8 @@ end
 local function liftFrame(f)
 	if lifted[f] then return end
 	-- A frame that already ignores the UI's opacity (or won't say) is left to Core's fade, which asks LevelFor.
-	if core.ask(f, "IsIgnoringParentAlpha") ~= false then return end
-	if pcall(f.SetIgnoreParentAlpha, f, true) then lifted[f] = true end
+	if core.rejoined(f) or core.ask(f, "IsIgnoringParentAlpha") ~= false then return end
+	if core.setIgnore(f, true) then lifted[f] = true end
 end
 
 local function drop(f)
@@ -401,7 +401,7 @@ local function drop(f)
 	if lifted[f] then
 		lifted[f] = nil
 		restoreAlpha(f)
-		pcall(f.SetIgnoreParentAlpha, f, false)
+		core.setIgnore(f, false)
 	end
 	if id == "minimap" and core.state.cvarsHidden then core.hideMinimap() end
 end
@@ -579,13 +579,12 @@ end
 
 local function tipCheck(tip)
 	if Elements.KeepsTooltip(tip) then
-		if not tipLifted and core.ask(tip, "IsIgnoringParentAlpha") == false
-			and pcall(tip.SetIgnoreParentAlpha, tip, true) then
+		if not tipLifted and core.ask(tip, "IsIgnoringParentAlpha") == false and core.setIgnore(tip, true) then
 			tipLifted = true
 		end
 	elseif tipLifted then
 		tipLifted = false
-		pcall(tip.SetIgnoreParentAlpha, tip, false)
+		core.setIgnore(tip, false)
 	end
 end
 
@@ -597,7 +596,7 @@ events:SetScript("OnEvent", function()
 		pcall(GameTooltip.HookScript, GameTooltip, "OnHide", function(tip)
 			if tipLifted then
 				tipLifted = false
-				pcall(tip.SetIgnoreParentAlpha, tip, false)
+				core.setIgnore(tip, false)
 			end
 		end)
 	end

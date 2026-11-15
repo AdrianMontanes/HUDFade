@@ -1,5 +1,9 @@
 # HUD Fade
 
+## 1.4.1
+
+- Text and pictures that an addon keeps apart from the UI's opacity now hide with the HUD too. Everchat's chat tabs (General, Combat Log) and their unread glow stayed on screen while the chat itself hid. Any addon that does the same is covered, not only Everchat.
+
 ## 1.4.0
 
 - New **Camera pan** (off by default, under Idle and on the Burn-in protection page): while the HUD is hidden for being idle or AFK (you choose which), the camera turns slowly around your character, so the game world doesn't sit still on your screen either. Any key, click, mouse or controller movement stops it at once, and it waits for the idle or AFK time again before turning.

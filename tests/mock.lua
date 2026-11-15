@@ -49,9 +49,25 @@ local modelMethods = setmetatable({
 	GetModelAlpha = function(self) return self.malpha or 1 end,
 }, { __index = stubMethod })
 
+-- Textures and text share a method table per kind too, so a hook there sees every one of them.
+local regionMethods = setmetatable({
+	SetAlpha = function(self, a) self.alpha = a end,
+	GetAlpha = function(self) return self.alpha end,
+	GetParent = function(self) return self.parent end,
+	GetObjectType = function(self) return self.kind end,
+	SetIgnoreParentAlpha = function(self, on) self.ignoring = on and true or false end,
+	IsIgnoringParentAlpha = function(self) return self.ignoring end,
+}, { __index = stubMethod })
+
+local function newRegion(parent, kind)
+	local r = setmetatable({ parent = parent, alpha = 1, ignoring = false, kind = kind }, { __index = regionMethods })
+	parent.regions[#parent.regions + 1] = r
+	return r
+end
+
 local frames = {}
 local function newFrame(kind)
-	local f = { scripts = {}, shown = true, alpha = 1, events = {}, kind = kind or "Frame" }
+	local f = { scripts = {}, shown = true, alpha = 1, events = {}, kind = kind or "Frame", regions = {} }
 	function f:SetScript(n, fn) self.scripts[n] = fn end
 	function f:Hide() self.shown = false end
 	function f:Show() self.shown = true end
@@ -66,6 +82,9 @@ local function newFrame(kind)
 	function f:GetObjectType() return self.kind end
 	function f:GetParent() return self.parent end
 	function f:GetEffectiveScale() return 1 end
+	function f:CreateTexture() return newRegion(self, "Texture") end
+	function f:CreateFontString() return newRegion(self, "FontString") end
+	function f:GetRegions() return unpack(self.regions) end
 	local isModel = kind == "PlayerModel" or kind == "Model"
 	setmetatable(f, { __index = isModel and modelMethods or stubMethod })
 	frames[#frames + 1] = f
@@ -145,6 +164,12 @@ function model:GetModelAlpha() return self.malpha end
 local lone = newFrame() -- ignores its parent's alpha
 lone.parent = UIParent
 function lone:IsIgnoringParentAlpha() return true end
+
+-- A texture set to ignore its parent's alpha before HUD Fade loads (in XML, say): only the login scan sees it
+local artFrame = newFrame()
+artFrame.parent = UIParent
+local earlyArt = newRegion(artFrame, "Texture")
+earlyArt.ignoring = true
 
 -- Secret values (12.0): here indexing one errors, like math on one does in the game.
 local SECRET = newproxy(true)
@@ -350,6 +375,8 @@ check("plates off", cvars.nameplateShowEnemies == "0")
 check("model faded", model.malpha == 0)
 check("frame that ignores parent opacity faded", lone.alpha == 0)
 check("frames with secret values left alone", secretFrame.alpha == 1 and secretLoner.alpha == 1)
+check("a texture that ignored the UI's opacity before HUD Fade loaded is hidden too",
+	earlyArt.alpha < 0.01 and earlyArt.ignoring == false)
 check("minimap hidden", Minimap.shown == false)
 Minimap:Show()
 check("minimap stays hidden if another addon shows it", Minimap.shown == false)
@@ -372,6 +399,7 @@ check("damage numbers back", cvars.floatingCombatTextCombatDamage_v2 == "1"
 	and HUDFadeDB.restore.floatingCombatTextCombatDamage_v2 == nil)
 check("model back", model.malpha == 1)
 check("that frame back", lone.alpha == 1)
+check("that texture back, apart from the UI's opacity again", earlyArt.alpha == 1 and earlyArt.ignoring == true)
 check("minimap back", Minimap.shown == true)
 bag:Hide()
 step(0.5)
@@ -923,6 +951,88 @@ HUDFade.Show()
 step(0.5)
 check("and comes back at the alpha its addon gave it", elvPortrait.malpha == 0.8)
 
+-- Textures and text that ignore the UI's opacity (Everchat's chat tabs) fade too, from the moment their addon says so
+local function seen(o) -- how opaque it looks: its own alpha (or its animation's) times its parents'
+	local a = rawget(o, "animAlpha") or o.alpha
+	local p = rawget(o, "ignoring") ~= true and o.parent
+	while p do
+		a = a * p.alpha
+		if rawget(p, "ignoring") == true or p == UIParent then break end
+		p = p.parent
+	end
+	return a
+end
+local tabButton = CreateFrame("Button", nil, UIParent)
+tabButton.alpha = 0.4 -- the game fades chat tabs, so Everchat lifts the tab's text and art out of that
+local tabText = tabButton:CreateFontString()
+tabText:SetIgnoreParentAlpha(true)
+local unreadGlow = tabButton:CreateTexture()
+unreadGlow:SetIgnoreParentAlpha(true)
+unreadGlow.animAlpha = 0.6 -- an alpha animation playing, which overrides any alpha set on it
+local floating = CreateFrame("Frame") -- not part of the UI
+local floatingText = floating:CreateFontString()
+floatingText:SetIgnoreParentAlpha(true)
+local laterPanel = CreateFrame("Frame")
+local laterText = laterPanel:CreateFontString()
+laterText:SetIgnoreParentAlpha(true)
+laterPanel.parent = UIParent -- its addon places it in the UI right after
+local guarded = tabButton:CreateTexture()
+guarded:SetIgnoreParentAlpha(true)
+-- Like DynamicCam's guard on the minimap: puts the setting straight back
+hooksecurefunc(guarded, "SetIgnoreParentAlpha", function(self, on)
+	if not on then self:SetIgnoreParentAlpha(true) end
+end)
+step(0.1)
+check("text that ignores the UI's opacity shows as usual while the HUD is up", seen(tabText) == 1)
+HUDFade.Hide()
+step(0.5)
+check("it fades with the HUD", seen(tabText) > 0 and seen(tabText) < 1)
+step(1)
+check("and is gone once the HUD is hidden", seen(tabText) == 0)
+check("so is a texture whose alpha animation plays on", seen(unreadGlow) == 0)
+check("and one its addon placed in the UI right after", seen(laterText) == 0)
+check("one outside the UI is left alone", floatingText.alpha == 1 and floatingText.ignoring == true)
+check("one whose addon keeps it apart is still faded, without a tug of war",
+	guarded.alpha == 0 and guarded.ignoring == true)
+tabText:SetAlpha(0.9) -- its addon lights the tab while the HUD is hidden
+check("its addon changing its opacity while hidden doesn't bring it back", seen(tabText) == 0)
+HUDFade.Show()
+step(0.5)
+check("back with the HUD, at the opacity its addon gave it and apart from the tab's again",
+	seen(tabText) == 0.9 and tabText.ignoring == true)
+check("the animated one too", seen(unreadGlow) == 0.6 and unreadGlow.ignoring == true and unreadGlow.alpha == 1)
+check("and the one its addon keeps apart", guarded.alpha == 1 and seen(laterText) == 1)
+local secureGlow = tabButton:CreateTexture()
+function secureGlow:IsProtected() return true end
+secureGlow:SetIgnoreParentAlpha(true)
+HUDFade.Hide()
+step(1.5)
+lockdown = true
+HUDFade.Show()
+step(0.5)
+check("a protected one can't get its setting back in combat, so it shows with the UI",
+	secureGlow.ignoring == false and seen(secureGlow) == 0.4)
+lockdown = false
+fire("PLAYER_REGEN_ENABLED")
+check("it gets it back once combat ends", secureGlow.ignoring == true and seen(secureGlow) == 1)
+HUDFadeDB.hiddenAlpha = 0.5
+HUDFade.Hide()
+step(1.5)
+check("with the HUD dimmed rather than hidden, it dims with it", near(tabText.alpha, 0.45) and tabText.ignoring == true)
+tabText:SetAlpha(0.8)
+check("and its addon's changes are dimmed at once, without a blink", near(tabText.alpha, 0.4))
+HUDFade.Show()
+step(0.5)
+check("back to its addon's opacity", tabText.alpha == 0.8)
+HUDFadeDB.hiddenAlpha = 0
+tabText:SetIgnoreParentAlpha(false) -- its addon lets it follow the tab again
+HUDFade.Hide()
+step(1.5)
+check("once its addon puts it back under the UI's opacity, it is left alone",
+	tabText.alpha == 0.8 and tabText.ignoring == false)
+HUDFade.Show()
+step(0.5)
+
 -- Pixel shift
 local function atRest() return select(1, uiOffset()) == 0 and select(2, uiOffset()) == 0 end
 local function shiftUntil(done) repeat HUDFade.ShiftNow() until done() end
@@ -1314,6 +1424,8 @@ local function elementFrame(frameName, parent)
 end
 local chat = elementFrame("ChatFrame1")
 local chatTab = elementFrame("ChatFrame1Tab", chat) -- inside the chat frame, so it goes with it
+local chatLabel = chatTab:CreateFontString()
+chatLabel:SetIgnoreParentAlpha(true)
 local bar = elementFrame("MultiBarBottomLeft")
 local barModel = newFrame("PlayerModel") -- a 3D model inside the bar
 barModel.parent = bar
@@ -1348,6 +1460,7 @@ check("but not a frame placed by another element", barGlow.ignoring == false)
 check("other elements fade with the HUD", bar.ignoring == false and euiBar.ignoring == false)
 step(1.5)
 check("it stays while the rest of the HUD is hidden", UIParent.alpha == 0 and chat.ignoring == true and chat.alpha == 1)
+check("text in it that ignores the UI's opacity stays too", chatLabel.alpha == 1 and chatLabel.ignoring == true)
 local apart = table.concat(HUDFade.Explain(), " ")
 check("/hudfade why lists it", apart:find("Chat (always visible)", 1, true) ~= nil)
 HUDFade.Show()
@@ -1364,6 +1477,7 @@ HUDFade.Hide()
 step(1.5)
 check("a mouseover element is hidden until the mouse is over it",
 	bar.ignoring == false and UIParent.alpha == 0 and barModel.malpha == 0)
+check("a hidden element's text that ignores the UI's opacity is hidden too", seen(chatLabel) == 0)
 bar.over = true
 step(0.1)
 check("with the mouse over its spot it fades in", bar.ignoring == true and bar.alpha > 0 and bar.alpha < 1)
