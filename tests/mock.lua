@@ -1525,6 +1525,31 @@ step(3)
 check("and goes together", bar.ignoring == false and euiBar.ignoring == false)
 HUDFadeDB.oneBarAtATime = true
 
+-- Bartender4's bars are 1 px anchors: the overlay it shows while unlocked covers the buttons
+local bt4Bar = elementFrame("BT4Bar1")
+local bt4Overlay = elementFrame("BT4Bar1Overlay", bt4Bar)
+bt4Overlay.bar = bt4Bar
+bt4Bar.overlay = bt4Overlay
+bt4Overlay:Hide()
+local bt4Button = elementFrame("BT4Button1", bt4Bar)
+local flyout = elementFrame(nil, bt4Button)
+E.Refresh()
+bt4Overlay.over = true
+step(0.5)
+check("a Bartender4 bar comes back with the mouse over its locked overlay",
+	bt4Bar.ignoring == true and bt4Bar.alpha == 1)
+check("and only that bar", bar.ignoring == false and euiBar.ignoring == false)
+bt4Overlay.over = false
+step(3)
+check("and goes once the mouse leaves", bt4Bar.ignoring == false)
+function GetMouseFoci() return { flyout } end
+step(0.5)
+check("a flyout opened from one of its buttons, beyond its spot, keeps it too", bt4Bar.ignoring == true)
+function GetMouseFoci() return {} end -- the game world
+step(3)
+check("then over the game world it goes", bt4Bar.ignoring == false)
+GetMouseFoci = nil
+
 -- Mouseover tooltips: one for something in the game world opens over the hidden HUD while that row is Shown
 local tipRow = E.SECTIONS[3].rows[#E.SECTIONS[3].rows]
 check("Mouseover tooltips is an element with Hidden and Shown", tipRow.id == "tooltips" and #tipRow.modes == 2)

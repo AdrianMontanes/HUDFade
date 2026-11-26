@@ -1,5 +1,11 @@
 # HUD Fade
 
+## 1.6.1
+
+- Bartender4: bars set to **Shown on mouseover** on the Elements page now come back when you hover them. Bartender4's bars are tiny anchor points, so HUD Fade never saw the mouse over them. This covers its action bars and its menu, bag and queue bars.
+- Bartender4's XP and reputation bar now goes with **XP, reputation and data bars**, and its totem bar on WoW Forever with **Action bars**.
+- A bar shown on mouseover also stays while the mouse is on a flyout opened from one of its buttons, like a mage's portals, even where the flyout reaches past the bar.
+
 ## 1.6.0
 
 - New **Mouseover tooltips** row on the Elements page, under Info: set it to **Shown** and the game's tooltip still opens while the HUD is hidden when you hover a player, a creature or an object in the world, wherever your UI places it (EllesmereUI and ElvUI included). Tooltips for parts of the HUD that are hidden stay hidden.

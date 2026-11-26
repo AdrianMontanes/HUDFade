@@ -33,7 +33,7 @@ local BAR_NAMES = {
 	"Elv_ABFade", "ElvUI_StanceBar", "ElvUI_BarPet", "ElvUI_ExtraActionBarHolder", "ElvUI_ZoneAbilityHolder",
 	"VehicleLeaveButtonHolder",
 	"BT4BarStanceBar", "BT4BarPetBar", "BT4BarVehicle", "BT4BarExtraActionBar", "BT4BarZoneAbilityBar",
-	"BT4BarBlizzardArt",
+	"BT4BarBlizzardArt", "BT4BarTotemBar",
 	"DominosFramepet", "DominosFrameclass", "DominosFramepossess", "DominosFrameextra", "DominosFramevehicle",
 	"DominosFrameencounter",
 }
@@ -80,7 +80,7 @@ local SECTIONS = {
 		{ id = "xp", label = "XP, reputation and data bars",
 			names = { "StatusTrackingBarManager", "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer",
 				"ElvUI_ExperienceBar", "ElvUI_ReputationBar", "ElvUI_HonorBar", "ElvUI_AzeriteBar", "ElvUI_ThreatBar",
-				"ElvUI_PetExperienceBar", "BT4BarStatusTrackingBar", "DominosFrameexp", "DominosFrameartifact" },
+				"ElvUI_PetExperienceBar", "BT4BarStatus", "DominosFrameexp", "DominosFrameartifact" },
 			tip = "Experience and reputation bars, and EllesmereUI's data bars." },
 		{ id = "cooldowns", label = "Cooldown manager",
 			names = { "EssentialCooldownViewer", "UtilityCooldownViewer", "BuffIconCooldownViewer",
@@ -471,12 +471,38 @@ local function step(elapsed)
 end
 animator:SetScript("OnUpdate", function(_, elapsed) step(elapsed) end)
 
-local function over(f, row)
-	-- The minimap is hidden outright, so its own spot counts even then.
-	return (row.instant or core.ask(f, "IsVisible") == true) and core.ask(f, "IsMouseOver") == true
+-- Bartender4's bars are 1 px anchors. The overlay it shows while unlocked covers the buttons, and its spot counts
+-- while hidden too: Bartender4's own mouseover fade checks it the same way.
+local function overlayOf(f)
+	local o = rawget(f, "overlay")
+	return type(o) == "table" and rawget(o, "bar") == f and o or nil
 end
 
-local function decideRow(row, combat, instant, ui, t)
+-- The lifted frame that the frame under the mouse belongs to: a bar for one of its buttons, or for a flyout opened
+-- from one beyond the bar's own spot.
+local function rootUnderMouse()
+	local ok, f = pcall(function()
+		if GetMouseFoci then return (GetMouseFoci() or {})[1] end
+		return GetMouseFocus and GetMouseFocus()
+	end)
+	if not ok then return nil end
+	for _ = 1, 25 do
+		if type(f) ~= "table" or f == UIParent then return nil end
+		if rowOf[f] then return f end
+		f = parentOf(f)
+	end
+	return nil
+end
+
+local function over(f, row, under)
+	-- The minimap is hidden outright, so its own spot counts even then.
+	if not row.instant and core.ask(f, "IsVisible") ~= true then return false end
+	if f == under or core.ask(f, "IsMouseOver") == true then return true end
+	local o = overlayOf(f)
+	return o ~= nil and core.ask(o, "IsMouseOver") == true
+end
+
+local function decideRow(row, combat, instant, ui, t, under)
 	local id, mode, list = row.id, Elements.Mode(row.id), roots[row.id] or {}
 	local all = mode == "show" or (combat and Elements.InCombat(id))
 	-- A row of separate bars can bring back only the bar under the mouse.
@@ -484,7 +510,7 @@ local function decideRow(row, combat, instant, ui, t)
 	local function hovering(f) return (hoverUntil[each and f or id] or 0) > t end
 	if not all and mode == "hover" then
 		for _, f in ipairs(list) do
-			if over(f, row) then hoverUntil[each and f or id] = t + LINGER end
+			if over(f, row, under) then hoverUntil[each and f or id] = t + LINGER end
 		end
 	end
 	local why
@@ -541,9 +567,9 @@ local function decideRows(goal, combat, instant, clean)
 			if rowOf[f] ~= cameFor[f] then drop(f) end
 		end
 	end
-	local ui = uiLevel()
+	local ui, under = uiLevel(), rootUnderMouse()
 	for _, row in ipairs(ROWS) do
-		if not row.tooltip then decideRow(row, combat, instant, ui, t) end
+		if not row.tooltip then decideRow(row, combat, instant, ui, t, under) end
 	end
 end
 
