@@ -29,6 +29,7 @@ globals = {
 read_globals = {
 	"AlertFrame",
 	"BackdropTemplateMixin",
+	"C_AddOns",
 	"C_CVar",
 	"C_GamePad",
 	"C_NamePlate",
@@ -54,6 +55,7 @@ read_globals = {
 	"InCombatLockdown",
 	"InterfaceOptions_AddCategory",
 	"InterfaceOptionsFrame_OpenToCategory",
+	"IsAddOnLoaded",
 	"IsKeyDown",
 	"IsMouseButtonDown",
 	"IsMouselooking",

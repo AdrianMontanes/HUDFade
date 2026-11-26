@@ -1,7 +1,11 @@
 # HUD Fade
 
-## 1.6.1
+## 1.7.0
 
+- New **Other elements** section on the Elements page, for parts of your UI that aren't listed above it. With TomTom installed it starts with rows for the **TomTom arrow** and **TomTom coordinates**, so the arrow can come back while your mouse is over it, or stay visible, while the rest of the HUD is hidden.
+- Add any other part of your UI there yourself: click **Select an element**, move your mouse over it on screen and click. A box outlines what would be added, with its name, and the mouse wheel picks a bigger or smaller part. Right-click or Escape cancels, and either way you're back where you were on the Elements page.
+- Or type an element's name in the box beside the button, for one that isn't on screen right now: a list of matching names opens as you type. `/hudfade what` names the element under your mouse.
+- Each added element gets a row of its own with the usual State menu and In combat box, starting as **Shown on mouseover**, and a Remove button. TomTom's rows can be removed too, and added back the same way. `/hudfade reset` takes added elements off and brings TomTom's rows back.
 - Bartender4: bars set to **Shown on mouseover** on the Elements page now come back when you hover them. Bartender4's bars are tiny anchor points, so HUD Fade never saw the mouse over them. This covers its action bars and its menu, bag and queue bars.
 - Bartender4's XP and reputation bar now goes with **XP, reputation and data bars**, and its totem bar on WoW Forever with **Action bars**.
 - A bar shown on mouseover also stays while the mouse is on a flyout opened from one of its buttons, like a mage's portals, even where the flyout reaches past the bar.

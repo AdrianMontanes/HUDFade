@@ -68,6 +68,8 @@ end
 local frames = {}
 local function newFrame(kind)
 	local f = { scripts = {}, shown = true, alpha = 1, events = {}, kind = kind or "Frame", regions = {} }
+	f[0] = newproxy() -- the game's frames carry their userdata here
+	function f:GetName() return self.name end
 	function f:SetScript(n, fn) self.scripts[n] = fn end
 	function f:Hide() self.shown = false end
 	function f:Show() self.shown = true end
@@ -143,7 +145,10 @@ end)
 function CreateFrame(kind, name, parent)
 	local f = newFrame(kind)
 	f.parent = parent
-	if name then _G[name] = f end
+	if name then
+		f.name = name
+		_G[name] = f
+	end
 	return f
 end
 
@@ -339,6 +344,7 @@ local function load(file) assert(loadfile(arg[1] .. "/" .. file))("HUDFade", ns)
 load("Core.lua")
 load("Elements.lua")
 load("Options.lua")
+load("Picker.lua")
 load("MinimapButton.lua")
 
 ---------------------------------------------------------------------------
@@ -475,7 +481,7 @@ check("a failed one says so", said:find("the screenshot failed.", 1, true))
 HUDFade.Peek(false)
 
 for _, f in ipairs(frames) do
-	if f.scripts.OnKeyDown then keyFrame = f end
+	if f.scripts.OnKeyDown and f ~= HUDFadeFramePicker then keyFrame = f end
 end
 HUDFade.Hide()
 step(4)
@@ -1282,7 +1288,8 @@ check("reset puts every element back to Hidden", next(HUDFadeDB.elements) == nil
 -- Help and feedback addresses
 local pageBox = copyBoxes[1]
 check("the settings show the addon page and issues addresses",
-	#copyBoxes == 2 and pageBox.text:find("curseforge") ~= nil and copyBoxes[2].text:find("/issues") ~= nil)
+	pageBox.text:find("curseforge") ~= nil and copyBoxes[2].text:find("/issues") ~= nil)
+local nameBox = copyBoxes[3] -- the Elements page's box for adding a frame by name
 pageBox:SetText("typed over")
 pageBox.scripts.OnTextChanged(pageBox, true)
 check("typing in an address box puts the address back", pageBox.text:find("curseforge") ~= nil)
@@ -1698,6 +1705,221 @@ check("and it comes back after", chat.ignoring == true and chat.alpha == 1)
 E.SetMode("chat", "hide")
 HUDFade.Show()
 step(1)
+
+-- Other frames: TomTom's arrow has a row, and any named part of the UI can be added by name or picked on screen
+do
+	C_AddOns = { IsAddOnLoaded = function(addon) return addon == "TomTom" end }
+	local arrow = elementFrame("TomTomCrazyArrow")
+	E.Refresh()
+	E.SetMode("tomtom", "hover")
+	HUDFade.Hide()
+	step(1.5)
+	check("TomTom's arrow hides with the HUD", arrow.ignoring == false and UIParent.alpha == 0)
+	arrow.over = true
+	step(0.2)
+	check("and comes back under the mouse with its row on mouseover", arrow.ignoring == true and arrow.alpha == 1)
+	arrow.over = false
+	step(3)
+	check("then goes again", arrow.ignoring == false)
+	local listedRows = E.AddedRows()
+	check("with TomTom loaded, its rows come first under Other frames",
+		listedRows[1].id == "tomtom" and listedRows[2].id == "tomtomCoords")
+	E.SetMode("tomtom", "show")
+	E.Remove(listedRows[1])
+	step(0.2)
+	check("removing TomTom's arrow row takes it off the page, and the arrow hides with the HUD again",
+		E.AddedRows()[1].id == "tomtomCoords" and arrow.ignoring == false and E.Mode("tomtom") == "hide")
+	local restored, restoredMsg = E.AddFrame("TomTomCrazyArrow")
+	check("adding the arrow again brings back its row by name, on mouseover",
+		restored and restoredMsg:find("added TomTom arrow", 1, true) == 1 and E.AddedRows()[1].id == "tomtom"
+		and E.Mode("tomtom") == "hover" and #HUDFadeDB.addedFrames == 0)
+	E.SetMode("tomtom", "hide")
+
+	local meter = elementFrame("MyMeterFrame")
+	local meterRow = elementFrame("MyMeterFrameRow1", meter)
+	local addedOk, msg = E.AddFrame(" MyMeterFrame ")
+	check("a frame added by name gets a row of its own, shown on mouseover",
+		addedOk and HUDFadeDB.addedFrames[1] == "MyMeterFrame" and E.Mode("frame:MyMeterFrame") == "hover"
+		and E.AddedRows()[3].label == "MyMeterFrame" and msg:find("added MyMeterFrame", 1, true) == 1)
+	check("it hides with the HUD until the mouse is over it", meter.ignoring == false)
+	meterRow.over = true
+	step(0.2)
+	check("a part inside it doesn't count as its spot", meter.ignoring == false)
+	meter.over = true
+	step(0.2)
+	check("its own spot does", meter.ignoring == true and meter.alpha == 1 and meterRow.ignoring == false)
+	meter.over, meterRow.over = false, false
+	step(3)
+	check("and it goes again", meter.ignoring == false)
+	E.SetMode("frame:MyMeterFrame", "show")
+	step(0.2)
+	check("set to Always visible it stays", meter.ignoring == true)
+	local whyText = table.concat(HUDFade.Explain(), " ")
+	check("/hudfade why lists it by name", whyText:find("MyMeterFrame (always visible)", 1, true) ~= nil)
+	check("adding it again says it is there", select(2, E.AddFrame("MyMeterFrame")):find("already") ~= nil)
+	check("so does a part inside it",
+		select(2, E.AddFrame("MyMeterFrameRow1")):find("part of MyMeterFrame on the Elements page") ~= nil)
+	check("and a part of a listed row", select(2, E.AddFrame("TomTomCrazyArrow")):find("part of TomTom arrow") ~= nil)
+	local worldThing = elementFrame("WorldThing", newFrame())
+	check("a frame outside the HUD is refused", select(2, E.AddFrame("WorldThing")):find("not part of the HUD") ~= nil)
+	check("so is a name with spaces", E.AddFrame("Two Words") == false and E.AddFrame("") == false)
+	addedOk, msg = E.AddFrame("NotMadeYet")
+	check("a name no frame has yet is kept, with a warning", addedOk and msg:find("nothing has that name") ~= nil)
+	local lateFrame = elementFrame("NotMadeYet")
+	E.SetMode("frame:NotMadeYet", "show")
+	step(0.2)
+	check("and used once the frame exists", lateFrame.ignoring == true)
+	E.RemoveFrame("NotMadeYet")
+	E.RemoveFrame("MyMeterFrame")
+	step(1.5)
+	check("removed, it hides with the HUD again and its settings go",
+		meter.ignoring == false and lateFrame.ignoring == false and #HUDFadeDB.addedFrames == 0
+		and HUDFadeDB.elements["frame:MyMeterFrame"] == nil)
+	worldThing.parent = nil
+	HUDFade.Show()
+	step(1)
+
+	-- The page: the name box adds one, and its row has a Remove button
+	local made = {}
+	CreateFrame = function(...)
+		local f = realCreate(...)
+		rawset(f, "CreateFontString", stubObject)
+		rawset(f, "SetText", function(self, text) self.label = text end)
+		made[#made + 1] = f
+		return f
+	end
+	nameBox.text = "MyMeterFrame"
+	function nameBox:GetText() return self.text end
+	nameBox.scripts.OnEnterPressed(nameBox)
+	check("typing a name in the box adds that frame", HUDFadeDB.addedFrames[1] == "MyMeterFrame")
+	check("and empties the box", nameBox.text == "")
+	local removes = {}
+	for _, f in ipairs(made) do
+		if f.label == "Remove" then removes[#removes + 1] = f end
+	end
+	check("its row on the page has a Remove button, like TomTom's two rows above it", #removes == 3)
+	if #removes == 3 then
+		removes[3].scripts.OnClick(removes[3])
+		removes[1].scripts.OnClick(removes[1])
+	end
+	check("which takes it off", #HUDFadeDB.addedFrames == 0 and HUDFadeDB.removedRows.tomtom == true)
+	CreateFrame = realCreate
+
+	-- Typing in the name box lists the frames whose names have that text in them, to click
+	nameBox.scripts.OnEditFocusGained(nameBox)
+	nameBox.text = "meter"
+	nameBox.scripts.OnTextChanged(nameBox, true)
+	local listed = {}
+	for _, f in ipairs(frames) do
+		if f.shown and rawget(f, "value") then listed[#listed + 1] = f end
+	end
+	check("typing part of a name lists the frames that have it",
+		#listed == 2 and listed[1].value == "MyMeterFrame" and listed[2].value == "MyMeterFrameRow1")
+	if listed[1] then listed[1].scripts.OnClick(listed[1]) end
+	check("clicking one adds it", HUDFadeDB.addedFrames[1] == "MyMeterFrame" and nameBox.text == "")
+	nameBox.text = "meter"
+	nameBox.scripts.OnTextChanged(nameBox, true)
+	local stillListed = 0
+	for _, f in ipairs(frames) do
+		if f.shown and rawget(f, "value") then stillListed = stillListed + 1 end
+	end
+	check("frames already on the page, or inside one there, aren't listed", stillListed == 0)
+	nameBox.scripts.OnEscapePressed(nameBox)
+	E.RemoveFrame("MyMeterFrame")
+
+	-- Picking on screen: the biggest named part under the mouse, the wheel for a smaller one, a click adds it
+	function UIParent:GetWidth() return 1000 end
+	function UIParent:GetHeight() return 600 end
+	local addonPanel = elementFrame("SomeAddonPanel")
+	local panelButton = elementFrame("SomeAddonPanelButton", addonPanel)
+	function addonPanel:GetFrameLevel() return 1 end
+	function panelButton:GetFrameLevel() return 2 end -- drawn over its parent, as in the game
+	local holder = elementFrame("SomeFullScreenHolder")
+	function holder:GetWidth() return 1000 end
+	function holder:GetHeight() return 600 end
+	local lines = {}
+	local tipSetText, tipAddLine = GameTooltip.SetText, GameTooltip.AddLine
+	function GameTooltip:SetText(text)
+		lines = { text }
+	end
+	function GameTooltip:AddLine(text) lines[#lines + 1] = text end
+	local reopened, told
+	local open = HUDFade.OpenOptions
+	HUDFade.OpenOptions = function(page) reopened = page end
+	local picker = HUDFadeFramePicker
+	function picker:Hide() -- the game runs OnHide
+		if not self.shown then return end
+		self.shown = false
+		self.scripts.OnHide(self)
+	end
+	addonPanel.over, panelButton.over, holder.over = true, true, true
+	HUDFade.PickFrame(function(m) told = m end)
+	step(0.2)
+	check("picking covers the screen and names the part under the mouse",
+		picker.shown == true and lines[1] == "SomeAddonPanel")
+	check("the whole panel rather than one button in it, and never a full-screen holder",
+		table.concat(lines, " "):find("1 of 2", 1, true) == nil and table.concat(lines, " "):find("2 of 2") ~= nil)
+	check("the HUD stays up while picking", UIParent.alpha == 1)
+	picker.scripts.OnMouseWheel(picker, -1)
+	check("the mouse wheel picks a smaller part", lines[1] == "SomeAddonPanelButton")
+	picker.scripts.OnMouseWheel(picker, 1)
+	picker.scripts.OnMouseUp(picker, "LeftButton")
+	check("a click adds it", picker.shown == false and HUDFadeDB.addedFrames[1] == "SomeAddonPanel"
+		and E.Mode("frame:SomeAddonPanel") == "hover")
+	check("says so and goes back to the Elements page",
+		reopened == "elements" and told:find("added SomeAddonPanel", 1, true) == 1)
+	reopened = nil
+	HUDFade.PickFrame()
+	step(0.2)
+	check("a frame already on the page says so", table.concat(lines, " "):find("already", 1, true) ~= nil)
+	picker.scripts.OnMouseUp(picker, "LeftButton")
+	check("and a click doesn't take it twice", picker.shown == true and #HUDFadeDB.addedFrames == 1)
+	addonPanel.over, panelButton.over = false, false
+	moveMouse()
+	step(0.2)
+	check("over nothing but a full-screen holder, it asks for a part of the UI",
+		lines[1] == "Move your mouse over a part of your UI")
+	picker.scripts.OnMouseUp(picker, "RightButton")
+	check("right-click cancels", picker.shown == false and reopened == "elements" and #HUDFadeDB.addedFrames == 1)
+	reopened = nil
+
+	-- From the settings, they stay open but invisible, so the Elements page is as it was after
+	local settings = elementFrame("SettingsPanel")
+	local settingsButton = elementFrame("SettingsPanelCloseButton", settings)
+	settings.over, settingsButton.over = true, true
+	HUDFade.PickFrame()
+	step(0.2)
+	check("the settings window turns invisible but stays open", settings.alpha == 0 and settings.shown == true)
+	check("and its parts are never offered", lines[1] == "Move your mouse over a part of your UI")
+	local propagated
+	rawset(picker, "SetPropagateKeyboardInput", function(_, on) propagated = on end)
+	picker.scripts.OnKeyDown(picker, "W")
+	check("other keys still reach the game while selecting", propagated == true and picker.shown == true)
+	picker.scripts.OnKeyDown(picker, "ESCAPE")
+	check("Escape cancels without reaching the settings window", propagated == false and picker.shown == false)
+	check("which shows again as it was, without being reopened", settings.alpha == 1 and reopened == nil)
+	settings:Hide()
+	settings.parent = nil
+	HUDFade.PickFrame()
+	fire("PLAYER_REGEN_DISABLED")
+	lockdown = true
+	check("a fight stops it and leaves the settings closed", picker.shown == false and reopened == nil)
+	told = nil
+	HUDFade.PickFrame(function(m) told = m end)
+	check("it can't start in combat", picker.shown == false and told:find("leave combat") ~= nil)
+	lockdown = false
+	fire("PLAYER_REGEN_ENABLED")
+	SlashCmdList.HUDFADE("reset")
+	check("reset takes added frames off and puts TomTom's rows back",
+		#HUDFadeDB.addedFrames == 0 and next(HUDFadeDB.removedRows) == nil and E.AddedRows()[1].id == "tomtom")
+	C_AddOns = nil
+	HUDFade.OpenOptions = open
+	GameTooltip.SetText, GameTooltip.AddLine = tipSetText, tipAddLine
+	UIParent.GetWidth, UIParent.GetHeight = nil, nil
+	addonPanel.parent, holder.parent, arrow.parent, meter.parent = nil, nil, nil, nil
+	HUDFade.Show()
+	step(1)
+end
 
 -- 1.3.0 turned the Minimap box under "also hide" into the Minimap element
 local saved = HUDFadeDB

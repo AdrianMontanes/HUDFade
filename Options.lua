@@ -342,7 +342,7 @@ local function choiceMenu(choices, texts, get, set, y, x, width, title, tip)
 	local hook = w.HookScript or w.SetScript
 	hook(w, "OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:SetText(title, 1, 1, 1)
+		GameTooltip:SetText(type(title) == "function" and title() or title, 1, 1, 1)
 		GameTooltip:AddLine(type(tip) == "function" and tip() or tip, nil, nil, nil, true)
 		GameTooltip:Show()
 	end)
@@ -371,18 +371,20 @@ local function panMenu(y, x, width)
 end
 
 -- A box in the Elements page's In combat column. usable(): whether it means anything with the other settings.
+-- id and label can be functions, for the rows of added frames.
 local function combatBox(id, label, y, x, usable)
 	local E = HUDFade.Elements
+	local function key() return type(id) == "function" and id() or id end
 	local cb = CreateFrame("CheckButton", nil, canvas, "UICheckButtonTemplate")
 	cb:SetPoint("TOPLEFT", x, y)
 	cb:SetSize(26, 26)
 	cb:SetScript("OnClick", function(self)
-		E.SetInCombat(id, self:GetChecked() and true or false)
+		E.SetInCombat(key(), self:GetChecked() and true or false)
 		refreshAll()
 	end)
 	cb:SetScript("OnEnter", function(self)
 		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-		GameTooltip:SetText(label .. ": in combat", 1, 1, 1)
+		GameTooltip:SetText((type(label) == "function" and label() or label) .. ": in combat", 1, 1, 1)
 		GameTooltip:AddLine("Ticked: it comes back when a fight brings the HUD back. Unticked: it stays hidden in fights, "
 			.. "and a fight brings back only the ticked elements, not the entire HUD.", nil, nil, nil, true)
 		if not db().showCombat then
@@ -392,7 +394,8 @@ local function combatBox(id, label, y, x, usable)
 	end)
 	cb:SetScript("OnLeave", function() GameTooltip:Hide() end)
 	cb.refresh = function()
-		cb:SetChecked(E.InCombat(id) or (id ~= "nameplates" and E.Mode(id) == "show"))
+		local k = key()
+		cb:SetChecked(E.InCombat(k) or (k ~= "nameplates" and E.Mode(k) == "show"))
 	end
 	cb.setActive = function(on)
 		if on and db().showCombat and usable() then cb:Enable() else cb:Disable() end
@@ -413,6 +416,232 @@ local TOOLTIP_TEXT = { hide = "Hidden", show = "Shown" }
 local TOOLTIP_TIP = "Hidden: it stays hidden with the rest of the HUD.\nShown: it opens as usual while the HUD is "
 	.. "hidden and closes when your mouse moves off. Moving the mouse brings back the entire HUD after an idle hide "
 	.. "(unless Mouse moving is off), so this is for after your Hide UI key."
+
+local function hint(w, title, text)
+	w:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(title, 1, 1, 1)
+		GameTooltip:AddLine(text, nil, nil, nil, true)
+		GameTooltip:Show()
+	end)
+	w:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
+-- The Elements page's Other elements rows (other addons' and the player's), and the controls to add more below.
+local ROW_H, CONTROLS_H = 28, 56
+local added = { slots = {} }
+
+local function layoutAdded()
+	if not added.box then return end
+	local list = HUDFade.Elements.AddedRows()
+	for i, row in ipairs(list) do
+		local slot = added.slots[i] or added.newSlot(i)
+		slot.row = row
+		slot.name:SetText(row.label)
+		slot.show(true)
+	end
+	for i = #list + 1, #added.slots do
+		added.slots[i].row = nil
+		added.slots[i].show(false)
+	end
+	added.controls:ClearAllPoints()
+	added.controls:SetPoint("TOPLEFT", added.box, "TOPLEFT", 0, -ROW_H * #list)
+	added.grown(ROW_H * #list + CONTROLS_H)
+end
+
+local function tellAdded(msg)
+	if added.status then added.status:SetText((msg:gsub("^%l", string.upper))) end
+end
+
+local PICK_TIP = "The settings hide. Move your mouse over the part of your UI you want: a box shows what would be "
+	.. "added, with its name. The mouse wheel picks a bigger or smaller part. Left-click adds it, right-click or "
+	.. "Escape cancels.\nOnly parts with a name can be added, and ones that cover the whole screen are skipped."
+local NAME_TIP = "Type an element's name and pick it from the list, or press Enter. Names are case-sensitive. "
+	.. "/hudfade what names the element under your mouse. Use this for one that isn't on screen right now, like "
+	.. "DurabilityFrame, the armor figure that shows when your gear is damaged."
+local SUGGESTIONS = 8 -- names listed under the name box
+
+-- Suggestions for the name box: frames whose name has the text in it, those starting with it first, leaving out
+-- ones that can't be added.
+local function suggest(names, lower, text)
+	local q = text:lower()
+	local first, rest = {}, {}
+	for i, l in ipairs(lower) do
+		local at = l:find(q, 1, true)
+		if at == 1 then first[#first + 1] = names[i] elseif at then rest[#rest + 1] = names[i] end
+	end
+	local E, out, tried = HUDFade.Elements, {}, 0
+	for _, list in ipairs({ first, rest }) do
+		for _, name in ipairs(list) do
+			if #out >= SUGGESTIONS or tried >= 300 then return out end
+			tried = tried + 1
+			if not E.Refusal(name, _G[name]) and E.InHUD(_G[name]) then out[#out + 1] = name end
+		end
+	end
+	return out
+end
+
+local function addedFrames(box, MENU_X, MENU_W, BOX_X)
+	local E = HUDFade.Elements
+	added.box = box
+	added.newSlot = function(i)
+		local was = canvas
+		canvas = box
+		local y = -(i - 1) * ROW_H
+		local slot = {}
+		local function id() return slot.row and slot.row.id end
+		local function label() return slot.row and slot.row.label or "" end
+		local name = box:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+		name:SetPoint("TOPLEFT", 24, y - 6)
+		name:SetWidth(MENU_X - 32)
+		name:SetJustifyH("LEFT")
+		if name.SetWordWrap then name:SetWordWrap(false) end
+		slot.name = name
+		local menu = choiceMenu({ "hide", "hover", "show" }, MODE_TEXT, function() return E.Mode(id()) end,
+			function(v) E.SetMode(id(), v) end, y, MENU_X, MENU_W, label,
+			function() return (slot.row and slot.row.tip or "") .. "\n\n" .. MODE_TIP end)
+		local cb = combatBox(id, label, y + 2, BOX_X, function() return E.Mode(id()) ~= "show" end)
+		local remove = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+		remove:SetPoint("TOPLEFT", BOX_X + 36, y)
+		remove:SetSize(70, 22)
+		remove:SetText("Remove")
+		remove:SetScript("OnClick", function()
+			local row = slot.row
+			if not row then return end
+			E.Remove(row)
+			tellAdded(row.label .. " removed: it hides with the HUD again. Add it back with Select an element or "
+				.. "by its name, " .. row.names[1] .. ".")
+			refreshAll()
+		end)
+		hint(remove, "Remove", "Takes this element off the page. It hides with the rest of the HUD again, and you "
+			.. "can add it back any time.")
+		slot.show = function(on)
+			for _, w in ipairs({ name, menu, cb, remove }) do
+				if on then w:Show() else w:Hide() end
+			end
+		end
+		widgets[#widgets + 1] = {
+			refresh = function() end,
+			setActive = function(on)
+				name:SetAlpha(on and 1 or 0.5)
+				remove:SetEnabled(on)
+			end,
+		}
+		canvas = was
+		added.slots[i] = slot
+		return slot
+	end
+
+	local controls = CreateFrame("Frame", nil, box)
+	controls:SetSize(600, CONTROLS_H)
+	added.controls = controls
+	local pick = CreateFrame("Button", nil, controls, "UIPanelButtonTemplate")
+	pick:SetPoint("TOPLEFT", 24, -2)
+	pick:SetSize(140, 22)
+	pick:SetText("Select an element")
+	pick:SetScript("OnClick", function() HUDFade.PickFrame(tellAdded) end)
+	hint(pick, "Select an element", PICK_TIP)
+	local orName = controls:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	orName:SetPoint("TOPLEFT", 174, -6)
+	orName:SetText("or by name")
+	local nameBox = CreateFrame("EditBox", nil, controls, "InputBoxTemplate")
+	nameBox:SetPoint("TOPLEFT", MENU_X + 6, -3)
+	nameBox:SetSize(MENU_W - 6, 20)
+	nameBox:SetAutoFocus(false)
+	local addButton = CreateFrame("Button", nil, controls, "UIPanelButtonTemplate")
+	addButton:SetPoint("TOPLEFT", MENU_X + MENU_W + 8, -2)
+	addButton:SetSize(60, 22)
+	addButton:SetText("Add")
+	local function addTyped()
+		local ok, msg = E.AddFrame(nameBox:GetText())
+		tellAdded(msg)
+		if ok then
+			nameBox:SetText("")
+			nameBox:ClearFocus()
+		end
+		refreshAll()
+	end
+	addButton:SetScript("OnClick", addTyped)
+	hint(nameBox, "Add an element by name", NAME_TIP)
+	hint(addButton, "Add an element by name", NAME_TIP)
+
+	-- A list of matching names under the box while typing.
+	local list = CreateFrame("Frame", nil, controls)
+	list:SetPoint("TOPLEFT", nameBox, "BOTTOMLEFT", -6, -2)
+	list:SetSize(MENU_W + 70, 4)
+	list:SetFrameLevel((controls:GetFrameLevel() or 0) + 40)
+	list:EnableMouse(true)
+	list:Hide()
+	local bg = list:CreateTexture(nil, "BACKGROUND")
+	bg:SetAllPoints()
+	bg:SetColorTexture(0.06, 0.06, 0.08, 0.96)
+	local names, lower -- every frame name, looked up once each time the box gets focus
+	local buttons = {}
+	for i = 1, SUGGESTIONS do
+		local b = CreateFrame("Button", nil, list)
+		b:SetPoint("TOPLEFT", 2, -2 - (i - 1) * 18)
+		b:SetPoint("RIGHT", -2, 0)
+		b:SetHeight(18)
+		local text = b:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		text:SetPoint("LEFT", 6, 0)
+		text:SetPoint("RIGHT", -6, 0)
+		text:SetJustifyH("LEFT")
+		b.text = text
+		local hl = b:CreateTexture(nil, "HIGHLIGHT")
+		hl:SetAllPoints()
+		hl:SetColorTexture(1, 1, 1, 0.15)
+		b:SetScript("OnClick", function(self)
+			nameBox:SetText(self.value)
+			list:Hide()
+			addTyped()
+		end)
+		buttons[i] = b
+	end
+	local function update(text)
+		local found = names and #text >= 2 and suggest(names, lower, text) or {}
+		for i, b in ipairs(buttons) do
+			b.value = found[i]
+			b.text:SetText(found[i] or "")
+			if found[i] then b:Show() else b:Hide() end
+		end
+		list:SetHeight(4 + #found * 18)
+		if #found > 0 then list:Show() else list:Hide() end
+	end
+	nameBox:SetScript("OnEditFocusGained", function()
+		names = HUDFade.FrameNames()
+		lower = {}
+		for i, n in ipairs(names) do lower[i] = n:lower() end
+	end)
+	nameBox:SetScript("OnEditFocusLost", function(self)
+		self:HighlightText(0, 0)
+		-- A click on the list takes the focus first: leave the list for that click.
+		if not list:IsMouseOver() then list:Hide() end
+	end)
+	nameBox:SetScript("OnTextChanged", function(self, typed)
+		if typed then update(self:GetText() or "") end
+	end)
+	nameBox:SetScript("OnEnterPressed", function()
+		list:Hide()
+		addTyped()
+	end)
+	nameBox:SetScript("OnEscapePressed", function(self)
+		list:Hide()
+		self:ClearFocus()
+	end)
+	local status = controls:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	status:SetPoint("TOPLEFT", 24, -30)
+	status:SetWidth(540)
+	status:SetJustifyH("LEFT")
+	added.status = status
+	widgets[#widgets + 1] = {
+		refresh = function() end,
+		setActive = function(on)
+			pick:SetEnabled(on)
+			addButton:SetEnabled(on)
+			orName:SetAlpha(on and 1 or 0.5)
+		end,
+	}
+end
 
 -- The Elements page: what each part of the HUD does while the rest is hidden.
 local function buildElements()
@@ -439,30 +668,56 @@ local function buildElements()
 	for _, section in ipairs(E.SECTIONS) do
 		header(section.name, y)
 		y = y - 22
+		if section.added then
+			note("Elements of other addons, and any part of your UI you add yourself: select it on your screen or "
+				.. "type its name, and it gets a row here.", y - 2)
+			y = y - 30
+		end
 		for _, row in ipairs(section.rows) do
-			local name = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-			name:SetPoint("TOPLEFT", 24, y - 6)
-			name:SetText(row.label)
-			local id = row.id
-			local texts, modeTip = MODE_TEXT, section.notify and NOTIFY_TIP or MODE_TIP
-			if row.tooltip then texts, modeTip = TOOLTIP_TEXT, TOOLTIP_TIP end
-			choiceMenu(row.modes, texts, function() return E.Mode(id) end, function(v) E.SetMode(id, v) end,
-				y, MENU_X, MENU_W, row.label, row.tip .. "\n\n" .. modeTip)
-			combatBox(id, row.label, y + 2, BOX_X, function() return E.Mode(id) ~= "show" end)
-			local dim = {}
-			dim.refresh = function() end
-			dim.setActive = function(on) name:SetAlpha(on and 1 or 0.5) end
-			if row.each then
-				local apart = checkbox("oneBarAtATime", "One at a time", "On mouseover, ticked: only the bar under "
-					.. "your mouse comes back. Unticked: every bar comes back together when your mouse is over any of "
-					.. "them.", y, 0)
-				apart:ClearAllPoints()
-				apart:SetPoint("LEFT", name, "RIGHT", 8, 0)
-				local setActive = apart.setActive
-				apart.setActive = function(on) setActive(on and E.Mode(id) == "hover") end
+			if not row.addon then -- other addons' rows go with the added frames, below
+				local name = canvas:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+				name:SetPoint("TOPLEFT", 24, y - 6)
+				name:SetText(row.label)
+				local id = row.id
+				local texts, modeTip = MODE_TEXT, section.notify and NOTIFY_TIP or MODE_TIP
+				if row.tooltip then texts, modeTip = TOOLTIP_TEXT, TOOLTIP_TIP end
+				choiceMenu(row.modes, texts, function() return E.Mode(id) end, function(v) E.SetMode(id, v) end,
+					y, MENU_X, MENU_W, row.label, row.tip .. "\n\n" .. modeTip)
+				combatBox(id, row.label, y + 2, BOX_X, function() return E.Mode(id) ~= "show" end)
+				local dim = {}
+				dim.refresh = function() end
+				dim.setActive = function(on) name:SetAlpha(on and 1 or 0.5) end
+				if row.each then
+					local apart = checkbox("oneBarAtATime", "One at a time", "On mouseover, ticked: only the bar "
+						.. "under your mouse comes back. Unticked: every bar comes back together when your mouse is "
+						.. "over any of them.", y, 0)
+					apart:ClearAllPoints()
+					apart:SetPoint("LEFT", name, "RIGHT", 8, 0)
+					local setActive = apart.setActive
+					apart.setActive = function(on) setActive(on and E.Mode(id) == "hover") end
+				end
+				widgets[#widgets + 1] = dim
+				y = y - 28
 			end
-			widgets[#widgets + 1] = dim
-			y = y - 28
+		end
+		if section.added then
+			-- Its rows change as frames are added and removed, so they and everything below sit in frames of
+			-- their own that move down as it grows.
+			local box = CreateFrame("Frame", nil, content)
+			box:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+			box:SetSize(600, 1)
+			canvas = box
+			local top = y
+			addedFrames(box, MENU_X, MENU_W, BOX_X)
+			local tail = CreateFrame("Frame", nil, content)
+			tail:SetPoint("TOPLEFT", box, "BOTTOMLEFT", 0, 0)
+			tail:SetSize(600, 1)
+			canvas = tail
+			added.grown = function(h)
+				box:SetHeight(h)
+				content:SetHeight(-top + h + added.tail)
+			end
+			y = 0
 		end
 		y = y - 8
 	end
@@ -505,7 +760,9 @@ local function buildElements()
 		widgets[#widgets + 1] = dim
 		y = y - 28
 	end
-	content:SetHeight(-y + 24)
+	added.tail = -y + 24
+	canvas = content
+	layoutAdded()
 end
 
 local built = false
@@ -644,7 +901,10 @@ local function build()
 end
 
 function refreshAll()
-	if built then panel.master.refresh() end
+	if built then
+		panel.master.refresh()
+		layoutAdded()
+	end
 	local on = db().enabled and true or false
 	for _, w in ipairs(widgets) do
 		w.refresh()
@@ -966,9 +1226,12 @@ SlashCmdList.HUDFADE = function(msg)
 		end
 		wipe(d.elements)
 		wipe(d.elementCombat)
+		wipe(d.addedFrames)
+		wipe(d.removedRows)
 		HUDFade.ApplyOverrides(true)
 		HUDFade.UpdateMinimapButton()
-		HUDFade.Update()
+		HUDFade.Elements.Refresh()
+		refreshAll()
 		say("settings reset.")
 	else
 		for _, line in ipairs(HELP) do say(line) end

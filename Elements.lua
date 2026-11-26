@@ -197,17 +197,62 @@ local SECTIONS = {
 		{ id = "talking", label = "Talking heads", names = { "TalkingHeadFrame" },
 			tip = "The box where a quest character talks to you." },
 	} },
+	-- Rows with an addon are listed only while it is loaded, and can be removed like the frames a player adds.
+	{ name = "Other elements", added = true, rows = {
+		{ id = "tomtom", label = "TomTom arrow", names = { "TomTomCrazyArrow" }, addon = "TomTom",
+			tip = "TomTom's waypoint arrow." },
+		{ id = "tomtomCoords", label = "TomTom coordinates", names = { "TomTomBlock" }, addon = "TomTom",
+			tip = "TomTom's box with your map coordinates." },
+	} },
 }
 
-local ROWS, BY_ID = {}, {}
+local FIXED, ROWS, BY_ID = {}, {}, {}
 for _, section in ipairs(SECTIONS) do
 	for _, row in ipairs(section.rows) do
 		row.modes = (row.tooltip or section.notify) and { "hide", "show" } or { "hide", "hover", "show" }
+		FIXED[#FIXED + 1] = row
 		ROWS[#ROWS + 1] = row
 		BY_ID[row.id] = row
 	end
 end
 Elements.SECTIONS = SECTIONS
+
+-- Frames the player added on the Elements page, by name (DB.addedFrames), each a row of its own after the rest.
+local addedRows = {} -- frame name -> its row
+local listed = false  -- ROWS has the added frames
+
+local function addedRow(name)
+	local row = addedRows[name]
+	if not row then
+		row = { id = "frame:" .. name, label = name, names = { name }, added = name, modes = { "hide", "hover", "show" },
+			tip = "A part of your UI you added: " .. name .. "." }
+		addedRows[name] = row
+	end
+	return row
+end
+
+local function removed(row)
+	return row.addon ~= nil and db().removedRows[row.id] == true
+end
+
+local function rows()
+	if listed or not HUDFade.db then return ROWS end
+	listed = true
+	wipe(ROWS)
+	wipe(BY_ID)
+	for _, row in ipairs(FIXED) do
+		if not removed(row) then
+			ROWS[#ROWS + 1] = row
+			BY_ID[row.id] = row
+		end
+	end
+	for _, name in ipairs(db().addedFrames) do
+		local row = addedRow(name)
+		ROWS[#ROWS + 1] = row
+		BY_ID[row.id] = row
+	end
+	return ROWS
+end
 
 -- EllesmereUI lists every element you can move in unlock mode, by group: which row each one belongs to.
 local EUI_GROUPS = {
@@ -261,7 +306,7 @@ end
 
 -- A fight brings back only some elements: the rest of the HUD stays hidden.
 function Elements.PartialCombat()
-	for _, row in ipairs(ROWS) do
+	for _, row in ipairs(rows()) do
 		if not Elements.InCombat(row.id) and Elements.Mode(row.id) ~= "show" then return true end
 	end
 	return false
@@ -317,6 +362,7 @@ end
 
 local function resolve()
 	resolvedAt, dirty = core.now(), false
+	rows() -- with frames added since the last look
 	local found = {}
 	for _, row in ipairs(ROWS) do found[row.id] = {} end
 	local function adder(id)
@@ -372,7 +418,7 @@ local function resolve()
 end
 
 function Elements.Refresh()
-	dirty = true
+	dirty, listed = true, false
 	HUDFade.Update()
 end
 
@@ -568,7 +614,7 @@ local function decideRows(goal, combat, instant, clean)
 		end
 	end
 	local ui, under = uiLevel(), rootUnderMouse()
-	for _, row in ipairs(ROWS) do
+	for _, row in ipairs(rows()) do
 		if not row.tooltip then decideRow(row, combat, instant, ui, t, under) end
 	end
 end
@@ -608,6 +654,7 @@ end
 -- For /hudfade what: the row a frame belongs to.
 function Elements.RowFor(f)
 	if dirty or core.now() - resolvedAt > RESOLVE_EVERY then resolve() end
+	rows()
 	for _ = 1, 25 do
 		if type(f) ~= "table" then return nil end
 		local id = rowOf[f]
@@ -618,10 +665,112 @@ function Elements.RowFor(f)
 	return nil
 end
 
+---------------------------------------------------------------------------
+-- Frames the player adds, picked on screen or typed by name
+---------------------------------------------------------------------------
+local function loaded(addon)
+	local fn = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
+	if type(fn) ~= "function" then return false end
+	local ok, on = pcall(fn, addon)
+	return ok and on and true or false
+end
+
+-- The rows of the Other elements section: other addons' (while loaded), then added frames in the order added.
+function Elements.AddedRows()
+	rows()
+	local out = {}
+	for _, row in ipairs(FIXED) do
+		if row.addon and not removed(row) and loaded(row.addon) then out[#out + 1] = row end
+	end
+	for _, name in ipairs(db().addedFrames) do out[#out + 1] = addedRows[name] end
+	return out
+end
+
+-- Whether a frame is drawn as part of the HUD, so it fades with it.
+function Elements.InHUD(f)
+	for _ = 1, 50 do
+		f = parentOf(f)
+		if f == UIParent then return true end
+		if not f then return false end
+	end
+	return false
+end
+
+-- Why the frame by this name can't be added, or nil. f: that frame, if it exists right now.
+function Elements.Refusal(name, f)
+	for _, n in ipairs(db().addedFrames) do
+		if n == name then return name .. " is on the Elements page already." end
+	end
+	if f == nil then return nil end
+	if type(f) ~= "table" or type(f.SetIgnoreParentAlpha) ~= "function" or type(f.GetChildren) ~= "function" then
+		return name .. " is not a part of the UI."
+	end
+	if not Elements.InHUD(f) then return name .. " is not part of the HUD, so it doesn't hide with it." end
+	local row = Elements.RowFor(f)
+	if row then return name .. " is part of " .. row.label .. " on the Elements page already." end
+	return nil
+end
+
+-- Adds a frame by its global name, shown on mouseover to begin with. Returns whether it was added and what to
+-- tell the player.
+function Elements.AddFrame(name)
+	name = type(name) == "string" and name:match("^%s*(.-)%s*$") or ""
+	if name == "" or name:find("%s") then
+		return false, "type an element's name, like DurabilityFrame. /hudfade what names the element under your mouse."
+	end
+	-- A removed row of another addon comes back with its own name for it.
+	for _, row in ipairs(FIXED) do
+		if removed(row) then
+			for _, n in ipairs(row.names) do
+				if n == name then
+					db().removedRows[row.id] = nil
+					db().elements[row.id] = "hover"
+					Elements.Refresh()
+					return true, "added " .. row.label .. ": it comes back while your mouse is over it. Change "
+						.. "that on the Elements page."
+				end
+			end
+		end
+	end
+	local f = _G[name]
+	local refusal = Elements.Refusal(name, f)
+	if refusal then return false, refusal end
+	local list = db().addedFrames
+	list[#list + 1] = name
+	db().elements["frame:" .. name] = "hover"
+	Elements.Refresh()
+	if f == nil then
+		return true, "added " .. name .. ", but nothing has that name right now (names are case-sensitive). It "
+			.. "counts once something does."
+	end
+	return true, "added " .. name .. ": it comes back while your mouse is over it. Change that on the Elements page."
+end
+
+-- Takes a row of the Other elements section off the page: an added frame, or another addon's row.
+function Elements.Remove(row)
+	if row.added then
+		local list = db().addedFrames
+		for i = #list, 1, -1 do
+			if list[i] == row.added then table.remove(list, i) end
+		end
+	elseif row.addon then
+		db().removedRows[row.id] = true
+	else
+		return
+	end
+	db().elements[row.id], db().elementCombat[row.id] = nil, nil
+	rowOn[row.id] = nil
+	Elements.Refresh()
+end
+
+function Elements.RemoveFrame(name)
+	Elements.Remove(addedRow(name))
+end
+
 -- For /hudfade why: the rows on screen apart from the rest of the HUD.
 function Elements.Describe()
 	local out = {}
-	for _, row in ipairs(ROWS) do
+	for _, row in ipairs(rows()) do
 		if rowOn[row.id] then out[#out + 1] = row.label .. " (" .. rowOn[row.id] .. ")" end
 	end
 	if tipLifted and GameTooltip and core.ask(GameTooltip, "GetOwner") == UIParent then

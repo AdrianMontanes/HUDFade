@@ -39,6 +39,7 @@ Most fade addons set each frame's opacity one by one, and UI addons do the same 
 - **Camera pan:** when you're AFK, the camera turns slowly around your character with the HUD hidden, so the game world doesn't sit still on your screen either. It can start when idle instead, or with a key for a cinematic look while you play, or stay off.
 - **Dim instead of hide:** hidden opacity from 0% (true black) up to 50%.
 - **Choose what stays:** keep chat, the minimap or any other part visible, show bars when your mouse is over them, and pick what comes back in a fight. Tooltips for what you hover in the world, loot rolls, zone names, raid warnings, toasts and the breath bar can stay too.
+- **Add your own elements:** select any other part of your UI on screen, or type its name, and give it a row of its own.
 - **Your call on the world:** hide names, nameplates and damage numbers too, or leave them like the game's own Hide UI does.
 
 No setup per addon and no reload. Keys for hide/show, peek, screenshot, camera pan and on/off are in the game's Key Bindings, under AddOns.

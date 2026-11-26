@@ -1851,6 +1851,8 @@ events:SetScript("OnEvent", function(_, event, arg1)
 		DB.restore = DB.restore or {}
 		if type(DB.elements) ~= "table" then DB.elements = {} end
 		if type(DB.elementCombat) ~= "table" then DB.elementCombat = {} end
+		if type(DB.addedFrames) ~= "table" then DB.addedFrames = {} end
+		if type(DB.removedRows) ~= "table" then DB.removedRows = {} end
 		-- The Minimap box under "also hide" became the Minimap element in 1.3.0: unticked meant keep it.
 		if DB.hideMinimap == false and DB.elements.minimap == nil then DB.elements.minimap = "show" end
 		DB.hideMinimap = nil
